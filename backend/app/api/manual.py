@@ -13,16 +13,17 @@ class StatementRequest(BaseModel):
     text: str
     brokerageName: str
 
-@router.post("/api/manual/parse-statement")
+@router.post("/manual/parse-statement")
 def parse_statement_manual_endpoint(request: StatementRequest, db: Session = Depends(get_db)):
     try:
         # Delete existing holdings for this brokerageName
         db.query(Holding).filter(Holding.brokerage == request.brokerageName).delete()
         db.commit()
 
-        parsed_holdings = parse_statement_manually(request.text, request.brokerageName)
+        parsed_holdings_data = parse_statement_manually(request.text, request.brokerageName)
         
-        for holding_data in parsed_holdings:
+        new_holding_ids = []
+        for holding_data in parsed_holdings_data:
             db_holding = Holding(
                 brokerage=holding_data["brokerage"],
                 date=holding_data["date"],
@@ -34,10 +35,15 @@ def parse_statement_manual_endpoint(request: StatementRequest, db: Session = Dep
                 totalCost=holding_data["totalCost"],
             )
             db.add(db_holding)
+            db.flush() # Flush to assign ID before commit, if needed by subsequent logic
+            new_holding_ids.append(db_holding.id)
         db.commit()
-        # db.refresh(db_holding) # Refreshing after commit is not always needed for every item in a loop
 
-        return {"message": "Holdings parsed and saved successfully!", "holdings": parsed_holdings}
+        # After commit, query for the newly added holdings to get their IDs and full data
+        # Or, to simplify, fetch all holdings for the given brokerage after the update
+        updated_holdings = db.query(Holding).filter(Holding.brokerage == request.brokerageName).all()
+
+        return {"message": "Holdings parsed and saved successfully!", "holdings": updated_holdings}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

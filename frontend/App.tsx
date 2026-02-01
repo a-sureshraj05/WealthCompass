@@ -17,12 +17,8 @@ const App: React.FC = () => {
               setLoading(true);
               try {
                 const fetchedHoldings = await fetchHoldings();
-                const processedHoldings = fetchedHoldings.map(h => ({
-                  ...h,
-                  avgPrice: h.costPerShare,
-                  currentPrice: h.costPerShare, // Temporary: assuming currentPrice is costPerShare for initial display
-                }));
-                setHoldings(processedHoldings);
+                // No need for processedHoldings anymore, as types.ts is updated.
+                setHoldings(fetchedHoldings);
               } catch (error) {
                 console.error("Failed to fetch holdings:", error);
               } finally {
@@ -37,8 +33,9 @@ const App: React.FC = () => {
   // }, [holdings]);
 
   const stats = useMemo((): PortfolioStats => {
-    const totalValue = holdings.reduce((sum, h) => sum + (h.quantity * (h.currentPrice || 0)), 0);
-    const totalCost = holdings.reduce((sum, h) => sum + (h.quantity * (h.avgPrice || 0)), 0);
+    // For now, assuming currentPrice is costPerShare for calculation purposes in the absence of real-time data
+    const totalValue = holdings.reduce((sum, h) => sum + (h.quantity * h.costPerShare), 0);
+    const totalCost = holdings.reduce((sum, h) => sum + (h.quantity * h.costPerShare), 0);
     const totalGain = totalValue - totalCost;
     const gainPercentage = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
     
@@ -50,7 +47,7 @@ const App: React.FC = () => {
   }, [holdings]);
 
   const handleAddHoldings = (newHoldings: StockHolding[]) => {
-    setHoldings(prev => [...prev, ...newHoldings]);
+    setHoldings(newHoldings);
   };
 
   const handleRemoveHolding = (id: string) => {

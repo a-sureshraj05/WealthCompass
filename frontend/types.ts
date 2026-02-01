@@ -9,9 +9,7 @@ export interface StockHolding {
   quantity: number;
   costPerShare: number; // Corresponds to backend's costPerShare
   totalCost: number;
-  // These might be computed on the frontend or fetched separately
-  avgPrice?: number; 
-  currentPrice?: number;
+  // avgPrice and currentPrice will be derived or fetched separately if needed.
 }
 
 export interface PortfolioStats {
