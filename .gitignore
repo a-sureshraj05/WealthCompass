@@ -1,2 +1,4 @@
 .gemini/
 .env
+.DS_Store
+backend/tests/sample/
