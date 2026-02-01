@@ -1,0 +1,6 @@
+
+{
+  "name": "WealthCompass - Secure Stock Consolidator",
+  "description": "A high-security stock portfolio aggregator that uses Gemini AI to parse brokerage statements and provide a unified view of your investments without storing data on a server.",
+  "requestFramePermissions": []
+}
