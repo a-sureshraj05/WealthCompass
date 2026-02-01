@@ -3,3 +3,4 @@
 .DS_Store
 backend/tests/sample/
 db/wealthcompass.db
+wealthcompass.db
