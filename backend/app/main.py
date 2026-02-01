@@ -14,8 +14,8 @@ app = FastAPI()
 def startup_event():
     Base.metadata.create_all(bind=engine)
 
-app.include_router(transactions.router)
-app.include_router(manual.router)
+app.include_router(transactions.router, prefix="/api/v1")
+app.include_router(manual.router, prefix="/api/v1")
 
 @app.get("/")
 def read_root():

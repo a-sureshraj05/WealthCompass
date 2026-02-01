@@ -1,13 +1,17 @@
 
 export interface StockHolding {
   id: string;
+  brokerage: string;
+  date: string; // Assuming ISO date string from backend
   ticker: string;
   name: string;
+  action: string; // e.g., 'Buy', 'Sell'
   quantity: number;
-  avgPrice: number;
-  currentPrice: number;
-  brokerage: string;
-  category: string;
+  costPerShare: number; // Corresponds to backend's costPerShare
+  totalCost: number;
+  // These might be computed on the frontend or fetched separately
+  avgPrice?: number; 
+  currentPrice?: number;
 }
 
 export interface PortfolioStats {
