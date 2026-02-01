@@ -7,7 +7,7 @@ WealthCompass is a web application designed to consolidate and analyze personal 
 *   **Backend:** Python with [FastAPI](https://fastapi.tiangolo.com/)
 *   **Frontend:** TypeScript with [React](https://reactjs.org/) (built with [Vite](https://vitejs.dev/))
 *   **AI:** Google Cloud [Vertex AI](https://cloud.google.com/vertex-ai) (Gemini models)
-*   **Database:** [SQLAlchemy](https://www.sqlalchemy.org/) ORM (database not yet integrated)
+*   **Database:** [SQLAlchemy](https://www.sqlalchemy.org/) ORM (SQLite for local development)
 
 ## Folder Structure
 
@@ -18,7 +18,7 @@ The project is organized into two main parts:
 ├── backend/         # Contains the Python FastAPI server
 │   ├── app/
 │   │   ├── api/     # API endpoint definitions (AI, transactions)
-│   │   ├── db/      # SQLAlchemy database schema
+│   │   ├── db/      # SQLAlchemy database schema and SQLite file (wealthcompass.db)
 │   │   └── main.py  # Main FastAPI application
 │   └── requirements.txt
 ├── frontend/        # Contains the React user interface
@@ -38,46 +38,14 @@ Follow these steps to get the application running locally.
 *   Node.js 18+
 *   `gcloud` CLI
 
-### 2. Clone the Repository
-
-```bash
-git clone <your-repository-url>
-cd WealthCompass
-```
-
 ### 3. Backend Setup
 
 ```bash
 # Install Python dependencies
 pip install -r backend/requirements.txt
+# Ensure uvicorn is installed for running the server
+pip install "uvicorn[standard]"
 ```
-
-### 4. Frontend Setup
-
-```bash
-# Navigate to the frontend directory
-cd frontend
-
-# Install Node.js dependencies
-npm install
-
-# Return to the project root
-cd ..
-```
-
-### 5. Environment Configuration
-
-The application uses a central `.env` file for configuration, located at `/.gemini/.env`.
-
-1.  Ensure this file exists.
-2.  Fill it with the following content, replacing the placeholder with your Google Cloud Project ID:
-
-    ```
-    GOOGLE_GENAI_USE_VERTEXAI=true
-    GOOGLE_CLOUD_PROJECT="your-gcp-project-id"
-    GOOGLE_CLOUD_LOCATION="us-central1"
-    GEMINI_MODEL="gemini-2.5-flash"
-    ```
 
 ### 6. Google Cloud Authentication
 
@@ -97,6 +65,8 @@ A convenient script, `server.sh`, manages the development environment.
 
 *   **To Start the Servers:**
     This command kills any old processes, closes all `Terminal.app` windows, and starts the backend and frontend in new, clean windows.
+    The backend will run on `http://0.0.0.0:8000` (accessible via `http://localhost:8000`).
+    The frontend will run on `http://localhost:5173`.
 
     ```bash
     ./server.sh start
@@ -110,5 +80,5 @@ A convenient script, `server.sh`, manages the development environment.
     ```
 
 Once started:
-*   The backend will be running at `http://127.0.0.1:8000`.
+*   The backend will be running at `http://localhost:8000`.
 *   The frontend will be running at `http://localhost:5173`.

@@ -4,31 +4,38 @@ import { StockHolding, PortfolioStats } from './types';
 import Dashboard from './components/Dashboard';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import { fetchHoldings } from './services/geminiService'; // Import fetchHoldings
 
 const App: React.FC = () => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'holdings' | 'import'>('dashboard');
 
-  // Load initial data from local storage for persistence (secured locally)
+  // Fetch holdings from backend on initial load
   useEffect(() => {
-    const saved = localStorage.getItem('wealthcompass_holdings');
-    if (saved) {
-      try {
-        setHoldings(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse saved data");
-      }
-    }
-  }, []);
+            const getHoldings = async () => {
+              setLoading(true);
+              try {
+                const fetchedHoldings = await fetchHoldings();
+                // No need for processedHoldings anymore, as types.ts is updated.
+                setHoldings(fetchedHoldings);
+              } catch (error) {
+                console.error("Failed to fetch holdings:", error);
+              } finally {
+                setLoading(false);
+              }
+            };
+            getHoldings();  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('wealthcompass_holdings', JSON.stringify(holdings));
-  }, [holdings]);
+  // No longer saving to local storage as data is fetched from backend
+  // useEffect(() => {
+  //   localStorage.setItem('wealthcompass_holdings', JSON.stringify(holdings));
+  // }, [holdings]);
 
   const stats = useMemo((): PortfolioStats => {
-    const totalValue = holdings.reduce((sum, h) => sum + (h.quantity * h.currentPrice), 0);
-    const totalCost = holdings.reduce((sum, h) => sum + (h.quantity * h.avgPrice), 0);
+    // For now, assuming currentPrice is costPerShare for calculation purposes in the absence of real-time data
+    const totalValue = holdings.reduce((sum, h) => sum + (h.quantity * h.costPerShare), 0);
+    const totalCost = holdings.reduce((sum, h) => sum + (h.quantity * h.costPerShare), 0);
     const totalGain = totalValue - totalCost;
     const gainPercentage = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
     
@@ -40,7 +47,7 @@ const App: React.FC = () => {
   }, [holdings]);
 
   const handleAddHoldings = (newHoldings: StockHolding[]) => {
-    setHoldings(prev => [...prev, ...newHoldings]);
+    setHoldings(newHoldings);
   };
 
   const handleRemoveHolding = (id: string) => {
@@ -50,6 +57,7 @@ const App: React.FC = () => {
   const handleClearAll = () => {
     if (window.confirm("Are you sure you want to clear all data? This cannot be undone.")) {
       setHoldings([]);
+      // TODO: Implement backend call to clear all holdings
     }
   };
 
@@ -87,3 +95,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
