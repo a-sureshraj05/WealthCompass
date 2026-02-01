@@ -1,7 +1,7 @@
 import { StockHolding } from "../types";
 
 export const parseStatement = async (text: string, brokerageName: string): Promise<StockHolding[]> => {
-  const response = await fetch("/api/ai/parse-statement", {
+  const response = await fetch("/api/manual/parse-statement", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -14,10 +14,11 @@ export const parseStatement = async (text: string, brokerageName: string): Promi
   }
 
   const parsedData = await response.json();
-  return parsedData.map((item: any) => ({
+  // Assuming the backend now returns { message, holdings } or similar
+  return parsedData.holdings.map((item: any) => ({
     ...item,
     id: Math.random().toString(36).substr(2, 9),
-    brokerage: brokerageName
+    brokerage: brokerageName // The backend now sets brokerage directly, but frontend might still want to add it for consistency or immediate UI update
   }));
 };
 
