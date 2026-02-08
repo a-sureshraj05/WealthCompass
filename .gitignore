@@ -4,3 +4,5 @@
 backend/tests/sample/
 db/wealthcompass.db
 wealthcompass.db
+GoogleAIStudio/
+last_commit_hash.txt

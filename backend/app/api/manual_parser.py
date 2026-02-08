@@ -88,7 +88,8 @@ def parse_statement_manually(text: str, brokerage_name: str) -> List[Dict[str, A
                     holding[target_attr] = 0.0
             elif target_attr == "date":
                 try:
-                    holding[target_attr] = datetime.strptime(str(value), date_format).date()
+                    # Ensure datetime.datetime object is returned
+                    holding[target_attr] = datetime.strptime(str(value), date_format)
                 except (ValueError, TypeError):
                     print(f"Warning: Could not convert '{value}' to date using format '{date_format}' for {target_attr}.")
                     holding[target_attr] = None
@@ -107,6 +108,10 @@ def parse_statement_manually(text: str, brokerage_name: str) -> List[Dict[str, A
             except Exception as e:
                 print(f"Warning: Error executing derived function for {target_attr}: {e}")
                 holding[target_attr] = None # Fallback if derived function fails
+
+        # Explicitly set 'price' for Transaction model compatibility
+        if "costPerShare" in holding and "price" not in holding:
+            holding["price"] = holding["costPerShare"]
 
         # Basic validation: ensure we have at least a ticker and quantity
         if holding.get("ticker") and holding.get("quantity", 0) > 0:
