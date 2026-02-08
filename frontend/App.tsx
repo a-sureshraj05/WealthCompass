@@ -1,36 +1,48 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { StockHolding, PortfolioStats } from './types';
+import { StockHolding, PortfolioStats, Transaction } from './types';
 import Dashboard from './components/Dashboard';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import { fetchHoldings } from './services/geminiService'; // Import fetchHoldings
+import { fetchHoldings, fetchTransactions, removeTransaction } from './services/apiService'; // Import fetchHoldings and fetchTransactions
 
 const App: React.FC = () => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'holdings' | 'import'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'holdings' | 'import' | 'transactions'>('dashboard');
 
   // Fetch holdings from backend on initial load
   useEffect(() => {
-            const getHoldings = async () => {
-              setLoading(true);
-              try {
-                const fetchedHoldings = await fetchHoldings();
-                // No need for processedHoldings anymore, as types.ts is updated.
-                setHoldings(fetchedHoldings);
-              } catch (error) {
-                console.error("Failed to fetch holdings:", error);
-              } finally {
-                setLoading(false);
-              }
-            };
-            getHoldings();  }, []);
+    const getHoldings = async () => {
+      setLoading(true);
+      try {
+        const fetchedHoldings = await fetchHoldings();
+        setHoldings(fetchedHoldings);
+      } catch (error) {
+        console.error("Failed to fetch holdings:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    getHoldings();
+  }, []);
 
-  // No longer saving to local storage as data is fetched from backend
-  // useEffect(() => {
-  //   localStorage.setItem('wealthcompass_holdings', JSON.stringify(holdings));
-  // }, [holdings]);
+  // Fetch transactions from backend
+  useEffect(() => {
+    const getTransactions = async () => {
+      setLoading(true);
+      try {
+        const fetchedTransactions = await fetchTransactions();
+        setTransactions(fetchedTransactions);
+      } catch (error) {
+        console.error("Failed to fetch transactions:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    getTransactions();
+  }, []);
 
   const stats = useMemo((): PortfolioStats => {
     // For now, assuming currentPrice is costPerShare for calculation purposes in the absence of real-time data
@@ -54,10 +66,20 @@ const App: React.FC = () => {
     setHoldings(prev => prev.filter(h => h.id !== id));
   };
 
+  const handleRemoveTransaction = async (id: string) => {
+    try {
+      await removeTransaction(id);
+      setTransactions(prev => prev.filter(t => t.id !== id));
+    } catch (error) {
+      console.error("Failed to remove transaction:", error);
+    }
+  };
+
   const handleClearAll = () => {
     if (window.confirm("Are you sure you want to clear all data? This cannot be undone.")) {
       setHoldings([]);
-      // TODO: Implement backend call to clear all holdings
+      setTransactions([]);
+      // TODO: Implement backend call to clear all holdings and transactions
     }
   };
 
@@ -72,9 +94,11 @@ const App: React.FC = () => {
           <Dashboard 
             activeTab={activeTab} 
             holdings={holdings} 
+            transactions={transactions}
             stats={stats}
             onAddHoldings={handleAddHoldings}
             onRemoveHolding={handleRemoveHolding}
+            onRemoveTransaction={handleRemoveTransaction}
             onClearAll={handleClearAll}
             setLoading={setLoading}
             loading={loading}
@@ -95,4 +119,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-

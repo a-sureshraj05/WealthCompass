@@ -1,4 +1,4 @@
-import { StockHolding } from "../types";
+import { StockHolding, Transaction } from "../types";
 
 export const parseStatement = async (text: string, brokerageName: string): Promise<StockHolding[]> => {
   const response = await fetch("/api/v1/manual/parse-statement", {
@@ -35,6 +35,24 @@ export const fetchHoldings = async (): Promise<StockHolding[]> => {
     avgPrice: item.costPerShare, // Map backend's costPerShare to avgPrice for frontend compatibility
     currentPrice: undefined, // Current price not available from this endpoint
   }));
+};
+
+export const fetchTransactions = async (): Promise<Transaction[]> => {
+  const response = await fetch("/api/v1/transactions");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch transactions: ${response.status} ${response.statusText}`);
+  }
+  const data = await response.json();
+  return data.map((item: any) => ({ ...item, id: String(item.id) }));
+};
+
+export const removeTransaction = async (id: string): Promise<void> => {
+  const response = await fetch(`/api/v1/transactions/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to remove transaction: ${response.status} ${response.statusText}`);
+  }
 };
 
 export const getPortfolioInsights = async (holdings: StockHolding[]): Promise<string> => {

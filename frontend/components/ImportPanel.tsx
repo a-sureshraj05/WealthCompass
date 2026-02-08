@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { parseStatement } from '../services/geminiService';
+import { parseStatement } from '../services/apiService';
 import { StockHolding } from '../types';
 
 interface Props {
@@ -19,6 +19,7 @@ const ImportPanel: React.FC<Props> = ({ onAddHoldings, setLoading }) => {
   const [selectedBroker, setSelectedBroker] = useState('');
   const [manualText, setManualText] = useState('');
   const [uploadError, setUploadError] = useState('');
+  const [showSuccessPrompt, setShowSuccessPrompt] = useState(false);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log("handleFileUpload called");
@@ -45,6 +46,7 @@ const ImportPanel: React.FC<Props> = ({ onAddHoldings, setLoading }) => {
           const extracted = await parseStatement(text || "Demo Statement: AAPL 10 shares @ 150. MSFT 5 shares @ 300.", selectedBroker);
           onAddHoldings(extracted);
           setManualText('');
+          setShowSuccessPrompt(true);
         } catch (err) {
           console.error("Parsing error:", err);
           setUploadError('Failed to parse statement. Please ensure it contains stock data.');
@@ -69,6 +71,7 @@ const ImportPanel: React.FC<Props> = ({ onAddHoldings, setLoading }) => {
       const extracted = await parseStatement(manualText, selectedBroker);
       onAddHoldings(extracted);
       setManualText('');
+      setShowSuccessPrompt(true);
     } catch (err) {
       setUploadError('AI failed to find stock holdings in that text.');
     } finally {
@@ -176,6 +179,24 @@ const ImportPanel: React.FC<Props> = ({ onAddHoldings, setLoading }) => {
           <span className="text-xs italic">Parsing powered by Google Gemini 3 Flash</span>
         </div>
       </div>
+
+      {showSuccessPrompt && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center space-y-4">
+            <svg className="w-16 h-16 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="text-xl font-bold text-slate-900">Upload Successful!</h3>
+            <p className="text-slate-600">Your statement has been successfully parsed and holdings updated.</p>
+            <button
+              onClick={() => setShowSuccessPrompt(false)}
+              className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

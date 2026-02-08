@@ -31,3 +31,13 @@ export interface BrokerageInfo {
   color: string;
   icon: string;
 }
+
+export interface Transaction {
+  id: string;
+  date: string; // ISO date string
+  ticker: string;
+  type: 'BUY' | 'SELL'; // Or more types if applicable
+  quantity: number;
+  price: number;
+  brokerage: string;
+}
