@@ -1,4 +1,3 @@
-
 export interface StockHolding {
   id: string;
   brokerage: string;
@@ -44,6 +43,31 @@ export interface Transaction {
   ticker: string;
   name: string;
   action: string;
-  costPerShare: number;
+  costPerShare: number; // Corresponds to backend's costPerShare
   totalCost: number;
+}
+
+export interface RealizedGain {
+  id: string;
+  ticker: string;
+  buyDate: string;
+  sellDate: string;
+  quantity: number;
+  buyPrice: number;
+  sellPrice: number;
+  gain: number;
+  isLongTerm: boolean;
+  brokerage: string;
+}
+
+export interface UnrealizedLot {
+  id: string;
+  ticker: string;
+  buyDate: string;
+  quantity: number;
+  buyPrice: number;
+  currentPrice: number;
+  gain: number;
+  isLongTerm: boolean;
+  brokerage: string;
 }
