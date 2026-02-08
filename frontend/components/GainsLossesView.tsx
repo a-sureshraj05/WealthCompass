@@ -22,7 +22,7 @@ interface UnrealizedLot {
 
 const COLORS = ['#6366f1', '#a855f7', '#ec4899', '#f97316', '#10b981', '#0ea5e9', '#64748b'];
 
-const GainsTable: React.FC<Props> = ({ transactions }) => {
+const GainsLossesView: React.FC<Props> = ({ transactions }) => {
   const [activeSubTab, setActiveSubTab] = useState<'realized' | 'unrealized'>('realized');
   const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
@@ -541,4 +541,4 @@ const GainsTable: React.FC<Props> = ({ transactions }) => {
   );
 };
 
-export default GainsTable;
+export default GainsLossesView;

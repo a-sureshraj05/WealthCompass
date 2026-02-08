@@ -15,7 +15,7 @@ const BROKERAGES = [
   { name: 'Other', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }
 ];
 
-const ImportPanel: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
+const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
   const [selectedBroker, setSelectedBroker] = useState('');
   const [manualText, setManualText] = useState('');
   const [uploadError, setUploadError] = useState('');
@@ -145,7 +145,7 @@ const ImportPanel: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
               <div className="space-y-4">
                 <textarea
                   className="w-full h-44 p-4 rounded-3xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm font-medium outline-none resize-none"
-                  placeholder="Or paste the text content of your statement here... Gemini will extract the stocks automatically."
+                  placeholder="Or paste your CSV/text statement here (e.g., Symbol,Quantity,Price,Settle Date,Brokerage)..."
                   value={manualText}
                   onChange={(e) => setManualText(e.target.value)}
                 />
@@ -202,4 +202,4 @@ const ImportPanel: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
   );
 };
 
-export default ImportPanel;
+export default ImportDataView;
