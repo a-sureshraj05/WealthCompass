@@ -4,13 +4,14 @@ import { StockHolding, PortfolioStats, Transaction, DateRangeType } from './type
 import Dashboard from './components/Dashboard';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import { fetchHoldings, fetchTransactions, removeTransaction } from './services/apiService';
+import GainsTable from './components/GainsTable';
+import { fetchHoldings, fetchTransactions, removeTransaction, triggerRealizedGainsProcess } from './services/apiService';
 
 const App: React.FC = () => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'holdings' | 'import' | 'transactions'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'holdings' | 'import' | 'transactions' | 'gains'>('dashboard');
 
   // Filter states for transactions
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
@@ -122,7 +123,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onProcessGains={triggerRealizedGainsProcess} />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar stats={stats} />

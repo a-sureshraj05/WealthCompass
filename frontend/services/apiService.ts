@@ -1,4 +1,4 @@
-import { StockHolding, Transaction } from "../types";
+import { StockHolding, Transaction, RealizedGain } from "../types";
 
 export const parseStatement = async (text: string, brokerageName: string): Promise<Transaction[]> => {
   const response = await fetch("/api/v1/manual/parse-statement", {
@@ -77,9 +77,27 @@ export const removeTransaction = async (id: string): Promise<void> => {
   }
 };
 
+export const fetchRealizedGains = async (): Promise<RealizedGain[]> => {
+  const response = await fetch("/api/v1/realized-gains");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch realized gains: ${response.status} ${response.statusText}`);
+  }
+  const data = await response.json();
+  return data.map((item: any) => ({ ...item, id: String(item.id) }));
+};
+
 export const getPortfolioInsights = async (holdings: StockHolding[]): Promise<string> => {
   if (holdings.length === 0) return "Add holdings to get AI insights.";
 
   // This will be implemented in the backend in the next step.
   return "Insights are not yet implemented in the new architecture.";
+};
+
+export const triggerRealizedGainsProcess = async (): Promise<void> => {
+  const response = await fetch("/api/v1/realized-gains/process", {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to trigger realized gains processing: ${response.status} ${response.statusText}`);
+  }
 };

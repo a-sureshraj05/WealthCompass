@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -29,3 +29,18 @@ class Holding(Base):
     quantity = Column(Float)
     costPerShare = Column(Float)
     totalCost = Column(Float)
+
+
+class RealizedGain(Base):
+    __tablename__ = 'realized_gains'
+
+    id = Column(Integer, primary_key=True, index=True)
+    brokerage = Column(String)
+    ticker = Column(String)
+    buyDate = Column(DateTime)
+    sellDate = Column(DateTime)
+    quantity = Column(Float)
+    buyPrice = Column(Float)
+    sellPrice = Column(Float)
+    gain = Column(Float)
+    isLongTerm = Column(Boolean)

@@ -3,7 +3,8 @@ import React from 'react';
 
 interface Props {
   activeTab: string;
-  setActiveTab: (tab: 'dashboard' | 'holdings' | 'import' | 'transactions') => void;
+  setActiveTab: (tab: 'dashboard' | 'holdings' | 'import' | 'transactions' | 'gains') => void;
+  onProcessGains: () => Promise<void>;
 }
 
 const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab }) => {
@@ -11,6 +12,7 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab }) => {
     { id: 'dashboard', label: 'Dashboard', icon: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z' },
     { id: 'holdings', label: 'Holdings', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
     { id: 'transactions', label: 'Transactions', icon: 'M3 10v6m0 0v-6m0 6h18m0-6v6m0-6h-18m0 6a2 2 0 002 2h14a2 2 0 002-2v-6H3zM4 10h16a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2a1 1 0 011-1z' },
+    { id: 'gains', label: 'Gains & Losses', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' }, // New item
     { id: 'import', label: 'Import Data', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' },
   ];
 
@@ -29,7 +31,19 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab }) => {
         {menuItems.map((item) => (
           <button
             key={item.id}
-            onClick={() => setActiveTab(item.id as any)}
+            onClick={async () => {
+              if (item.id === 'gains') {
+                console.log("Attempting to process realized gains...");
+                try {
+                  await onProcessGains();
+                  console.log("Realized gains processed successfully.");
+                } catch (error) {
+                  console.error("Error processing realized gains on tab click:", error);
+                  // Optionally, show a user-friendly error message
+                }
+              }
+              setActiveTab(item.id as any);
+            }}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
               activeTab === item.id 
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' 

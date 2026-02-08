@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.db.schema import Holding, Transaction as DBTransaction # Import Transaction as DBTransaction
 from .manual_parser import parse_statement_manually
+from . import process
 
 router = APIRouter()
 
@@ -39,6 +40,8 @@ def parse_statement_manual_endpoint(request: StatementRequest, db: Session = Dep
             db.flush() # Flush to assign ID before commit, if needed by subsequent logic
             new_transaction_ids.append(db_transaction.id)
         db.commit()
+
+        process.process_transactions(db, request.brokerageName) # Call the new processing function with db session and brokerage name
 
         # After commit, query for the newly added transactions to get their IDs and full data
         # Or, to simplify, fetch all transactions for the given brokerage after the update
