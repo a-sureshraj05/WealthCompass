@@ -238,6 +238,7 @@ interface Props {
 
 
   transactions: Transaction[]; // Add transactions to props
+  allTransactions: Transaction[];
 
 
 
@@ -637,7 +638,7 @@ const Dashboard: React.FC<Props> = ({
 
 
 
-  transactions,
+    transactions,
 
 
 
@@ -653,7 +654,23 @@ const Dashboard: React.FC<Props> = ({
 
 
 
-  stats,
+    allTransactions,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    stats,
 
 
 
@@ -1517,7 +1534,7 @@ const Dashboard: React.FC<Props> = ({
 
 
 
-          transactions={transactions} 
+                    transactions={transactions} 
 
 
 
@@ -1533,7 +1550,23 @@ const Dashboard: React.FC<Props> = ({
 
 
 
-          onRemove={onRemoveTransaction}
+                    allTransactions={allTransactions}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    onRemove={onRemoveTransaction}
 
 
 

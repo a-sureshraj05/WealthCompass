@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Transaction, DateRangeType } from '../types';
 
 interface Props {
@@ -30,58 +30,37 @@ const TransactionsTable: React.FC<Props> = ({
   setEndDate,
   dateRangeType,
   setDateRangeType,
+
 }) => {
-  const uniqueBrokerages = useMemo(() => [
-    'All',
-    ...new Set(transactions.map(t => t.brokerage))
-  ].sort((a, b) => {
-    if (a === 'All') return -1;
-    if (b === 'All') return 1;
-    return a.localeCompare(b);
-  }), [transactions]);
+  const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
+  const [isTickerMenuOpen, setIsTickerMenuOpen] = useState(false);
 
-  const uniqueTickers = useMemo(() => [
-    'All',
-    ...new Set(transactions.map(t => t.ticker))
-  ].sort((a, b) => {
-    if (a === 'All') return -1;
-    if (b === 'All') return 1;
-    return a.localeCompare(b);
-  }), [transactions]);
+  const brokerageMenuRef = useRef<HTMLDivElement>(null);
+  const tickerMenuRef = useRef<HTMLDivElement>(null);
 
-  const handleBrokerageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const options = Array.from(e.target.options);
-    let value = options.filter(option => option.selected).map(option => option.value);
-
-    if (value.includes('All')) {
-      // If 'All' is selected, and it's the only selection, clear the filter (empty array)
-      // If 'All' is selected along with other options, then only 'All' should be kept
-      if (value.length === 1) {
-        setSelectedBrokerages([]); // Empty array means all brokerages are selected
-      } else {
-        setSelectedBrokerages(value.filter(item => item !== 'All'));
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (brokerageMenuRef.current && !brokerageMenuRef.current.contains(event.target as Node)) {
+        setIsBrokerageMenuOpen(false);
       }
-    } else {
-      setSelectedBrokerages(value);
-    }
-  };
-
-  const handleTickerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const options = Array.from(e.target.options);
-    let value = options.filter(option => option.selected).map(option => option.value);
-
-    if (value.includes('All')) {
-      // If 'All' is selected, and it's the only selection, clear the filter (empty array)
-      // If 'All' is selected along with other options, then only 'All' should be kept
-      if (value.length === 1) {
-        setSelectedTickers([]); // Empty array means all tickers are selected
-      } else {
-        setSelectedTickers(value.filter(item => item !== 'All'));
+      if (tickerMenuRef.current && !tickerMenuRef.current.contains(event.target as Node)) {
+        setIsTickerMenuOpen(false);
       }
-    } else {
-      setSelectedTickers(value);
-    }
-  };
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const uniqueBrokerages = useMemo(() => {
+    const brokers = new Set(transactions?.map(t => t.brokerage) || []);
+    return Array.from(brokers).sort();
+  }, [transactions]);
+
+  const uniqueTickers = useMemo(() => {
+    const tickers = new Set(transactions?.map(t => t.ticker) || []);
+    return Array.from(tickers).sort();
+  }, [transactions]);
 
   const handleDateChange = (setter: (d: string | null) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const dateValue = e.target.value;
@@ -168,78 +147,138 @@ const TransactionsTable: React.FC<Props> = ({
                   <span className="text-sm font-bold text-slate-700">Filters</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 flex-1">
-              {/* Brokerage Filter */}
-              <div className="relative group flex-1 min-w-[150px]">
-                <label htmlFor="brokerage-filter" className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter">Brokerage</label>
-                <select
-                  id="brokerage-filter"
-                  multiple
-                  value={selectedBrokerages}
-                  onChange={handleBrokerageChange}
-                  className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer w-full"
+              {/* Custom Multi-Select for Brokerage */}
+              <div className="relative" ref={brokerageMenuRef}>
+                <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter z-10">Brokerage</label>
+                <button
+                  onClick={() => setIsBrokerageMenuOpen(!isBrokerageMenuOpen)}
+                  className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer min-w-[140px] text-left w-full"
                 >
-                  {uniqueBrokerages.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </div>
-              </div>
-      
-              {/* Symbol Filter */}
-              <div className="relative group flex-1 min-w-[150px]">
-                <label htmlFor="ticker-filter" className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter">Symbol</label>
-                <select
-                  id="ticker-filter"
-                  multiple
-                  value={selectedTickers}
-                  onChange={handleTickerChange}
-                  className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer w-full"
-                >
-                  {uniqueTickers.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </div>
-              </div>
-      
-              {/* Date Range Type Filter */}
-              <div className="relative group flex-1 min-w-[150px]">
-                <label htmlFor="date-range-type" className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter">Timeframe</label>
-                <select
-                  id="date-range-type"
-                  value={dateRangeType}
-                  onChange={(e) => setDateRangeType(e.target.value as DateRangeType)}
-                  className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer w-full"
-                >
-                  <option value="all">All Time</option>
-                  <option value="30d">Last 30 Days</option>
-                  <option value="90d">Last 90 Days</option>
-                  <option value="ytd">Year to Date</option>
-                  <option value="custom">Custom Range...</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </div>
-              </div>
-      
-              {/* Custom Date Range Inputs */}
-              {dateRangeType === 'custom' && (
-                    <div className="flex items-center space-x-2 animate-in slide-in-from-left-2 duration-200">
-                      <input
-                        type="date"
-                        value={startDate || ''}
-                        onChange={handleDateChange(setStartDate)}
-                        className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                      <span className="text-slate-300 text-xs font-bold">to</span>
-                      <input
-                        type="date"
-                        value={endDate || ''}
-                        onChange={handleDateChange(setEndDate)}
-                        className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
+                  <span className="truncate max-w-[100px]">
+                    {selectedBrokerages.length === 0 ? 'All Brokers' :
+                     selectedBrokerages.length === 1 ? selectedBrokerages[0] :
+                     `${selectedBrokerages.length} Brokers`}
+                  </span>
+                  <svg className={`w-4 h-4 text-slate-400 transition-transform ${isBrokerageMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+
+                {isBrokerageMenuOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+                    <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                      <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Brokerages</span>
+                      {selectedBrokerages.length > 0 && (
+                        <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 px-2">Clear</button>
+                      )}
                     </div>
-                  )}
+                    <div className="max-h-60 overflow-y-auto p-2 space-y-1">
+                      {uniqueBrokerages.filter(b => b !== 'All').map(broker => (
+                        <label key={broker} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            checked={selectedBrokerages.includes(broker)}
+                            onChange={() => {
+                              const newSelection = selectedBrokerages.includes(broker)
+                                ? selectedBrokerages.filter(item => item !== broker)
+                                : [...selectedBrokerages, broker];
+                              setSelectedBrokerages(newSelection);
+                            }}
+                          />
+                          <span className="ml-3 text-sm font-bold text-slate-700">{broker}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+      
+              {/* Custom Multi-Select for Symbol */}
+              <div className="relative" ref={tickerMenuRef}>
+                <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter z-10">Symbol</label>
+                <button
+                  onClick={() => setIsTickerMenuOpen(!isTickerMenuOpen)}
+                  className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer min-w-[140px] text-left w-full"
+                >
+                  <span className="truncate max-w-[100px]">
+                    {selectedTickers.length === 0 ? 'All Symbols' :
+                     selectedTickers.length === 1 ? selectedTickers[0] :
+                     `${selectedTickers.length} Symbols`}
+                  </span>
+                  <svg className={`w-4 h-4 text-slate-400 transition-transform ${isTickerMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+
+                {isTickerMenuOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+                    <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                      <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Assets</span>
+                      {selectedTickers.length > 0 && (
+                        <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 px-2">Clear</button>
+                      )}
+                    </div>
+                    <div className="max-h-60 overflow-y-auto p-2 space-y-1">
+                      {uniqueTickers.filter(t => t !== 'All').map(ticker => (
+                        <label key={ticker} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            checked={selectedTickers.includes(ticker)}
+                            onChange={() => {
+                              const newSelection = selectedTickers.includes(ticker)
+                                ? selectedTickers.filter(item => item !== ticker)
+                                : [...selectedTickers, ticker];
+                              setSelectedTickers(newSelection);
+                            }}
+                          />
+                          <span className="ml-3 text-sm font-bold text-slate-700">{ticker}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+      
+              {/* Timeframe Selector */}
+              <div className="flex items-center gap-2">
+                <div className="relative group">
+                  <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter">Timeframe</label>
+                  <select 
+                    value={dateRangeType}
+                    onChange={(e) => setDateRangeType(e.target.value as DateRangeType)}
+                    className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer min-w-[150px]"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="90d">Last 90 Days</option>
+                    <option value="ytd">Year to Date</option>
+                    <option value="custom">Custom Range...</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                </div>
+
+                {dateRangeType === 'custom' && (
+                  <div className="flex items-center space-x-2 animate-in slide-in-from-left-2 duration-200">
+                    <input 
+                      type="date"
+                      value={startDate || ''}
+                      onChange={handleDateChange(setStartDate)}
+                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                    <span className="text-slate-300 text-xs font-bold">to</span>
+                    <input 
+                      type="date"
+                      value={endDate || ''}
+                      onChange={handleDateChange(setEndDate)}
+                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                )}
+              </div>
                 </div> {/* Closing div for "flex flex-wrap items-center gap-4 flex-1" */}
               <button
                 onClick={resetFilters}
@@ -288,7 +327,7 @@ const TransactionsTable: React.FC<Props> = ({
                 </td>
                 <td className="px-6 py-4">
                   <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
-                    t.action === 'BUY' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                    t.action.toUpperCase() === 'BUY' || t.action.toUpperCase() === 'BTO' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                   }`}>
                     {t.action}
                   </span>
