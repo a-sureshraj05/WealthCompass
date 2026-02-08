@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { StockHolding } from '../types';
-import { getPortfolioInsights } from '../services/apiService';
+import { getPortfolioInsights } from '../../services/apiService';
 
 interface Props {
   holdings: StockHolding[];

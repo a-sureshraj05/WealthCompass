@@ -1,17 +1,16 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { StockHolding, PortfolioStats, Transaction, DateRangeType } from './types'; // Import DateRangeType
-import Dashboard from './components/Dashboard';
+import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import GainsTable from './components/GainsTable';
 import { fetchHoldings, fetchTransactions, removeTransaction, triggerRealizedGainsProcess } from './services/apiService';
 
 const App: React.FC = () => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'holdings' | 'import' | 'transactions' | 'gains'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses'>('dashboardView');
 
   // Filter states for transactions
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
@@ -20,64 +19,66 @@ const App: React.FC = () => {
   const [endDate, setEndDate] = useState<string | null>(null);
   const [dateRangeType, setDateRangeType] = useState<DateRangeType>('all'); // New date range type state
 
+  const getHoldings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const fetchedHoldings = await fetchHoldings();
+      setHoldings(fetchedHoldings);
+    } catch (error) {
+      console.error("Failed to fetch holdings:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [setHoldings, setLoading]); // Depend on stable setters
+
   // Fetch holdings from backend on initial load
   useEffect(() => {
-    const getHoldings = async () => {
-      setLoading(true);
-      try {
-        const fetchedHoldings = await fetchHoldings();
-        setHoldings(fetchedHoldings);
-      } catch (error) {
-        console.error("Failed to fetch holdings:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     getHoldings();
-  }, []);
+  }, [getHoldings]);
 
   // Fetch transactions from backend with filters
+  const getTransactions = useCallback(async () => { // Wrapped in useCallback
+    setLoading(true);
+    let finalStartDate: string | null = startDate;
+    let finalEndDate: string | null = endDate;
+
+    // Calculate start and end dates based on dateRangeType
+    const now = new Date();
+    if (dateRangeType === '30d') {
+      const d = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+      finalStartDate = d.toISOString().split('T')[0];
+      finalEndDate = now.toISOString().split('T')[0];
+    } else if (dateRangeType === '90d') {
+      const d = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+      finalStartDate = d.toISOString().split('T')[0];
+      finalEndDate = now.toISOString().split('T')[0];
+    } else if (dateRangeType === 'ytd') {
+      const d = new Date(now.getFullYear(), 0, 1);
+      finalStartDate = d.toISOString().split('T')[0];
+      finalEndDate = now.toISOString().split('T')[0];
+    } else if (dateRangeType === 'all') {
+      finalStartDate = null;
+      finalEndDate = null;
+    } // 'custom' range uses existing startDate/endDate states
+
+    try {
+      const fetchedTransactions = await fetchTransactions(
+        selectedBrokerages,
+        selectedTickers,
+        finalStartDate,
+        finalEndDate
+      );
+      setTransactions(fetchedTransactions);
+    } catch (error) {
+      console.error("Failed to fetch transactions:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [setTransactions, setLoading, selectedBrokerages, selectedTickers, startDate, endDate, dateRangeType]); // Added dependencies
+
   useEffect(() => {
-    const getTransactions = async () => {
-      setLoading(true);
-      let finalStartDate: string | null = startDate;
-      let finalEndDate: string | null = endDate;
-
-      // Calculate start and end dates based on dateRangeType
-      const now = new Date();
-      if (dateRangeType === '30d') {
-        const d = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
-        finalStartDate = d.toISOString().split('T')[0];
-        finalEndDate = now.toISOString().split('T')[0];
-      } else if (dateRangeType === '90d') {
-        const d = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
-        finalStartDate = d.toISOString().split('T')[0];
-        finalEndDate = now.toISOString().split('T')[0];
-      } else if (dateRangeType === 'ytd') {
-        const d = new Date(now.getFullYear(), 0, 1);
-        finalStartDate = d.toISOString().split('T')[0];
-        finalEndDate = now.toISOString().split('T')[0];
-      } else if (dateRangeType === 'all') {
-        finalStartDate = null;
-        finalEndDate = null;
-      } // 'custom' range uses existing startDate/endDate states
-
-      try {
-        const fetchedTransactions = await fetchTransactions(
-          selectedBrokerages,
-          selectedTickers,
-          finalStartDate,
-          finalEndDate
-        );
-        setTransactions(fetchedTransactions);
-      } catch (error) {
-        console.error("Failed to fetch transactions:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     getTransactions();
-  }, [selectedBrokerages, selectedTickers, startDate, endDate, dateRangeType]); // Re-fetch when filters change
+  }, [getTransactions]); // Depend on getTransactions
 
   const stats = useMemo((): PortfolioStats => {
     const totalValue = holdings.reduce((sum, h) => sum + (h.quantity * h.costPerShare), 0);
@@ -98,6 +99,7 @@ const App: React.FC = () => {
   // New handler for adding transactions
   const handleAddTransactions = (newTransactions: Transaction[]) => {
     setTransactions(newTransactions);
+    getHoldings(); // Re-fetch holdings after transactions are added
   };
 
   const handleRemoveHolding = (id: string) => {
@@ -129,7 +131,7 @@ const App: React.FC = () => {
         <Navbar stats={stats} />
         
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          <Dashboard 
+          <DashboardView
             activeTab={activeTab} 
             holdings={holdings} 
             transactions={transactions}

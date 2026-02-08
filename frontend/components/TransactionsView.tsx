@@ -17,7 +17,7 @@ interface Props {
   setDateRangeType: (d: DateRangeType) => void;
 }
 
-const TransactionsTable: React.FC<Props> = ({
+const TransactionsView: React.FC<Props> = ({
   transactions,
   onRemove,
   selectedBrokerages,
@@ -29,9 +29,8 @@ const TransactionsTable: React.FC<Props> = ({
   endDate,
   setEndDate,
   dateRangeType,
-  setDateRangeType,
-
-}) => {
+    setDateRangeType,
+  }) => {
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
   const [isTickerMenuOpen, setIsTickerMenuOpen] = useState(false);
 
@@ -356,4 +355,4 @@ const TransactionsTable: React.FC<Props> = ({
   );
 };
 
-export default TransactionsTable;
+export default TransactionsView;

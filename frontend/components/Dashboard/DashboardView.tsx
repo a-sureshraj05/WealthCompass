@@ -2,11 +2,11 @@ import React from 'react';
 import { StockHolding, PortfolioStats, Transaction, DateRangeType } from '../types';
 import SummaryCards from './SummaryCards';
 import PortfolioVisuals from './PortfolioVisuals';
-import HoldingsTable from './HoldingsTable';
-import ImportPanel from './ImportPanel';
+import HoldingsView from '../HoldingsView';
+import ImportDataView from '../ImportDataView';
 import AIInsights from './AIInsights';
-import TransactionsTable from './TransactionsTable'; // Import TransactionsTable
-import GainsTable from './GainsTable';
+import TransactionsView from '../TransactionsView';
+import GainsLossesView from '../GainsLossesView';
 
 interface Props {
   activeTab: string;
@@ -34,7 +34,7 @@ interface Props {
   setDateRangeType: (d: DateRangeType) => void;
 }
 
-const Dashboard: React.FC<Props> = ({
+const DashboardView: React.FC<Props> = ({
   activeTab,
   holdings,
   transactions,
@@ -59,8 +59,8 @@ const Dashboard: React.FC<Props> = ({
   dateRangeType,
   setDateRangeType,
 }) => {
-  if (activeTab === 'import') {
-    return <ImportPanel onAddHoldings={onAddHoldings} onAddTransactions={onAddTransactions} setLoading={setLoading} />;
+  if (activeTab === 'importData') {
+    return <ImportDataView onAddHoldings={onAddHoldings} onAddTransactions={onAddTransactions} setLoading={setLoading} />;
   }
 
   if (activeTab === 'holdings') {
@@ -75,7 +75,7 @@ const Dashboard: React.FC<Props> = ({
             Clear All Data
           </button>
         </div>
-        <HoldingsTable holdings={holdings} onRemove={onRemoveHolding} />
+        <HoldingsView holdings={holdings} onRemove={onRemoveHolding} />
       </div>
     );
   }
@@ -92,7 +92,7 @@ const Dashboard: React.FC<Props> = ({
             Clear All Data
           </button>
         </div>
-        <TransactionsTable
+        <TransactionsView
                     transactions={transactions}
                     allTransactions={allTransactions}
                     onRemove={onRemoveTransaction}
@@ -111,13 +111,13 @@ const Dashboard: React.FC<Props> = ({
     );
   }
 
-  if (activeTab === 'gains') {
+  if (activeTab === 'gainsLosses') {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900">Realized Gains & Losses</h2>
         </div>
-        <GainsTable transactions={allTransactions} />
+        <GainsLossesView transactions={allTransactions} />
       </div>
     );
   }
@@ -131,7 +131,7 @@ const Dashboard: React.FC<Props> = ({
           <PortfolioVisuals holdings={holdings} />
           <div className="bg-white p-6 rounded-2xl border shadow-sm">
             <h3 className="text-lg font-bold text-slate-900 mb-4">Recent Performance</h3>
-            <HoldingsTable holdings={holdings.slice(0, 5)} onRemove={onRemoveHolding} />
+            <HoldingsView holdings={holdings.slice(0, 5)} onRemove={onRemoveHolding} />
             {holdings.length > 5 && (
               <p className="mt-4 text-center text-sm text-indigo-600 font-medium cursor-pointer">
                 View all holdings →
@@ -161,4 +161,4 @@ const Dashboard: React.FC<Props> = ({
   );
 };
 
-export default Dashboard;
+export default DashboardView;
