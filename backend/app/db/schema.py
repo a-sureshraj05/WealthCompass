@@ -1,10 +1,11 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+
 class Transaction(Base):
-    __tablename__ = 'transactions'
+    __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True, index=True)
     brokerage = Column(String)
@@ -17,8 +18,9 @@ class Transaction(Base):
     costPerShare = Column(Float)
     totalCost = Column(Float)
 
+
 class Holding(Base):
-    __tablename__ = 'holdings'
+    __tablename__ = "holdings"
 
     id = Column(Integer, primary_key=True, index=True)
     brokerage = Column(String, index=True)
@@ -32,7 +34,7 @@ class Holding(Base):
 
 
 class RealizedGain(Base):
-    __tablename__ = 'realized_gains'
+    __tablename__ = "realized_gains"
 
     id = Column(Integer, primary_key=True, index=True)
     brokerage = Column(String)

@@ -1,7 +1,7 @@
 import { StockHolding, Transaction, RealizedGain } from "../types";
 
 export const parseStatement = async (text: string, brokerageName: string): Promise<Transaction[]> => {
-  const response = await fetch("/api/v1/manual/parse-statement", {
+  const response = await fetch("/api/v1/import/parse-statement", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
