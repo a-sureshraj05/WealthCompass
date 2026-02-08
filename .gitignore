@@ -6,3 +6,4 @@ db/wealthcompass.db
 wealthcompass.db
 GoogleAIStudio/
 last_commit_hash.txt
+.flake8

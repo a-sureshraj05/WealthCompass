@@ -1,12 +1,15 @@
-import io
 import csv
+import io
 from datetime import datetime
-from typing import List, Dict, Any, Callable
-from backend.app.core.brokerage_configs import BROKERAGE_CONFIGS, DEFAULT_HOLDING_SCHEMA
+from typing import Any, Dict, List
 
-def parse_statement_manually(text: str, brokerage_name: str) -> List[Dict[str, Any]]:
+from backend.app.core.brokerage_configs import (BROKERAGE_CONFIGS,
+                                                DEFAULT_HOLDING_SCHEMA)
+
+
+def parse_statement_csv_data(text: str, brokerage_name: str) -> List[Dict[str, Any]]:
     """
-    Parses a brokerage statement manually (without AI) to extract stock holdings.
+    Parses a brokerage statement from CSV data to extract stock holdings.
     It uses predefined configurations for each brokerage to parse CSV formatted text,
     and maps them to the DEFAULT_HOLDING_SCHEMA.
 
@@ -47,11 +50,13 @@ def parse_statement_manually(text: str, brokerage_name: str) -> List[Dict[str, A
     # Verify required columns for direct mapping are present in headers
     for csv_col in csv_to_holding_map.keys():
         if csv_col not in headers:
-            raise ValueError(f"Required CSV column '{csv_col}' not found in statement headers for direct mapping.")
+            raise ValueError(
+                f"Required CSV column '{csv_col}' not found in statement headers for direct mapping."
+            )
 
-    for row in reader: # Continue reading from after the header
+    for row in reader:  # Continue reading from after the header
         if not row:
-            continue # Skip empty rows
+            continue  # Skip empty rows
 
         row_data = dict(zip(headers, row))
 
@@ -69,33 +74,39 @@ def parse_statement_manually(text: str, brokerage_name: str) -> List[Dict[str, A
         # Apply direct CSV to holding mapping
         for csv_col, target_attr in csv_to_holding_map.items():
             value = row_data.get(csv_col, "")
-            
+
             # Remove newlines from string values
             if isinstance(value, str):
-                value = value.replace('\n', ' ').replace('\r', '').strip()
+                value = value.replace("\n", " ").replace("\r", "").strip()
 
             if target_attr in ["quantity", "costPerShare", "totalCost"]:
                 # Handle commas, dollar signs, and parentheses for negative numbers
-                cleaned_value = value.replace('$', '').replace(',', '').strip()
-                if cleaned_value.startswith('(') and cleaned_value.endswith(')'):
+                cleaned_value = value.replace("$", "").replace(",", "").strip()
+                if cleaned_value.startswith("(") and cleaned_value.endswith(")"):
                     # Convert (100.00) to -100.00
-                    cleaned_value = '-' + cleaned_value[1:-1]
-                
+                    cleaned_value = "-" + cleaned_value[1:-1]
+
                 try:
-                    holding[target_attr] = float(cleaned_value) if cleaned_value else 0.0
+                    holding[target_attr] = (
+                        float(cleaned_value) if cleaned_value else 0.0
+                    )
                 except ValueError:
-                    print(f"Warning: Could not convert '{cleaned_value}' to float for {target_attr}.")
+                    print(
+                        f"Warning: Could not convert '{cleaned_value}' to float for {target_attr}."
+                    )
                     holding[target_attr] = 0.0
             elif target_attr == "date":
                 try:
                     # Ensure datetime.datetime object is returned
                     holding[target_attr] = datetime.strptime(str(value), date_format)
                 except (ValueError, TypeError):
-                    print(f"Warning: Could not convert '{value}' to date using format '{date_format}' for {target_attr}.")
+                    print(
+                        f"Warning: Could not convert '{value}' to date using format '{date_format}' for {target_attr}."
+                    )
                     holding[target_attr] = None
             elif value is not None:
                 holding[target_attr] = value
-        
+
         # Apply derived attributes
         for target_attr, callable_func in derived_attributes.items():
             try:
@@ -103,11 +114,15 @@ def parse_statement_manually(text: str, brokerage_name: str) -> List[Dict[str, A
                 derived_value = callable_func(row_data, config)
                 # Remove newlines from derived string values
                 if isinstance(derived_value, str):
-                    derived_value = derived_value.replace('\n', ' ').replace('\r', '').strip()
+                    derived_value = (
+                        derived_value.replace("\n", " ").replace("\r", "").strip()
+                    )
                 holding[target_attr] = derived_value
             except Exception as e:
-                print(f"Warning: Error executing derived function for {target_attr}: {e}")
-                holding[target_attr] = None # Fallback if derived function fails
+                print(
+                    f"Warning: Error executing derived function for {target_attr}: {e}"
+                )
+                holding[target_attr] = None  # Fallback if derived function fails
 
         # Explicitly set 'price' for Transaction model compatibility
         if "costPerShare" in holding and "price" not in holding:
