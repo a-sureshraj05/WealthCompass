@@ -7,12 +7,15 @@ class Transaction(Base):
     __tablename__ = 'transactions'
 
     id = Column(Integer, primary_key=True, index=True)
+    brokerage = Column(String)
     date = Column(DateTime)
     ticker = Column(String)
-    type = Column(String)
+    name = Column(String)
+    action = Column(String)
     quantity = Column(Float)
     price = Column(Float)
-    brokerage = Column(String)
+    costPerShare = Column(Float)
+    totalCost = Column(Float)
 
 class Holding(Base):
     __tablename__ = 'holdings'

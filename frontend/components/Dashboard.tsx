@@ -31,6 +31,8 @@ interface Props {
 
   onAddHoldings: (h: StockHolding[]) => void;
 
+  onAddTransactions: (t: Transaction[]) => void; // New prop for transactions
+
   onRemoveHolding: (id: string) => void;
 
   onRemoveTransaction: (id: string) => void; // Add onRemoveTransaction to props
@@ -57,6 +59,8 @@ const Dashboard: React.FC<Props> = ({
 
   onAddHoldings,
 
+  onAddTransactions,
+
   onRemoveHolding,
 
   onRemoveTransaction,
@@ -71,7 +75,7 @@ const Dashboard: React.FC<Props> = ({
 
   if (activeTab === 'import') {
 
-    return <ImportPanel onAddHoldings={onAddHoldings} setLoading={setLoading} />;
+    return <ImportPanel onAddHoldings={onAddHoldings} onAddTransactions={onAddTransactions} setLoading={setLoading} />;
 
   }
 

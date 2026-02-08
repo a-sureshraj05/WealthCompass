@@ -1,6 +1,6 @@
 import { StockHolding, Transaction } from "../types";
 
-export const parseStatement = async (text: string, brokerageName: string): Promise<StockHolding[]> => {
+export const parseStatement = async (text: string, brokerageName: string): Promise<Transaction[]> => {
   const response = await fetch("/api/v1/manual/parse-statement", {
     method: "POST",
     headers: {
@@ -14,12 +14,12 @@ export const parseStatement = async (text: string, brokerageName: string): Promi
   }
 
   const parsedData = await response.json();
-  // Assuming the backend now returns { message, holdings } or similar
-  return parsedData.holdings.map((item: any) => ({
+  // Assuming the backend now returns { message, transactions } or similar
+  return parsedData.transactions.map((item: any) => ({
     ...item,
     id: String(item.id), // Ensure ID is a string
-    avgPrice: item.costPerShare, // Map backend's costPerShare to avgPrice for frontend compatibility
-    currentPrice: undefined, // Current price not available from this endpoint
+    // No longer mapping costPerShare to avgPrice for frontend compatibility here as it's a transaction
+    // currentPrice is also not applicable for transactions
   }));
 };
 

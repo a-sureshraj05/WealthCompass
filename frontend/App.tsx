@@ -4,7 +4,7 @@ import { StockHolding, PortfolioStats, Transaction } from './types';
 import Dashboard from './components/Dashboard';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import { fetchHoldings, fetchTransactions, removeTransaction } from './services/apiService'; // Import fetchHoldings and fetchTransactions
+import { fetchHoldings, fetchTransactions, removeTransaction } from './services/apiService';
 
 const App: React.FC = () => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
@@ -45,13 +45,11 @@ const App: React.FC = () => {
   }, []);
 
   const stats = useMemo((): PortfolioStats => {
-    // For now, assuming currentPrice is costPerShare for calculation purposes in the absence of real-time data
     const totalValue = holdings.reduce((sum, h) => sum + (h.quantity * h.costPerShare), 0);
     const totalCost = holdings.reduce((sum, h) => sum + (h.quantity * h.costPerShare), 0);
     const totalGain = totalValue - totalCost;
     const gainPercentage = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
     
-    // Simulating day change for demo
     const dayChange = totalValue * 0.012; 
     const dayChangePercentage = 1.2;
 
@@ -60,6 +58,11 @@ const App: React.FC = () => {
 
   const handleAddHoldings = (newHoldings: StockHolding[]) => {
     setHoldings(newHoldings);
+  };
+
+  // New handler for adding transactions
+  const handleAddTransactions = (newTransactions: Transaction[]) => {
+    setTransactions(newTransactions);
   };
 
   const handleRemoveHolding = (id: string) => {
@@ -97,6 +100,7 @@ const App: React.FC = () => {
             transactions={transactions}
             stats={stats}
             onAddHoldings={handleAddHoldings}
+            onAddTransactions={handleAddTransactions} // Pass new handler
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
             onClearAll={handleClearAll}

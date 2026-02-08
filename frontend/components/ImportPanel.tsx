@@ -1,10 +1,10 @@
 
 import React, { useState } from 'react';
 import { parseStatement } from '../services/apiService';
-import { StockHolding } from '../types';
+import { Transaction } from '../types'; // Import Transaction type
 
 interface Props {
-  onAddHoldings: (h: StockHolding[]) => void;
+  onAddTransactions: (t: Transaction[]) => void; // Change prop to onAddTransactions
   setLoading: (l: boolean) => void;
 }
 
@@ -15,7 +15,7 @@ const BROKERAGES = [
   { name: 'Other', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }
 ];
 
-const ImportPanel: React.FC<Props> = ({ onAddHoldings, setLoading }) => {
+const ImportPanel: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
   const [selectedBroker, setSelectedBroker] = useState('');
   const [manualText, setManualText] = useState('');
   const [uploadError, setUploadError] = useState('');
@@ -44,7 +44,7 @@ const ImportPanel: React.FC<Props> = ({ onAddHoldings, setLoading }) => {
         console.log("File content:", text);
         try {
           const extracted = await parseStatement(text || "Demo Statement: AAPL 10 shares @ 150. MSFT 5 shares @ 300.", selectedBroker);
-          onAddHoldings(extracted);
+          onAddTransactions(extracted); // Call onAddTransactions
           setManualText('');
           setShowSuccessPrompt(true);
         } catch (err) {
@@ -69,12 +69,13 @@ const ImportPanel: React.FC<Props> = ({ onAddHoldings, setLoading }) => {
     setUploadError('');
     try {
       const extracted = await parseStatement(manualText, selectedBroker);
-      onAddHoldings(extracted);
+      onAddTransactions(extracted); // Call onAddTransactions
       setManualText('');
       setShowSuccessPrompt(true);
     } catch (err) {
       setUploadError('AI failed to find stock holdings in that text.');
-    } finally {
+    }
+    finally {
       setLoading(false);
     }
   };
