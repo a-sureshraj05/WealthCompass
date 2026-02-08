@@ -255,12 +255,12 @@ const TransactionsTable: React.FC<Props> = ({
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Asset</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Values in $</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Brokerage</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Symbol</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Action</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Quantity</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Price</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Total Amount ($)</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Brokerage</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider"></th>
             </tr>
           </thead>
@@ -271,11 +271,19 @@ const TransactionsTable: React.FC<Props> = ({
                   {new Date(t.date).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4">
+                  <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
+                    t.brokerage === 'Robinhood' ? 'bg-emerald-50 text-emerald-600' :
+                    t.brokerage === 'Schwab' ? 'bg-indigo-50 text-indigo-600' :
+                    'bg-slate-100 text-slate-600'
+                  }`}>
+                    {t.brokerage}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
                   <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center font-bold text-slate-700 text-xs">
+                    <div className="inline-flex items-center justify-center rounded bg-slate-100 px-2 py-1 font-bold uppercase text-slate-600 text-xs">
                       {t.ticker}
                     </div>
-                    <span className="font-bold text-slate-900">{t.ticker}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -289,15 +297,6 @@ const TransactionsTable: React.FC<Props> = ({
                 <td className="px-6 py-4 text-sm text-slate-700">{t.price.toFixed(2)}</td>
                 <td className="px-6 py-4 font-bold text-slate-900">
                   {t.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
-                    t.brokerage === 'Robinhood' ? 'bg-emerald-50 text-emerald-600' :
-                    t.brokerage === 'Schwab' ? 'bg-indigo-50 text-indigo-600' :
-                    'bg-slate-100 text-slate-600'
-                  }`}>
-                    {t.brokerage}
-                  </span>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <button 
