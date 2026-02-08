@@ -37,8 +37,30 @@ export const fetchHoldings = async (): Promise<StockHolding[]> => {
   }));
 };
 
-export const fetchTransactions = async (): Promise<Transaction[]> => {
-  const response = await fetch("/api/v1/transactions");
+export const fetchTransactions = async (
+  brokerages?: string[],
+  tickers?: string[],
+  startDate?: string | null,
+  endDate?: string | null
+): Promise<Transaction[]> => {
+  const params = new URLSearchParams();
+  if (brokerages && brokerages.length > 0) {
+    brokerages.forEach(b => params.append("brokerages", b));
+  }
+  if (tickers && tickers.length > 0) {
+    tickers.forEach(t => params.append("tickers", t));
+  }
+  if (startDate) {
+    params.append("start_date", startDate);
+  }
+  if (endDate) {
+    params.append("end_date", endDate);
+  }
+
+  const queryString = params.toString();
+  const url = `/api/v1/transactions${queryString ? `?${queryString}` : ''}`;
+
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch transactions: ${response.status} ${response.statusText}`);
   }

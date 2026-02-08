@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 import datetime
 
@@ -41,8 +41,26 @@ class Transaction(BaseModel):
         from_attributes = True
 
 @router.get("/transactions", response_model=List[Transaction])
-def get_transactions(db: Session = Depends(get_db)):
-    return db.query(DBTransaction).all()
+def get_transactions(
+    db: Session = Depends(get_db),
+    brokerages: Optional[List[str]] = Query(None),
+    tickers: Optional[List[str]] = Query(None),
+    start_date: Optional[datetime.date] = Query(None),
+    end_date: Optional[datetime.date] = Query(None)
+):
+    query = db.query(DBTransaction)
+
+    if brokerages:
+        query = query.filter(DBTransaction.brokerage.in_(brokerages))
+    if tickers:
+        query = query.filter(DBTransaction.ticker.in_(tickers))
+    if start_date:
+        query = query.filter(DBTransaction.date >= start_date)
+    if end_date:
+        # Add one day to end_date to include transactions on the end_date itself
+        query = query.filter(DBTransaction.date <= (end_date + datetime.timedelta(days=1)))
+
+    return query.all()
 
 @router.delete("/transactions/{transaction_id}")
 def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):

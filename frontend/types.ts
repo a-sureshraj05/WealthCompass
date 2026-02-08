@@ -32,12 +32,18 @@ export interface BrokerageInfo {
   icon: string;
 }
 
+export type DateRangeType = 'all' | '30d' | '90d' | 'ytd' | 'custom';
+
 export interface Transaction {
   id: string;
   date: string; // ISO date string
-  ticker: string;
   type: 'BUY' | 'SELL'; // Or more types if applicable
   quantity: number;
   price: number;
   brokerage: string;
+  ticker: string;
+  name: string;
+  action: string;
+  costPerShare: number;
+  totalCost: number;
 }

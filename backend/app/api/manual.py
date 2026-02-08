@@ -24,7 +24,6 @@ def parse_statement_manual_endpoint(request: StatementRequest, db: Session = Dep
         
         new_transaction_ids = []
         for transaction_data in parsed_transactions_data:
-            print("Transaction Data before DBTransaction creation:", transaction_data) # <--- ADDED PRINT STATEMENT
             db_transaction = DBTransaction(
                 brokerage=transaction_data["brokerage"],
                 date=transaction_data["date"],
