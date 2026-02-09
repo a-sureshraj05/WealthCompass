@@ -3,7 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Transaction } from '../types';
 
 type DateRangeType = 'all' | '30d' | '90d' | 'ytd' | 'custom';
-type SortKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'type' | 'quantity' | 'price' | 'amount';
+type SortKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'action' | 'quantity' | 'price' | 'amount';
 type SortDirection = 'asc' | 'desc' | null;
 
 interface Props {
@@ -145,9 +145,9 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
             valA = a.ticker.toLowerCase();
             valB = b.ticker.toLowerCase();
             break;
-          case 'type':
-            valA = a.type.toLowerCase();
-            valB = b.type.toLowerCase();
+          case 'action':
+            valA = a.action.toLowerCase();
+            valB = b.action.toLowerCase();
             break;
           case 'quantity':
             valA = a.quantity;
@@ -439,10 +439,10 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
                 </th>
                 <th 
                   className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group/header"
-                  onClick={() => handleSort('type')}
+                  onClick={() => handleSort('action')}
                 >
                   <div className="flex items-center">
-                    Action <SortIndicator column="type" />
+                    Action <SortIndicator column="action" />
                   </div>
                 </th>
                 <th 
@@ -501,9 +501,9 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                      t.type === 'BUY' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                      ['BUY', 'BTO'].includes(t.action.toUpperCase()) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                     }`}>
-                      {t.type}
+                      {t.action}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-700 font-bold text-right">{t.quantity}</td>
