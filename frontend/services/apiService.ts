@@ -65,7 +65,7 @@ export const fetchTransactions = async (
     throw new Error(`Failed to fetch transactions: ${response.status} ${response.statusText}`);
   }
   const data = await response.json();
-  return data.map((item: any) => ({ ...item, id: String(item.id) }));
+  return data.map((item: any) => ({ ...item, id: String(item.id), type: item.action }));
 };
 
 export const removeTransaction = async (id: string): Promise<void> => {

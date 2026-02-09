@@ -36,7 +36,7 @@ export type DateRangeType = 'all' | '30d' | '90d' | 'ytd' | 'custom';
 export interface Transaction {
   id: string;
   date: string; // ISO date string
-  type: 'BUY' | 'SELL'; // Or more types if applicable
+  type: 'BUY' | 'SELL' | 'BTO'; // Or more types if applicable
   quantity: number;
   price: number;
   brokerage: string;
