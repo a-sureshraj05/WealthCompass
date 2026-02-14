@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.app.core import process
-from backend.app.core.csv_statement_parser import parse_statement_csv_data
+from backend.app.core.statement_parser import csv_data_parse
 from backend.app.core.database import get_db
 from backend.app.db.schema import \
     Transaction as DBTransaction  # Import Transaction as DBTransaction
@@ -27,7 +27,7 @@ def parse_statement_import_endpoint(
         ).delete()
         db.commit()
 
-        parsed_transactions_data = parse_statement_csv_data(
+        parsed_transactions_data = csv_data_parse(
             request.text, request.brokerageName
         )
 
@@ -45,6 +45,7 @@ def parse_statement_import_endpoint(
                 ],  # Map costPerShare from parser to price in Transaction
                 costPerShare=transaction_data["costPerShare"],
                 totalCost=transaction_data["totalCost"],
+                assetType=transaction_data["assetType"],
             )
             db.add(db_transaction)
             db.flush()  # Flush to assign ID before commit, if needed by subsequent logic

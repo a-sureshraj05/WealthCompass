@@ -188,7 +188,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <h3 className="text-xl font-bold text-slate-900">Upload Successful!</h3>
-            <p className="text-slate-600">Your statement has been successfully parsed and holdings updated.</p>
+            <p className="text-slate-600">Your statement has been successfully parsed and processed.</p>
             <button
               onClick={() => setShowSuccessPrompt(false)}
               className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg"

@@ -60,6 +60,7 @@ class Transaction(BaseModel):
     price: float
     costPerShare: float
     totalCost: float
+    assetType: str
 
     class Config:
         from_attributes = True

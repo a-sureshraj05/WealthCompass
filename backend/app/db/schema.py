@@ -17,6 +17,7 @@ class Transaction(Base):
     price = Column(Float)
     costPerShare = Column(Float)
     totalCost = Column(Float)
+    assetType = Column(String)
 
 
 class Holding(Base):
