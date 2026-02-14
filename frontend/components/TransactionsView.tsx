@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Transaction } from '../types';
 
@@ -57,7 +56,14 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
     return Array.from(brokers).sort();
   }, [transactions]);
 
-  const allAssetTypes = ['EQUITY', 'OPTION'];
+  const allAssetTypes = useMemo(() => {
+    const assetTypes = new Set(
+      transactions
+        .map(t => t.assetType && t.assetType.toUpperCase())
+        .filter(Boolean) as string[]
+    );
+    return Array.from(assetTypes).sort();
+  }, [transactions]);
 
   const allTickers = useMemo(() => {
     const tickers = new Set(transactions.map(t => t.ticker));
@@ -71,8 +77,9 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
   };
 
   const toggleAssetType = (type: string) => {
+    const normalizedType = type.toUpperCase(); // Normalize to uppercase
     setSelectedAssetTypes(prev => 
-      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+      prev.includes(normalizedType) ? prev.filter(t => t !== normalizedType) : [...prev, normalizedType]
     );
   };
 
@@ -104,7 +111,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
 
     let result = transactions.filter((t) => {
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(t.brokerage);
-      const matchesAssetType = selectedAssetTypes.length === 0 || selectedAssetTypes.includes(t.assetType);
+      const matchesAssetType = selectedAssetTypes.length === 0 || selectedAssetTypes.map(at => at.toLowerCase()).includes((t.assetType || '').toLowerCase());
       const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(t.ticker);
       
       const transactionDate = new Date(t.date).getTime();
@@ -138,8 +145,8 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
             valB = b.brokerage.toLowerCase();
             break;
           case 'assetType':
-            valA = a.assetType.toLowerCase();
-            valB = b.assetType.toLowerCase();
+            valA = (a.assetType || '').toLowerCase();
+            valB = (b.assetType || '').toLowerCase();
             break;
           case 'ticker':
             valA = a.ticker.toLowerCase();
@@ -489,9 +496,9 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                      t.assetType === 'OPTION' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                      (t.assetType || '').toLowerCase() === 'options' ? 'bg-purple-100 text-purple-700' : ((t.assetType || '').toLowerCase() === 'equity' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600')
                     }`}>
-                      {formatAssetType(t.assetType)}
+                      {formatAssetType(t.assetType || '')}
                     </span>
                   </td>
                   <td className="px-6 py-4">

@@ -1,7 +1,7 @@
 from typing import Any, Callable, Dict, List  # noqa: F401
 
 # Define the default expected attributes for a stock holding
-DEFAULT_HOLDING_SCHEMA = {
+DEFAULT_TRANSACTION_SCHEMA = {
     "brokerage": str,
     "date": str,
     "ticker": str,
@@ -10,7 +10,18 @@ DEFAULT_HOLDING_SCHEMA = {
     "quantity": float,
     "costPerShare": float,
     "totalCost": float,
+    "assetType": str,
 }
+
+def get_asset_type(row_data: Dict[str, Any], config: Dict[str, Any]) -> str:
+    action_key = next((key for key, value in config["csv_to_holding_map"].items() if value == "action"), None)
+    if action_key:
+        action = row_data.get(action_key, "").lower()
+        if action in ["buy", "sell", "conv"]:
+            return "Equity"
+        elif action in ["bto", "stc"]:
+            return "Options"
+    return ""
 
 BROKERAGE_CONFIGS = {
     "Robinhood": {
@@ -36,6 +47,7 @@ BROKERAGE_CONFIGS = {
         },
         "derived_attributes": {
             "brokerage": lambda row_data, config: "Robinhood",
+            "assetType": get_asset_type,
         },
         "csv_delimiter": ",",
         "header_row_index": 0,
@@ -64,6 +76,7 @@ BROKERAGE_CONFIGS = {
         },
         "derived_attributes": {
             "brokerage": lambda row_data, config: "Schwab",
+            "assetType": get_asset_type,
         },
         "csv_delimiter": ",",
         "header_row_index": 0,
@@ -93,6 +106,7 @@ BROKERAGE_CONFIGS = {
         },
         "derived_attributes": {
             "brokerage": lambda row_data, config: "ExampleBrokerage",
+            "assetType": get_asset_type,
         },
         "csv_delimiter": ",",
         "header_row_index": 0,

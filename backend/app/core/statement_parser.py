@@ -4,21 +4,21 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 from backend.app.core.brokerage_configs import (BROKERAGE_CONFIGS,
-                                                DEFAULT_HOLDING_SCHEMA)
+                                                DEFAULT_TRANSACTION_SCHEMA)
 
 
-def parse_statement_csv_data(text: str, brokerage_name: str) -> List[Dict[str, Any]]:
+def csv_data_parse(text: str, brokerage_name: str) -> List[Dict[str, Any]]:
     """
-    Parses a brokerage statement from CSV data to extract stock holdings.
+    Parses a brokerage statement from CSV data to extract stock transactions.
     It uses predefined configurations for each brokerage to parse CSV formatted text,
-    and maps them to the DEFAULT_HOLDING_SCHEMA.
+    and maps them to the DEFAULT_TRANSACTION_SCHEMA.
 
     Args:
         text: The CSV content of the brokerage statement.
         brokerage_name: The name of the brokerage, used to look up parsing configuration.
 
     Returns:
-        A list of dictionaries, where each dictionary represents a stock holding
+        A list of dictionaries, where each dictionary represents a stock transaction
         and matches the structure expected by the system.
 
     Raises:
@@ -34,7 +34,7 @@ def parse_statement_csv_data(text: str, brokerage_name: str) -> List[Dict[str, A
     derived_attributes = config.get("derived_attributes", {})
     date_format = config.get("date_format", "%Y-%m-%d")
 
-    holdings = []
+    transactions = []
     csv_file = io.StringIO(text)
     reader = csv.reader(csv_file, delimiter=delimiter)
 
@@ -60,18 +60,18 @@ def parse_statement_csv_data(text: str, brokerage_name: str) -> List[Dict[str, A
 
         row_data = dict(zip(headers, row))
 
-        # Initialize holding based on DEFAULT_HOLDING_SCHEMA
-        holding = {}
-        for attr, attr_type in DEFAULT_HOLDING_SCHEMA.items():
+        # Initialize transaction based on DEFAULT_TRANSACTION_SCHEMA
+        transaction = {}
+        for attr, attr_type in DEFAULT_TRANSACTION_SCHEMA.items():
             if attr_type is str:
-                holding[attr] = ""
+                transaction[attr] = ""
             elif attr_type is float:
-                holding[attr] = 0.0
+                transaction[attr] = 0.0
             elif attr_type is datetime:
-                holding[attr] = None
+                transaction[attr] = None
             # Add more types if necessary, or use a generic default
 
-        # Apply direct CSV to holding mapping
+        # Apply direct CSV to transaction mapping
         for csv_col, target_attr in csv_to_holding_map.items():
             value = row_data.get(csv_col, "")
 
@@ -87,25 +87,25 @@ def parse_statement_csv_data(text: str, brokerage_name: str) -> List[Dict[str, A
                     cleaned_value = "-" + cleaned_value[1:-1]
 
                 try:
-                    holding[target_attr] = (
+                    transaction[target_attr] = (
                         float(cleaned_value) if cleaned_value else 0.0
                     )
                 except ValueError:
                     print(
                         f"Warning: Could not convert '{cleaned_value}' to float for {target_attr}."
                     )
-                    holding[target_attr] = 0.0
+                    transaction[target_attr] = 0.0
             elif target_attr == "date":
                 try:
                     # Ensure datetime.datetime object is returned
-                    holding[target_attr] = datetime.strptime(str(value), date_format)
+                    transaction[target_attr] = datetime.strptime(str(value), date_format)
                 except (ValueError, TypeError):
                     print(
                         f"Warning: Could not convert '{value}' to date using format '{date_format}' for {target_attr}."
                     )
-                    holding[target_attr] = None
+                    transaction[target_attr] = None
             elif value is not None:
-                holding[target_attr] = value
+                transaction[target_attr] = value
 
         # Apply derived attributes
         for target_attr, callable_func in derived_attributes.items():
@@ -117,19 +117,19 @@ def parse_statement_csv_data(text: str, brokerage_name: str) -> List[Dict[str, A
                     derived_value = (
                         derived_value.replace("\n", " ").replace("\r", "").strip()
                     )
-                holding[target_attr] = derived_value
+                transaction[target_attr] = derived_value
             except Exception as e:
                 print(
                     f"Warning: Error executing derived function for {target_attr}: {e}"
                 )
-                holding[target_attr] = None  # Fallback if derived function fails
+                transaction[target_attr] = None  # Fallback if derived function fails
 
         # Explicitly set 'price' for Transaction model compatibility
-        if "costPerShare" in holding and "price" not in holding:
-            holding["price"] = holding["costPerShare"]
+        if "costPerShare" in transaction and "price" not in transaction:
+            transaction["price"] = transaction["costPerShare"]
 
         # Basic validation: ensure we have at least a ticker and quantity
-        if holding.get("ticker") and holding.get("quantity", 0) > 0:
-            holdings.append(holding)
+        if transaction.get("ticker") and transaction.get("quantity", 0) > 0:
+            transactions.append(transaction)
 
-    return holdings
+    return transactions
