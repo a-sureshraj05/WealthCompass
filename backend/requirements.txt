@@ -3,3 +3,4 @@ uvicorn[standard]
 sqlalchemy
 google-cloud-aiplatform
 python-dotenv
+yfinance
