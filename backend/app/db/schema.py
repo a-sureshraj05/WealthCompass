@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -47,3 +47,10 @@ class RealizedGain(Base):
     sellPrice = Column(Float)
     gain = Column(Float)
     isLongTerm = Column(Boolean)
+
+
+class TickerReference(Base):
+    __tablename__ = "ticker_references"
+
+    ticker = Column(String, primary_key=True, index=True)
+    first_addition_date = Column(Date)

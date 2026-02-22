@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.db.schema import RealizedGain
 from backend.app.db.schema import Transaction as DBTransaction
+from backend.app.core.table_loader.ticker_reference_loader import load as ticker_reference_load
 
 
 def process_transactions(db: Session, brokerage_name: str = None):
@@ -88,4 +89,7 @@ def process_transactions(db: Session, brokerage_name: str = None):
 
     db.add_all(realized_gains_list)
     db.commit()
+
+    ticker_reference_load(db)
+
     print(f"Finished processing. Saved {len(realized_gains_list)} realized gains.")
