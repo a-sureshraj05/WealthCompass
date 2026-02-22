@@ -7,3 +7,7 @@ wealthcompass.db
 GoogleAIStudio/
 last_commit_hash.txt
 .flake8
+/.vscode/
+
+# Ignore user-specific SQL session/query files
+sql/*.sql
