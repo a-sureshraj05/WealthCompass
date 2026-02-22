@@ -54,3 +54,4 @@ class TickerReference(Base):
 
     ticker = Column(String, primary_key=True, index=True)
     first_addition_date = Column(Date)
+    price = Column(Float)
