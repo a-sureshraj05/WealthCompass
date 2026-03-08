@@ -10,7 +10,7 @@ def delete(db: Session, brokerage_name: str = None):
         db.query(RealizedGain).delete()
     db.commit()
 
-def load(db: Session, brokerage_name: str = None):
+def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, Any]]]:
     # First, delete existing realized gains
     delete(db, brokerage_name)
 
@@ -26,6 +26,7 @@ def load(db: Session, brokerage_name: str = None):
         transactions = db.query(DBTransaction).order_by(DBTransaction.date).all()
 
     realized_gains_list = []
+    open_lots_by_ticker: Dict[str, List[Dict[str, Any]]] = {}
 
     # Group transactions by ticker
     ticker_groups: Dict[str, List[DBTransaction]] = {}
@@ -79,6 +80,11 @@ def load(db: Session, brokerage_name: str = None):
                     remaining_to_sell -= sell_qty
                     if lot["quantity"] == 0:
                         buy_lots_queue.pop(0)  # Remove fully depleted lot
+        # Filter out any lots with quantity <= 0 before adding to open_lots_by_ticker
+        open_lots_by_ticker[ticker] = [lot for lot in buy_lots_queue if lot["quantity"] > 0]
 
     db.add_all(realized_gains_list)
     db.commit()
+
+    print(f"[realized_gain_loader] Returning open_lots_by_ticker: {open_lots_by_ticker}")
+    return open_lots_by_ticker
