@@ -49,6 +49,20 @@ class RealizedGain(Base):
     isLongTerm = Column(Boolean)
 
 
+class UnrealizedGain(Base):
+    __tablename__ = "unrealized_gains"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brokerage = Column(String)
+    ticker = Column(String)
+    buyDate = Column(DateTime)
+    quantity = Column(Float)
+    buyPrice = Column(Float)
+    currentPrice = Column(Float)
+    unrealizedGain = Column(Float)
+    isLongTerm = Column(Boolean)
+
+
 class TickerReference(Base):
     __tablename__ = "ticker_references"
 

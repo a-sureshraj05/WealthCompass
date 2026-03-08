@@ -11,6 +11,7 @@ from backend.app.db.schema import \
     Holding as DBHolding  # Alias to avoid name collision
 from backend.app.db.schema import RealizedGain as DBRealizedGain
 from backend.app.db.schema import Transaction as DBTransaction
+from backend.app.db.schema import UnrealizedGain as DBUnrealizedGain
 
 router = APIRouter()
 
@@ -26,6 +27,22 @@ class RealizedGain(BaseModel):
     buyPrice: float
     sellPrice: float
     gain: float
+    isLongTerm: bool
+
+    class Config:
+        from_attributes = True
+
+
+# Pydantic model for response validation - UnrealizedGain
+class UnrealizedGain(BaseModel):
+    id: int
+    brokerage: str
+    ticker: str
+    buyDate: datetime.datetime
+    quantity: float
+    buyPrice: float
+    currentPrice: float
+    unrealizedGain: float
     isLongTerm: bool
 
     class Config:
@@ -111,6 +128,11 @@ def get_holdings(db: Session = Depends(get_db)):
 @router.get("/realized-gains", response_model=List[RealizedGain])
 def get_realized_gains(db: Session = Depends(get_db)):
     return db.query(DBRealizedGain).all()
+
+
+@router.get("/unrealized-gains", response_model=List[UnrealizedGain])
+def get_unrealized_gains(db: Session = Depends(get_db)):
+    return db.query(DBUnrealizedGain).all()
 
 
 @router.post("/realized-gains/process")

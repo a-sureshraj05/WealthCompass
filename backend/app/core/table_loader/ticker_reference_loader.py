@@ -24,10 +24,7 @@ def load(db: Session):
 
     # Insert new ticker references
     for ticker, first_date in first_addition_dates:
-        latest_price = None
-        historical_data = get_stock_price(ticker, period='1d')
-        if historical_data is not None and not historical_data.empty:
-            latest_price = historical_data['Close'].iloc[-1]
+        latest_price = get_stock_price(ticker, period='1d')
         
         ticker_ref = TickerReference(
             ticker=ticker,

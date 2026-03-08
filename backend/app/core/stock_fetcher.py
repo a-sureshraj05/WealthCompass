@@ -2,24 +2,25 @@ import yfinance as yf
 import pandas as pd
 from typing import Union
 
-def get_stock_price(ticker_symbol: str, period: str = '1d') -> Union[pd.DataFrame, None]:
+def get_stock_price(ticker_symbol: str, period: str = '1d') -> Union[float, None]:
     """
-    Fetches historical stock data for a given ticker symbol.
+    Fetches the latest closing stock price for a given ticker symbol.
     
     Args:
         ticker_symbol: The stock ticker symbol (e.g., 'AAPL').
-        period: The time period for which to fetch data (e.g., '1d', '5d', '1mo').
+        period: The time period for which to fetch data (e.g., '1d').
         
     Returns:
-        A pandas DataFrame containing the historical data, or None if an error occurs.
+        A float representing the latest closing price, or None if an error occurs or data is not found.
     """
     try:
         ticker = yf.Ticker(ticker_symbol)
         historical_data = ticker.history(period=period)
-        print(f"Fetching stock price for: {historical_data}")
+        # print(f"Fetching stock price for: {historical_data}") # Keep this line for debugging if needed
 
-        if not historical_data.empty:
-            return historical_data
+        if not historical_data.empty and 'Close' in historical_data.columns:
+            # Return the latest closing price as a scalar float
+            return historical_data['Close'].iloc[-1].item()
         else:
             return None
     except Exception as e:

@@ -3,7 +3,6 @@ import React from 'react';
 interface Props {
   activeTab: string;
   setActiveTab: (tab: 'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses') => void;
-  onProcessGains: () => Promise<void>;
 }
 
 const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab }) => {
@@ -31,16 +30,6 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab }) => {
           <button
             key={item.id}
             onClick={async () => {
-              if (item.id === 'gainsLosses') {
-                console.log("Attempting to process realized gains...");
-                try {
-                  await onProcessGains();
-                  console.log("Realized gains processed successfully.");
-                } catch (error) {
-                  console.error("Error processing realized gains on tab click:", error);
-                  // Optionally, show a user-friendly error message
-                }
-              }
               setActiveTab(item.id as any);
             }}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${

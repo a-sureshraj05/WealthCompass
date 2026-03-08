@@ -1,4 +1,4 @@
-import { StockHolding, Transaction, RealizedGain } from "../types";
+import { StockHolding, Transaction, RealizedGain, UnrealizedLot } from "../types";
 
 export const parseStatement = async (text: string, brokerageName: string): Promise<Transaction[]> => {
   const response = await fetch("/api/v1/import/parse-statement", {
@@ -84,6 +84,15 @@ export const fetchRealizedGains = async (): Promise<RealizedGain[]> => {
   }
   const data = await response.json();
   return data.map((item: any) => ({ ...item, id: String(item.id) }));
+};
+
+export const fetchUnrealizedGains = async (): Promise<UnrealizedLot[]> => {
+  const response = await fetch("/api/v1/unrealized-gains");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch unrealized gains: ${response.status} ${response.statusText}`);
+  }
+  const data = await response.json();
+  return data.map((item: any) => ({ ...item, id: String(item.id), gain: item.unrealizedGain }));
 };
 
 export const getPortfolioInsights = async (holdings: StockHolding[]): Promise<string> => {

@@ -1,24 +1,24 @@
-
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { Transaction, RealizedGain } from '../types';
-import { fetchRealizedGains, triggerRealizedGainsProcess } from '../services/apiService';
+import { Transaction, RealizedGain, UnrealizedLot } from '../types'; // Added UnrealizedLot
+import { fetchRealizedGains, triggerRealizedGainsProcess, fetchUnrealizedGains } from '../services/apiService'; // Added fetchUnrealizedGains
 
 interface Props {
   transactions: Transaction[];
 }
 
-interface UnrealizedLot {
-  id: string;
-  ticker: string;
-  buyDate: string;
-  quantity: number;
-  buyPrice: number;
-  currentPrice: number;
-  gain: number;
-  isLongTerm: boolean;
-  brokerage: string;
-}
+// Removed client-side UnrealizedLot interface definition, now imported from types.ts
+// interface UnrealizedLot {
+//   id: string;
+//   ticker: string;
+//   buyDate: string;
+//   quantity: number;
+//   buyPrice: number;
+//   currentPrice: number;
+//   gain: number;
+//   isLongTerm: boolean;
+//   brokerage: string;
+// }
 
 const COLORS = ['#6366f1', '#a855f7', '#ec4899', '#f97316', '#10b981', '#0ea5e9', '#64748b'];
 
@@ -52,83 +52,53 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
   }, []);
 
   const [realizedGainsData, setRealizedGainsData] = useState<RealizedGain[]>([]);
-  const [isLoadingGains, setIsLoadingGains] = useState(false);
+  const [unrealizedGainsData, setUnrealizedGainsData] = useState<UnrealizedLot[]>([]); // New state for unrealized data
+  const [isLoading, setIsLoading] = useState(false); // Combined loading state
 
   const getRealizedGains = useCallback(async () => {
-    setIsLoadingGains(true);
+    setIsLoading(true);
     try {
       const data = await fetchRealizedGains();
       setRealizedGainsData(data);
     } catch (error) {
       console.error("Error fetching realized gains:", error);
     } finally {
-      setIsLoadingGains(false);
+      setIsLoading(false);
     }
   }, []);
 
-  const handleRefreshRealizedGains = useCallback(async () => {
-    setIsLoadingGains(true);
+  const getUnrealizedGains = useCallback(async () => { // New function to fetch unrealized gains
+    setIsLoading(true);
     try {
-      await triggerRealizedGainsProcess();
-      await getRealizedGains(); // Re-fetch after processing
+      const data = await fetchUnrealizedGains();
+      setUnrealizedGainsData(data);
     } catch (error) {
-      console.error("Error refreshing realized gains:", error);
+      console.error("Error fetching unrealized gains:", error);
     } finally {
-      setIsLoadingGains(false);
+      setIsLoading(false);
     }
-  }, [getRealizedGains]);
+  }, []);
+
+  const handleRefreshGains = useCallback(async () => { // Modified refresh handler
+    setIsLoading(true);
+    try {
+      await triggerRealizedGainsProcess(); // This processes both realized and unrealized on backend
+      await getRealizedGains(); // Re-fetch realized after processing
+      await getUnrealizedGains(); // Re-fetch unrealized after processing
+    } catch (error) {
+      console.error("Error refreshing gains:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getRealizedGains, getUnrealizedGains]);
 
   useEffect(() => {
     getRealizedGains();
-  }, [getRealizedGains]);
+    getUnrealizedGains(); // Fetch unrealized gains on mount
+  }, [getRealizedGains, getUnrealizedGains]);
 
-  // Calculate Unrealized Lots using FIFO from transactions prop
-  const unrealizedLots = useMemo(() => {
-    if (!Array.isArray(transactions)) {
-      console.warn("GainsTable received non-array transactions prop:", transactions);
-      return [];
-    }
-    const openLots: UnrealizedLot[] = [];
-    const tickerGroups: Record<string, Transaction[]> = {};
-
-    transactions.forEach(t => {
-      if (!tickerGroups[t.ticker]) tickerGroups[t.ticker] = [];
-      tickerGroups[t.ticker].push(t);
-    });
-
-    Object.keys(tickerGroups).forEach(ticker => {
-      const sorted = tickerGroups[ticker].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      const buyLotsQueue: { date: string, quantity: number, price: number, brokerage: string }[] = [];
-
-      sorted.forEach(t => {
-        if (t.type === 'BUY') {
-          buyLotsQueue.push({ date: t.date, quantity: t.quantity, price: t.price, brokerage: t.brokerage });
-        } else { /* Skip sell transactions for unrealized calculation */ }
-      });
-
-      buyLotsQueue.forEach(lot => {
-        if (lot.quantity > 0) {
-          const buyDate = new Date(lot.date);
-          const now = new Date();
-          const diffDays = (now.getTime() - buyDate.getTime()) / (1000 * 3600 * 24);
-          const lastKnownPrice = sorted.filter(tr => tr.type === 'SELL').pop()?.price || lot.price; // Needs current market data for accuracy
-
-          openLots.push({
-            id: Math.random().toString(36).substr(2, 9),
-            ticker,
-            buyDate: lot.date,
-            quantity: lot.quantity,
-            buyPrice: lot.price,
-            currentPrice: lastKnownPrice,
-            gain: lot.quantity * (lastKnownPrice - lot.price),
-            isLongTerm: diffDays > 365,
-            brokerage: lot.brokerage
-          });
-        }
-      });
-    });
-    return openLots;
-  }, [transactions]);
+  // Original client-side unrealizedLots calculation is removed.
+  // const unrealizedLots = useMemo(() => { /* ... removed ... */ }, [transactions]);
 
   // YoY Chart Data for Realized
   const yoyData = useMemo(() => {
@@ -143,29 +113,29 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
     return Object.values(years).sort((a, b) => a.year.localeCompare(b.year));
   }, [realizedGainsData, activeSubTab]);
 
-  // Pie Chart Data for Unrealized
+  // Pie Chart Data for Unrealized (uses new unrealizedGainsData)
   const unrealizedPieData = useMemo(() => {
     if (activeSubTab !== 'unrealized') return [];
     const tickers: Record<string, number> = {};
-    unrealizedLots.forEach(lot => {
+    unrealizedGainsData.forEach(lot => { // Changed from unrealizedLots to unrealizedGainsData
       tickers[lot.ticker] = (tickers[lot.ticker] || 0) + lot.gain;
     });
     return Object.entries(tickers)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [unrealizedLots, activeSubTab]);
+  }, [unrealizedGainsData, activeSubTab]); // Changed dependency
 
   const uniqueTickers = useMemo(() => {
-    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedLots;
+    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData; // Changed source
     const tickers = new Set(source.map(g => g.ticker));
     return Array.from(tickers).sort();
-  }, [realizedGainsData, unrealizedLots, activeSubTab]);
+  }, [realizedGainsData, unrealizedGainsData, activeSubTab]); // Changed dependency
 
   const uniqueBrokerages = useMemo(() => {
-    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedLots;
+    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData; // Changed source
     const brokers = new Set(source.map(g => g.brokerage));
     return Array.from(brokers).sort();
-  }, [realizedGainsData, unrealizedLots, activeSubTab]);
+  }, [realizedGainsData, unrealizedGainsData, activeSubTab]); // Changed dependency
 
   const availableYears = useMemo(() => {
     const source = activeSubTab === 'realized' ? realizedGainsData : []; // Only consider realized for years
@@ -174,7 +144,7 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
   }, [realizedGainsData, activeSubTab]);
 
   const filteredData = useMemo(() => {
-    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedLots;
+    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData; // Changed source
     return source.filter(g => {
       const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(g.ticker);
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(g.brokerage);
@@ -186,7 +156,7 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
       }
       return matchesTicker && matchesBrokerage;
     });
-  }, [realizedGainsData, unrealizedLots, selectedTickers, selectedBrokerages, selectedYear, activeSubTab]);
+  }, [realizedGainsData, unrealizedGainsData, selectedTickers, selectedBrokerages, selectedYear, activeSubTab]); // Changed dependency
 
   const shortTerm = filteredData.filter(g => !g.isLongTerm);
   const longTerm = filteredData.filter(g => g.isLongTerm);
@@ -231,7 +201,7 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {data.map(g => (
+              {filteredData.map((g: RealizedGain | UnrealizedLot) => (
                 <tr key={g.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-tight">
@@ -242,10 +212,10 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
                     <span className="text-[11px] font-bold text-slate-600">{g.brokerage}</span>
                   </td>
                   <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{g.buyDate}</td>
-                  {activeSubTab === 'realized' && <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{g.sellDate}</td>}
+                  {activeSubTab === 'realized' && <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{(g as RealizedGain).sellDate}</td>}
                   <td className="px-4 py-3 text-right text-[11px] text-slate-900 font-bold">{g.quantity}</td>
                   <td className="px-4 py-3 text-right text-[11px] text-slate-500">${g.buyPrice.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right text-[11px] text-slate-500">${(activeSubTab === 'realized' ? g.sellPrice : g.currentPrice).toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right text-[11px] text-slate-500">${(activeSubTab === 'realized' ? (g as RealizedGain).sellPrice : (g as UnrealizedLot).currentPrice).toFixed(2)}</td>
                   <td className={`px-4 py-3 text-right text-[11px] font-black ${g.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {g.gain >= 0 ? '+' : ''}${g.gain.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
@@ -384,7 +354,7 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
               </div>
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
                 <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lot Count</div>
-                <div className="text-lg font-black text-slate-900">{filteredData.length}</div>
+                <div className="text-lg font-black text-slate-900">{isLoading ? 'Loading...' : filteredData.length}</div>
                 <div className="text-[9px] text-slate-500 font-bold uppercase mt-1">Processed Trades</div>
               </div>
             </div>
@@ -403,10 +373,10 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
           </div>
 
           <button 
-            onClick={handleRefreshRealizedGains}
+            onClick={handleRefreshGains}
             className="ml-4 px-3 py-1.5 bg-blue-500 text-white rounded-md text-xs font-bold hover:bg-blue-600 transition-colors"
           >
-            Refresh Gains
+            Refresh Gains {isLoading && <span className="ml-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-solid border-white border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" role="status"></span>}
           </button>
 
           <div className="flex flex-wrap items-center gap-4 flex-1">
