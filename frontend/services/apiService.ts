@@ -103,6 +103,34 @@ export const getPortfolioInsights = async (holdings: StockHolding[]): Promise<st
   return "Insights are not yet implemented in the new architecture.";
 };
 
+export const createPlaidLinkToken = async (): Promise<string> => {
+  const response = await fetch("/api/v1/plaid/create-link-token", { method: "POST" });
+  if (!response.ok) throw new Error("Failed to create Plaid link token");
+  const data = await response.json();
+  return data.link_token;
+};
+
+export const exchangePlaidToken = async (publicToken: string, brokerage: string): Promise<void> => {
+  const response = await fetch("/api/v1/plaid/exchange-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_token: publicToken, brokerage }),
+  });
+  if (!response.ok) throw new Error("Failed to exchange Plaid token");
+};
+
+export const syncPlaidTransactions = async (): Promise<{ message: string }> => {
+  const response = await fetch("/api/v1/plaid/sync", { method: "POST" });
+  if (!response.ok) throw new Error("Failed to sync Plaid transactions");
+  return response.json();
+};
+
+export const fetchConnectedBrokerages = async (): Promise<{ id: number; brokerage: string }[]> => {
+  const response = await fetch("/api/v1/plaid/connected-brokerages");
+  if (!response.ok) throw new Error("Failed to fetch connected brokerages");
+  return response.json();
+};
+
 export const triggerRealizedGainsProcess = async (): Promise<void> => {
   const response = await fetch("/api/v1/realized-gains/process", {
     method: "POST",
