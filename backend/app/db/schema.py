@@ -48,6 +48,7 @@ class Holding(Base):
     totalCost = Column(Float)
     currentPrice = Column(Float)
     marketValue = Column(Float)
+    assetType = Column(String)
 
 
 class RealizedGain(Base):

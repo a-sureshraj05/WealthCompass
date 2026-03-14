@@ -61,6 +61,7 @@ class Holding(BaseModel):
     totalCost: float
     currentPrice: float
     marketValue: float
+    assetType: Optional[str] = None
 
     class Config:
         from_attributes = True

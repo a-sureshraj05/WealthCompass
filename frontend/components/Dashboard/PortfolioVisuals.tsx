@@ -60,7 +60,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
                 ))}
               </Pie>
               <Tooltip 
-                formatter={(value: number) => `$${value.toLocaleString()}`}
+                formatter={(value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
               />
               <Legend verticalAlign="bottom" align="center" iconType="circle" />
@@ -79,7 +79,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
               <YAxis hide />
               <Tooltip 
                 cursor={{ fill: '#f8fafc' }}
-                formatter={(value: number) => `$${value.toLocaleString()}`}
+                formatter={(value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
               />
               <Bar dataKey="value" radius={[6, 6, 0, 0]}>

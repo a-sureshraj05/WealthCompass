@@ -32,6 +32,7 @@ def load(db: Session, brokerage_name: str = None):
                 "quantity": 0.0,
                 "totalCost": 0.0,
                 "currentPrice": row.currentPrice,
+                "assetType": row.assetType,
             }
 
         aggregated[key]["quantity"] += row.quantity
@@ -51,6 +52,7 @@ def load(db: Session, brokerage_name: str = None):
             totalCost=total_cost,
             currentPrice=current_price,
             marketValue=total_quantity * current_price,
+            assetType=agg.get("assetType"),
         )
         holdings_list.append(holding)
 

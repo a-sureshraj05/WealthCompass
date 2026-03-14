@@ -7,6 +7,7 @@ export interface StockHolding {
   totalCost: number;
   currentPrice: number;
   marketValue: number;
+  assetType?: string;
 }
 
 export interface PortfolioStats {

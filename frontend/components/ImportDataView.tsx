@@ -5,6 +5,7 @@ import { Transaction } from '../types';
 interface Props {
   onAddTransactions: (t: Transaction[]) => void;
   setLoading: (l: boolean) => void;
+  initialTab?: 'manual' | 'connect';
 }
 
 const BROKERAGES = [
@@ -14,8 +15,8 @@ const BROKERAGES = [
   { name: 'Other', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }
 ];
 
-const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
-  const [activeTab, setActiveTab] = useState<'manual' | 'connect'>('manual');
+const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initialTab = 'manual' }) => {
+  const [activeTab, setActiveTab] = useState<'manual' | 'connect'>(initialTab);
 
   // Manual state
   const [selectedBroker, setSelectedBroker] = useState('');
