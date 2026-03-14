@@ -31,6 +31,14 @@ const Navbar: React.FC<Props> = ({ stats }) => {
           </span>
         </div>
 
+        <div className="flex flex-col items-end">
+          <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Total Change</span>
+          <span className={`text-lg font-bold ${stats.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {stats.totalGain >= 0 ? '+' : '-'}${Math.abs(stats.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <span className="text-sm font-medium ml-1">({stats.gainPercentage >= 0 ? '+' : ''}{stats.gainPercentage.toFixed(2)}%)</span>
+          </span>
+        </div>
+
         <div className="w-px h-8 bg-slate-200" />
 
         <div className="flex items-center space-x-3">

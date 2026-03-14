@@ -10,6 +10,7 @@ import GainsLossesView from '../GainsLossesView';
 
 interface Props {
   activeTab: string;
+  setActiveTab: (tab: 'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses') => void;
   holdings: StockHolding[];
   transactions: Transaction[];
   realizedGains: RealizedGain[];
@@ -24,6 +25,7 @@ interface Props {
 
 const DashboardView: React.FC<Props> = ({
   activeTab,
+  setActiveTab,
   holdings,
   transactions,
   realizedGains,
@@ -36,7 +38,7 @@ const DashboardView: React.FC<Props> = ({
   setLoading,
 }) => {
   if (activeTab === 'importData') {
-    return <ImportDataView onAddTransactions={onAddTransactions} setLoading={setLoading} />;
+    return <ImportDataView onAddTransactions={onAddTransactions} setLoading={setLoading} initialTab="connect" />;
   }
 
   if (activeTab === 'holdings') {
@@ -51,7 +53,7 @@ const DashboardView: React.FC<Props> = ({
             Clear All Data
           </button>
         </div>
-        <HoldingsView holdings={holdings} onRemove={onRemoveHolding} />
+        <HoldingsView holdings={holdings} unrealizedGains={unrealizedGains} onRemove={onRemoveHolding} />
       </div>
     );
   }
@@ -93,7 +95,7 @@ const DashboardView: React.FC<Props> = ({
           <PortfolioVisuals holdings={holdings} />
           <div className="bg-white p-6 rounded-2xl border shadow-sm">
             <h3 className="text-lg font-bold text-slate-900 mb-4">Recent Performance</h3>
-            <HoldingsView holdings={holdings.slice(0, 5)} onRemove={onRemoveHolding} />
+            <HoldingsView holdings={holdings.slice(0, 5)} unrealizedGains={unrealizedGains} onRemove={onRemoveHolding} />
             {holdings.length > 5 && (
               <p className="mt-4 text-center text-sm text-indigo-600 font-medium cursor-pointer">
                 View all holdings →
@@ -112,7 +114,7 @@ const DashboardView: React.FC<Props> = ({
             </p>
             <button
               className="w-full py-3 bg-white text-indigo-900 font-bold rounded-xl shadow-lg hover:bg-indigo-50 transition-colors"
-              onClick={() => {}}
+              onClick={() => setActiveTab('importData')}
             >
               Get Started
             </button>

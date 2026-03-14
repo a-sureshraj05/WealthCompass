@@ -158,6 +158,7 @@ const App: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <DashboardView
             activeTab={activeTab}
+            setActiveTab={setActiveTab}
             holdings={holdings}
             transactions={transactions}
             realizedGains={realizedGains}

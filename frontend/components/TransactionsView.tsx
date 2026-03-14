@@ -517,7 +517,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
                   <td className="px-6 py-4 text-sm text-slate-500 font-medium text-right">${t.price.toFixed(2)}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="text-sm font-black text-slate-900">
-                      ${(t.quantity * t.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      ${(t.quantity * t.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
