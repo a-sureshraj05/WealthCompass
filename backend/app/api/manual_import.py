@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from backend.app.core import process
 from backend.app.core.statement_parser import csv_data_parse
 from backend.app.core.database import get_db
+from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 from backend.app.db.schema import \
-    Transaction as DBTransaction  # Import Transaction as DBTransaction
+    Transaction as DBTransaction, ManualRawTransaction as DBManualRawTransaction
 
 router = APIRouter()
 
@@ -21,9 +22,14 @@ def parse_statement_import_endpoint(
     request: StatementRequest, db: Session = Depends(get_db)
 ):
     try:
-        # Delete existing transactions for this brokerageName
+        # Delete existing manual raw transactions for this brokerageName
+        db.query(DBManualRawTransaction).filter(
+            DBManualRawTransaction.brokerage == request.brokerageName
+        ).delete()
+        # Delete existing manual transactions from the unified table for this brokerageName
         db.query(DBTransaction).filter(
-            DBTransaction.brokerage == request.brokerageName
+            DBTransaction.brokerage == request.brokerageName,
+            DBTransaction.source == "manual",
         ).delete()
         db.commit()
 
@@ -33,6 +39,24 @@ def parse_statement_import_endpoint(
 
         new_transaction_ids = []
         for transaction_data in parsed_transactions_data:
+            asset_type = normalize_asset_type(transaction_data["assetType"])
+
+            # Insert into ManualRawTransaction (raw log)
+            db_raw = DBManualRawTransaction(
+                brokerage=transaction_data["brokerage"],
+                date=transaction_data["date"],
+                ticker=transaction_data["ticker"],
+                name=transaction_data["name"],
+                action=transaction_data["action"],
+                quantity=transaction_data["quantity"],
+                price=transaction_data["costPerShare"],
+                costPerShare=transaction_data["costPerShare"],
+                totalCost=transaction_data["totalCost"],
+                assetType=asset_type,
+            )
+            db.add(db_raw)
+
+            # Insert into unified Transaction table
             db_transaction = DBTransaction(
                 brokerage=transaction_data["brokerage"],
                 date=transaction_data["date"],
@@ -40,12 +64,11 @@ def parse_statement_import_endpoint(
                 name=transaction_data["name"],
                 action=transaction_data["action"],
                 quantity=transaction_data["quantity"],
-                price=transaction_data[
-                    "costPerShare"
-                ],  # Map costPerShare from parser to price in Transaction
+                price=transaction_data["costPerShare"],
                 costPerShare=transaction_data["costPerShare"],
                 totalCost=transaction_data["totalCost"],
-                assetType=transaction_data["assetType"],
+                assetType=asset_type,
+                source="manual",
             )
             db.add(db_transaction)
             db.flush()  # Flush to assign ID before commit, if needed by subsequent logic

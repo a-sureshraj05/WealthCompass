@@ -28,6 +28,7 @@ class RealizedGain(BaseModel):
     sellPrice: float
     gain: float
     isLongTerm: bool
+    assetType: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -44,6 +45,7 @@ class UnrealizedGain(BaseModel):
     currentPrice: float
     unrealizedGain: float
     isLongTerm: bool
+    assetType: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -89,6 +91,7 @@ def get_transactions(
     tickers: Optional[List[str]] = Query(None),
     start_date: Optional[datetime.date] = Query(None),
     end_date: Optional[datetime.date] = Query(None),
+    source: Optional[str] = Query("all"),  # "all" | "manual" | "snaptrade"
 ):
     query = db.query(DBTransaction)
 
@@ -99,10 +102,11 @@ def get_transactions(
     if start_date:
         query = query.filter(DBTransaction.date >= start_date)
     if end_date:
-        # Add one day to end_date to include transactions on the end_date itself
         query = query.filter(
             DBTransaction.date <= (end_date + datetime.timedelta(days=1))
         )
+    if source and source != "all":
+        query = query.filter(DBTransaction.source == source)
 
     return query.all()
 

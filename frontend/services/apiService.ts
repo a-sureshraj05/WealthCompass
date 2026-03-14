@@ -131,6 +131,30 @@ export const fetchConnectedBrokerages = async (): Promise<{ id: number; brokerag
   return response.json();
 };
 
+export const getBrokerageConnectUrl = async (brokerage: string): Promise<string> => {
+  const response = await fetch(`/api/v1/brokerage/connect-url?brokerage=${encodeURIComponent(brokerage)}`);
+  if (!response.ok) throw new Error("Failed to get connect URL");
+  const data = await response.json();
+  return data.url;
+};
+
+export const fetchBrokerageConnections = async (): Promise<{ id: number; brokerage: string }[]> => {
+  const response = await fetch("/api/v1/brokerage/connections");
+  if (!response.ok) throw new Error("Failed to fetch connections");
+  return response.json();
+};
+
+export const deleteBrokerageConnection = async (authorizationId: string): Promise<void> => {
+  const response = await fetch(`/api/v1/brokerage/connections/${authorizationId}`, { method: "DELETE" });
+  if (!response.ok) throw new Error("Failed to delete connection");
+};
+
+export const syncBrokerageTransactions = async (): Promise<{ message: string }> => {
+  const response = await fetch("/api/v1/brokerage/sync", { method: "POST" });
+  if (!response.ok) throw new Error("Failed to sync transactions");
+  return response.json();
+};
+
 export const triggerRealizedGainsProcess = async (): Promise<void> => {
   const response = await fetch("/api/v1/realized-gains/process", {
     method: "POST",

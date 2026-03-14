@@ -40,8 +40,9 @@ export interface Transaction {
   ticker: string;
   name: string;
   action: string;
-  costPerShare: number; // Corresponds to backend's costPerShare
+  costPerShare: number;
   totalCost: number;
+  assetType: string;
 }
 
 export interface RealizedGain {
@@ -55,6 +56,7 @@ export interface RealizedGain {
   gain: number;
   isLongTerm: boolean;
   brokerage: string;
+  assetType?: string;
 }
 
 export interface UnrealizedLot {
@@ -67,4 +69,5 @@ export interface UnrealizedLot {
   gain: number;
   isLongTerm: boolean;
   brokerage: string;
+  assetType?: string;
 }

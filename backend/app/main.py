@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from backend.app.core.database import engine
 from backend.app.db.schema import Base
 
-from .api import manual_import, transactions, plaid
+from .api import manual_import, transactions, brokerage
 
 app = FastAPI()
 
@@ -23,7 +23,7 @@ def startup_event():
 
 app.include_router(transactions.router, prefix="/api/v1")
 app.include_router(manual_import.router, prefix="/api/v1")
-app.include_router(plaid.router, prefix="/api/v1/plaid")
+app.include_router(brokerage.router, prefix="/api/v1/brokerage")
 
 
 @app.get("/")

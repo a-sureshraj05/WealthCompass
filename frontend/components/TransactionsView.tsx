@@ -71,7 +71,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
   }, [transactions]);
 
   const toggleBrokerage = (broker: string) => {
-    setSelectedBrokerages(prev => 
+    setSelectedBrokerages(prev =>
       prev.includes(broker) ? prev.filter(b => b !== broker) : [...prev, broker]
     );
   };
@@ -110,7 +110,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
     const startOfYear = new Date(now.getFullYear(), 0, 1);
 
     let result = transactions.filter((t) => {
-      const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(t.brokerage);
+      const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.map(b => b.toLowerCase().trim()).includes((t.brokerage || '').toLowerCase().trim());
       const matchesAssetType = selectedAssetTypes.length === 0 || selectedAssetTypes.map(at => at.toLowerCase()).includes((t.assetType || '').toLowerCase());
       const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(t.ticker);
       
@@ -481,7 +481,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredTransactions.map((t) => (
-                <tr key={t.id} className="hover:bg-slate-50 transition-colors group">
+                <tr key={`${t.brokerage}-${t.id}`} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-6 py-4 text-sm text-slate-500 font-medium whitespace-nowrap">
                     {new Date(t.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                   </td>

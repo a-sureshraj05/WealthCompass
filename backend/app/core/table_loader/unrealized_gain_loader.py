@@ -20,13 +20,13 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
     unrealized_gains_list = []
     today = datetime.now()
 
-    for ticker, open_lots in open_lots_by_ticker.items():
+    for (brokerage, ticker), open_lots in open_lots_by_ticker.items():
         if not open_lots:
             continue
 
         current_price = get_stock_price(ticker)
         if current_price is None:
-            print(f"Warning: Could not fetch current price for {ticker}. Skipping unrealized gain calculation for this ticker.")
+            print(f"Warning: Could not fetch current price for {ticker} ({brokerage}). Skipping.")
             continue
 
         for lot in open_lots:
@@ -51,6 +51,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
                     currentPrice=current_price,
                     unrealizedGain=lot["quantity"] * (current_price - lot["price"]),
                     isLongTerm=is_long_term,
+                    assetType=lot.get("assetType"),
                 )
                 unrealized_gains_list.append(unrealized_gain)
             except Exception as e:

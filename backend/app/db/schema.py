@@ -18,6 +18,23 @@ class Transaction(Base):
     costPerShare = Column(Float)
     totalCost = Column(Float)
     assetType = Column(String)
+    source = Column(String)
+
+
+class ManualRawTransaction(Base):
+    __tablename__ = "manual_raw_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brokerage = Column(String)
+    date = Column(DateTime)
+    ticker = Column(String)
+    name = Column(String)
+    action = Column(String)
+    quantity = Column(Float)
+    price = Column(Float)
+    costPerShare = Column(Float)
+    totalCost = Column(Float)
+    assetType = Column(String)
 
 
 class Holding(Base):
@@ -46,6 +63,7 @@ class RealizedGain(Base):
     sellPrice = Column(Float)
     gain = Column(Float)
     isLongTerm = Column(Boolean)
+    assetType = Column(String)
 
 
 class UnrealizedGain(Base):
@@ -60,6 +78,7 @@ class UnrealizedGain(Base):
     currentPrice = Column(Float)
     unrealizedGain = Column(Float)
     isLongTerm = Column(Boolean)
+    assetType = Column(String)
 
 
 class TickerReference(Base):
@@ -94,3 +113,31 @@ class PlaidTransaction(Base):
     amount = Column(Float)               # total value (quantity * price)
     assetType = Column(String)           # equity, etf, etc.
     plaid_transaction_id = Column(String, unique=True)  # Plaid's own ID (prevents duplicates)
+
+
+class SnaptradeConnection(Base):
+    __tablename__ = "snaptrade_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brokerage = Column(String)               # e.g. "Robinhood"
+    brokerage_slug = Column(String)          # e.g. "ROBINHOOD"
+    authorization_id = Column(String, unique=True)  # Snaptrade's auth ID
+    account_id = Column(String)              # Snaptrade account ID
+
+
+class SnaptradeTransaction(Base):
+    __tablename__ = "snaptrade_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    authorization_id = Column(String, index=True)
+    brokerage = Column(String)
+    date = Column(DateTime)
+    ticker = Column(String)
+    name = Column(String)
+    action = Column(String)
+    quantity = Column(Float)
+    price = Column(Float)
+    amount = Column(Float)
+    currency = Column(String)
+    assetType = Column(String)
+    snaptrade_transaction_id = Column(String, unique=True)  # prevents duplicates
