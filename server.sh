@@ -22,10 +22,10 @@ start_servers() {
     echo "Launching servers in new terminal windows..."
 
     # Start the backend in a new terminal window with explicit host/port and in background
-    osascript -e "tell application \"Terminal\" to do script \"cd ${CWD} && echo '--- Starting Backend ---' && python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 &\""
+    osascript -e "tell application \"Terminal\" to do script \"cd ${CWD} && echo '--- Starting Backend ---' && python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000\""
 
-    # Start the frontend in a new terminal window and in background
-    osascript -e "tell application \"Terminal\" to do script \"cd ${CWD}/frontend && echo '--- Starting Frontend ---' && npm run dev &\""
+    # Start the frontend in a new terminal window
+    osascript -e "tell application \"Terminal\" to do script \"cd ${CWD}/frontend && echo '--- Starting Frontend ---' && npm run dev\""
 
     echo "The servers should now be running in new terminal windows."
 }

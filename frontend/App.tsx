@@ -160,28 +160,14 @@ const App: React.FC = () => {
             activeTab={activeTab}
             holdings={holdings}
             transactions={transactions}
-            allTransactions={transactions}
             realizedGains={realizedGains}
             unrealizedGains={unrealizedGains}
             stats={stats}
-            onAddHoldings={handleAddHoldings}
-            onAddTransactions={handleAddTransactions} // Pass new handler
+            onAddTransactions={handleAddTransactions}
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
             onClearAll={handleClearAll}
             setLoading={setLoading}
-            loading={loading}
-            // Pass filter states and setters
-            selectedBrokerages={selectedBrokerages}
-            setSelectedBrokerages={setSelectedBrokerages}
-            selectedTickers={selectedTickers}
-            setSelectedTickers={setSelectedTickers}
-            startDate={startDate}
-            setStartDate={setStartDate}
-            endDate={endDate}
-            setEndDate={setEndDate}
-            dateRangeType={dateRangeType}
-            setDateRangeType={setDateRangeType}
           />
         </main>
       </div>
