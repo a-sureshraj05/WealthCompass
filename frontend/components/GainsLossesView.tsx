@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { Transaction, RealizedGain, UnrealizedLot } from '../types'; // Added UnrealizedLot
-import { fetchRealizedGains, triggerRealizedGainsProcess, fetchUnrealizedGains } from '../services/apiService'; // Added fetchUnrealizedGains
+import { RealizedGain, UnrealizedLot } from '../types';
 
 interface Props {
-  transactions: Transaction[];
+  realizedGains: RealizedGain[];
+  unrealizedGains: UnrealizedLot[];
 }
 
 // Removed client-side UnrealizedLot interface definition, now imported from types.ts
@@ -22,7 +22,7 @@ interface Props {
 
 const COLORS = ['#6366f1', '#a855f7', '#ec4899', '#f97316', '#10b981', '#0ea5e9', '#64748b'];
 
-const GainsLossesView: React.FC<Props> = ({ transactions }) => {
+const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, unrealizedGains: unrealizedGainsData }) => {
   const [activeSubTab, setActiveSubTab] = useState<'realized' | 'unrealized'>('realized');
   const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
@@ -51,51 +51,6 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const [realizedGainsData, setRealizedGainsData] = useState<RealizedGain[]>([]);
-  const [unrealizedGainsData, setUnrealizedGainsData] = useState<UnrealizedLot[]>([]); // New state for unrealized data
-  const [isLoading, setIsLoading] = useState(false); // Combined loading state
-
-  const getRealizedGains = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await fetchRealizedGains();
-      setRealizedGainsData(data);
-    } catch (error) {
-      console.error("Error fetching realized gains:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const getUnrealizedGains = useCallback(async () => { // New function to fetch unrealized gains
-    setIsLoading(true);
-    try {
-      const data = await fetchUnrealizedGains();
-      setUnrealizedGainsData(data);
-    } catch (error) {
-      console.error("Error fetching unrealized gains:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const handleRefreshGains = useCallback(async () => { // Modified refresh handler
-    setIsLoading(true);
-    try {
-      await triggerRealizedGainsProcess(); // This processes both realized and unrealized on backend
-      await getRealizedGains(); // Re-fetch realized after processing
-      await getUnrealizedGains(); // Re-fetch unrealized after processing
-    } catch (error) {
-      console.error("Error refreshing gains:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [getRealizedGains, getUnrealizedGains]);
-
-  useEffect(() => {
-    getRealizedGains();
-    getUnrealizedGains(); // Fetch unrealized gains on mount
-  }, [getRealizedGains, getUnrealizedGains]);
 
   // Original client-side unrealizedLots calculation is removed.
   // const unrealizedLots = useMemo(() => { /* ... removed ... */ }, [transactions]);
@@ -117,13 +72,13 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
   const unrealizedPieData = useMemo(() => {
     if (activeSubTab !== 'unrealized') return [];
     const tickers: Record<string, number> = {};
-    unrealizedGainsData.forEach(lot => { // Changed from unrealizedLots to unrealizedGainsData
-      tickers[lot.ticker] = (tickers[lot.ticker] || 0) + lot.gain;
+    unrealizedGainsData.forEach(lot => {
+      tickers[lot.ticker] = (tickers[lot.ticker] || 0) + lot.quantity * lot.currentPrice;
     });
     return Object.entries(tickers)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [unrealizedGainsData, activeSubTab]); // Changed dependency
+  }, [unrealizedGainsData, activeSubTab]);
 
   const uniqueTickers = useMemo(() => {
     const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData; // Changed source
@@ -275,7 +230,7 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
           </div>
         ) : (
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Unrealized Gain Distribution</h3>
+            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Holdings Distribution by Market Value</h3>
             <div className="h-64">
               {unrealizedPieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -354,7 +309,7 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
               </div>
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
                 <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lot Count</div>
-                <div className="text-lg font-black text-slate-900">{isLoading ? 'Loading...' : filteredData.length}</div>
+                <div className="text-lg font-black text-slate-900">{filteredData.length}</div>
                 <div className="text-[9px] text-slate-500 font-bold uppercase mt-1">Processed Trades</div>
               </div>
             </div>
@@ -372,14 +327,7 @@ const GainsLossesView: React.FC<Props> = ({ transactions }) => {
             <span className="text-sm font-bold text-slate-700 whitespace-nowrap">Filter {activeSubTab === 'realized' ? 'Tax Data' : 'Holdings'}</span>
           </div>
 
-          <button 
-            onClick={handleRefreshGains}
-            className="ml-4 px-3 py-1.5 bg-blue-500 text-white rounded-md text-xs font-bold hover:bg-blue-600 transition-colors"
-          >
-            Refresh Gains {isLoading && <span className="ml-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-solid border-white border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" role="status"></span>}
-          </button>
-
-          <div className="flex flex-wrap items-center gap-4 flex-1">
+<div className="flex flex-wrap items-center gap-4 flex-1">
             {activeSubTab === 'realized' && (
               <div className="relative group">
                 <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter">Tax Year</label>

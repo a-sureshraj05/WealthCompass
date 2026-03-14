@@ -3,9 +3,10 @@ import React from 'react';
 interface Props {
   activeTab: string;
   setActiveTab: (tab: 'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses') => void;
+  onProcessGains: () => void;
 }
 
-const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab }) => {
+const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab, onProcessGains }) => {
   const menuItems = [
     { id: 'dashboardView', label: 'Dashboard', icon: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z' },
     { id: 'holdings', label: 'Holdings', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
@@ -46,7 +47,16 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab }) => {
         ))}
       </nav>
 
-      <div className="p-6">
+      <div className="px-6 pb-4">
+        <button
+          onClick={onProcessGains}
+          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-xl transition-colors"
+        >
+          Refresh Data
+        </button>
+      </div>
+
+      <div className="p-6 pt-0">
         <div className="bg-slate-800 rounded-2xl p-4">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Security Note</p>
           <p className="text-xs text-slate-500 leading-relaxed">

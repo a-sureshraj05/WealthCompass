@@ -1,5 +1,5 @@
 import React from 'react';
-import { StockHolding, PortfolioStats, Transaction, DateRangeType } from '../types';
+import { StockHolding, PortfolioStats, Transaction, RealizedGain, UnrealizedLot } from '../../types';
 import SummaryCards from './SummaryCards';
 import PortfolioVisuals from './PortfolioVisuals';
 import HoldingsView from '../HoldingsView';
@@ -11,56 +11,32 @@ import GainsLossesView from '../GainsLossesView';
 interface Props {
   activeTab: string;
   holdings: StockHolding[];
-  transactions: Transaction[]; // Add transactions to props
-  allTransactions: Transaction[];
+  transactions: Transaction[];
+  realizedGains: RealizedGain[];
+  unrealizedGains: UnrealizedLot[];
   stats: PortfolioStats;
-  onAddHoldings: (h: StockHolding[]) => void;
-  onAddTransactions: (t: Transaction[]) => void; // New prop for transactions
+  onAddTransactions: (t: Transaction[]) => void;
   onRemoveHolding: (id: string) => void;
-  onRemoveTransaction: (id: string) => void; // Add onRemoveTransaction to props
+  onRemoveTransaction: (id: string) => void;
   onClearAll: () => void;
   setLoading: (l: boolean) => void;
-  loading: boolean;
-  // Filter props
-  selectedBrokerages: string[];
-  setSelectedBrokerages: (b: string[]) => void;
-  selectedTickers: string[];
-  setSelectedTickers: (t: string[]) => void;
-  startDate: string | null;
-  setStartDate: (d: string | null) => void;
-  endDate: string | null;
-  setEndDate: (d: string | null) => void;
-  dateRangeType: DateRangeType;
-  setDateRangeType: (d: DateRangeType) => void;
 }
 
 const DashboardView: React.FC<Props> = ({
   activeTab,
   holdings,
   transactions,
-  allTransactions,
+  realizedGains,
+  unrealizedGains,
   stats,
-  onAddHoldings,
   onAddTransactions,
   onRemoveHolding,
   onRemoveTransaction,
   onClearAll,
   setLoading,
-  loading,
-  // Filter props
-  selectedBrokerages,
-  setSelectedBrokerages,
-  selectedTickers,
-  setSelectedTickers,
-  startDate,
-  setStartDate,
-  endDate,
-  setEndDate,
-  dateRangeType,
-  setDateRangeType,
 }) => {
   if (activeTab === 'importData') {
-    return <ImportDataView onAddHoldings={onAddHoldings} onAddTransactions={onAddTransactions} setLoading={setLoading} />;
+    return <ImportDataView onAddTransactions={onAddTransactions} setLoading={setLoading} />;
   }
 
   if (activeTab === 'holdings') {
@@ -92,21 +68,7 @@ const DashboardView: React.FC<Props> = ({
             Clear All Data
           </button>
         </div>
-        <TransactionsView
-                    transactions={transactions}
-                    allTransactions={allTransactions}
-                    onRemove={onRemoveTransaction}
-          selectedBrokerages={selectedBrokerages}
-          setSelectedBrokerages={setSelectedBrokerages}
-          selectedTickers={selectedTickers}
-          setSelectedTickers={setSelectedTickers}
-          startDate={startDate}
-          setStartDate={setStartDate}
-          endDate={endDate}
-          setEndDate={setEndDate}
-          dateRangeType={dateRangeType}
-          setDateRangeType={setDateRangeType}
-        />
+        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} />
       </div>
     );
   }
@@ -117,7 +79,7 @@ const DashboardView: React.FC<Props> = ({
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900">Realized Gains & Losses</h2>
         </div>
-        <GainsLossesView transactions={allTransactions} />
+        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} />
       </div>
     );
   }

@@ -22,24 +22,20 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
 
     for ticker, open_lots in open_lots_by_ticker.items():
         if not open_lots:
-            # print(f"[unrealized_gain_loader] No open lots for {ticker}, skipping.") # Debug print removed
             continue
 
-        current_price = get_stock_price(ticker)  # Fetch current price once per ticker
+        current_price = get_stock_price(ticker)
         if current_price is None:
-            # Skip if current price cannot be fetched
             print(f"Warning: Could not fetch current price for {ticker}. Skipping unrealized gain calculation for this ticker.")
             continue
 
         for lot in open_lots:
             # Ensure lot quantity is positive before processing
             if lot["quantity"] <= 0:
-                # print(f"[unrealized_gain_loader] Lot quantity is non-positive for {ticker}, skipping lot: {lot}") # Debug print removed
                 continue
 
             buy_date_dt = lot["date"]
             if buy_date_dt is None:
-                # print(f"[unrealized_gain_loader] buyDate is None for {ticker}, skipping lot: {lot}") # Debug print removed
                 continue
 
             try:
@@ -59,7 +55,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
                 unrealized_gains_list.append(unrealized_gain)
             except Exception as e:
                 print(f"[unrealized_gain_loader] ERROR creating UnrealizedGain object for lot {lot}: {e}")
-                continue # Skip this lot if there's an error creating the object
+                continue
 
     try:
         print(f"[unrealized_gain_loader] Adding {len(unrealized_gains_list)} unrealized gains to DB.")
@@ -69,4 +65,4 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
     except Exception as e:
         db.rollback()
         print(f"[unrealized_gain_loader] ERROR committing unrealized gains: {e}")
-        raise # Re-raise the exception to propagate the error
+        raise

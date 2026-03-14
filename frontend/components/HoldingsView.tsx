@@ -22,17 +22,16 @@ const HoldingsView: React.FC<Props> = ({ holdings, onRemove }) => {
           <tr className="bg-slate-50 border-b border-slate-200">
             <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Asset</th>
             <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Quantity</th>
-            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Cost Per Share</th>
+            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Avg Cost/Share</th>
             <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Total Cost</th>
+            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Current Price</th>
+            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Market Value</th>
             <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Brokerage</th>
             <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200">
           {holdings.map((h) => {
-            const costPerShare = h.costPerShare ?? 0;
-            const totalCost = h.totalCost ?? 0; // Use totalCost from backend
-
             return (
               <tr key={h.id} className="hover:bg-slate-50 transition-colors">
                 <td className="px-6 py-4">
@@ -40,15 +39,14 @@ const HoldingsView: React.FC<Props> = ({ holdings, onRemove }) => {
                     <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-700 text-sm">
                       {h.ticker}
                     </div>
-                    <div>
-                      <div className="font-bold text-slate-900">{h.ticker}</div>
-                      <div className="text-xs text-slate-500">{h.name}</div>
-                    </div>
+                    <div className="font-bold text-slate-900">{h.ticker}</div>
                   </div>
                 </td>
                 <td className="px-6 py-4 text-sm text-slate-700 font-medium">{h.quantity}</td>
-                <td className="px-6 py-4 text-sm text-slate-700 font-medium">${costPerShare.toFixed(2)}</td>
-                <td className="px-6 py-4 text-sm text-slate-700 font-medium">${totalCost.toFixed(2)}</td>
+                <td className="px-6 py-4 text-sm text-slate-700 font-medium">${h.averageCostPerShare.toFixed(2)}</td>
+                <td className="px-6 py-4 text-sm text-slate-700 font-medium">${h.totalCost.toFixed(2)}</td>
+                <td className="px-6 py-4 text-sm text-slate-700 font-medium">${h.currentPrice.toFixed(2)}</td>
+                <td className="px-6 py-4 text-sm text-slate-700 font-medium">${h.marketValue.toFixed(2)}</td>
                 <td className="px-6 py-4">
                   <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
                     h.brokerage === 'Robinhood' ? 'bg-emerald-100 text-emerald-700' :
