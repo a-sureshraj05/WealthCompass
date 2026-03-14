@@ -53,13 +53,12 @@ class UnrealizedGain(BaseModel):
 class Holding(BaseModel):
     id: int
     brokerage: str
-    date: datetime.datetime
     ticker: str
-    name: str
-    action: str
     quantity: float
-    costPerShare: float
+    averageCostPerShare: float
     totalCost: float
+    currentPrice: float
+    marketValue: float
 
     class Config:
         from_attributes = True

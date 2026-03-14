@@ -1,14 +1,16 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { StockHolding, PortfolioStats, Transaction, DateRangeType } from './types'; // Import DateRangeType
+import { StockHolding, PortfolioStats, Transaction, DateRangeType, RealizedGain, UnrealizedLot } from './types';
 import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import { fetchHoldings, fetchTransactions, removeTransaction, triggerRealizedGainsProcess } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, triggerRealizedGainsProcess } from './services/apiService';
 
 const App: React.FC = () => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [realizedGains, setRealizedGains] = useState<RealizedGain[]>([]);
+  const [unrealizedGains, setUnrealizedGains] = useState<UnrealizedLot[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses'>('dashboardView');
 
@@ -20,21 +22,34 @@ const App: React.FC = () => {
   const [dateRangeType, setDateRangeType] = useState<DateRangeType>('all'); // New date range type state
 
   const getHoldings = useCallback(async () => {
-    setLoading(true);
     try {
-      const fetchedHoldings = await fetchHoldings();
-      setHoldings(fetchedHoldings);
+      setHoldings(await fetchHoldings());
     } catch (error) {
       console.error("Failed to fetch holdings:", error);
-    } finally {
-      setLoading(false);
     }
-  }, [setHoldings, setLoading]); // Depend on stable setters
+  }, []);
 
-  // Fetch holdings from backend on initial load
+  const getRealizedGains = useCallback(async () => {
+    try {
+      setRealizedGains(await fetchRealizedGains());
+    } catch (error) {
+      console.error("Failed to fetch realized gains:", error);
+    }
+  }, []);
+
+  const getUnrealizedGains = useCallback(async () => {
+    try {
+      setUnrealizedGains(await fetchUnrealizedGains());
+    } catch (error) {
+      console.error("Failed to fetch unrealized gains:", error);
+    }
+  }, []);
+
   useEffect(() => {
     getHoldings();
-  }, [getHoldings]);
+    getRealizedGains();
+    getUnrealizedGains();
+  }, [getHoldings, getRealizedGains, getUnrealizedGains]);
 
   // Fetch transactions from backend with filters
   const getTransactions = useCallback(async () => { // Wrapped in useCallback
@@ -81,8 +96,8 @@ const App: React.FC = () => {
   }, [getTransactions]); // Depend on getTransactions
 
   const stats = useMemo((): PortfolioStats => {
-    const totalValue = holdings.reduce((sum, h) => sum + (h.quantity * h.costPerShare), 0);
-    const totalCost = holdings.reduce((sum, h) => sum + (h.quantity * h.costPerShare), 0);
+    const totalValue = holdings.reduce((sum, h) => sum + h.marketValue, 0);
+    const totalCost = holdings.reduce((sum, h) => sum + h.totalCost, 0);
     const totalGain = totalValue - totalCost;
     const gainPercentage = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
     
@@ -125,16 +140,29 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onProcessGains={triggerRealizedGainsProcess} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onProcessGains={async () => {
+        setLoading(true);
+        try {
+          await triggerRealizedGainsProcess();
+          await Promise.all([getHoldings(), getRealizedGains(), getUnrealizedGains()]);
+        } catch (error) {
+          console.error("Failed to process gains:", error);
+        } finally {
+          setLoading(false);
+        }
+      }} />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar stats={stats} />
         
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <DashboardView
-            activeTab={activeTab} 
-            holdings={holdings} 
+            activeTab={activeTab}
+            holdings={holdings}
             transactions={transactions}
+            allTransactions={transactions}
+            realizedGains={realizedGains}
+            unrealizedGains={unrealizedGains}
             stats={stats}
             onAddHoldings={handleAddHoldings}
             onAddTransactions={handleAddTransactions} // Pass new handler

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StockHolding, PortfolioStats, Transaction, DateRangeType } from '../types';
+import { StockHolding, PortfolioStats, Transaction, DateRangeType, RealizedGain, UnrealizedLot } from '../types';
 import SummaryCards from './SummaryCards';
 import PortfolioVisuals from './PortfolioVisuals';
 import HoldingsView from '../HoldingsView';
@@ -11,8 +11,10 @@ import GainsLossesView from '../GainsLossesView';
 interface Props {
   activeTab: string;
   holdings: StockHolding[];
-  transactions: Transaction[]; // Add transactions to props
+  transactions: Transaction[];
   allTransactions: Transaction[];
+  realizedGains: RealizedGain[];
+  unrealizedGains: UnrealizedLot[];
   stats: PortfolioStats;
   onAddHoldings: (h: StockHolding[]) => void;
   onAddTransactions: (t: Transaction[]) => void; // New prop for transactions
@@ -39,6 +41,8 @@ const DashboardView: React.FC<Props> = ({
   holdings,
   transactions,
   allTransactions,
+  realizedGains,
+  unrealizedGains,
   stats,
   onAddHoldings,
   onAddTransactions,
@@ -117,7 +121,7 @@ const DashboardView: React.FC<Props> = ({
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900">Realized Gains & Losses</h2>
         </div>
-        <GainsLossesView transactions={allTransactions} />
+        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} />
       </div>
     );
   }

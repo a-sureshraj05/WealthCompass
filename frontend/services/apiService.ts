@@ -32,8 +32,9 @@ export const fetchHoldings = async (): Promise<StockHolding[]> => {
   return data.map((item: any) => ({
     ...item,
     id: String(item.id), // Ensure ID is a string
-    avgPrice: item.costPerShare, // Map backend's costPerShare to avgPrice for frontend compatibility
-    currentPrice: undefined, // Current price not available from this endpoint
+    averageCostPerShare: item.averageCostPerShare,
+    currentPrice: item.currentPrice,
+    marketValue: item.marketValue,
   }));
 };
 

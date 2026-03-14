@@ -25,13 +25,12 @@ class Holding(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     brokerage = Column(String, index=True)
-    date = Column(DateTime)
     ticker = Column(String, index=True)
-    name = Column(String)
-    action = Column(String)
     quantity = Column(Float)
-    costPerShare = Column(Float)
+    averageCostPerShare = Column(Float)
     totalCost = Column(Float)
+    currentPrice = Column(Float)
+    marketValue = Column(Float)
 
 
 class RealizedGain(Base):
