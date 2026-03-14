@@ -28,14 +28,15 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
     realized_gains_list = []
     open_lots_by_ticker: Dict[str, List[Dict[str, Any]]] = {}
 
-    # Group transactions by ticker
-    ticker_groups: Dict[str, List[DBTransaction]] = {}
+    # Group transactions by (brokerage, ticker) to keep FIFO separate per brokerage
+    ticker_groups: Dict[tuple, List[DBTransaction]] = {}
     for t in transactions:
-        if t.ticker not in ticker_groups:
-            ticker_groups[t.ticker] = []
-        ticker_groups[t.ticker].append(t)
+        key = (t.brokerage, t.ticker)
+        if key not in ticker_groups:
+            ticker_groups[key] = []
+        ticker_groups[key].append(t)
 
-    for ticker, ticker_transactions in ticker_groups.items():
+    for (brokerage, ticker), ticker_transactions in ticker_groups.items():
         # Sort by date for FIFO
         sorted_transactions = sorted(ticker_transactions, key=lambda x: x.date)
 
@@ -49,6 +50,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                         "quantity": t.quantity,
                         "price": t.price,
                         "brokerage": t.brokerage,
+                        "assetType": t.assetType,
                     }
                 )
             elif t.action.upper() == "SELL":
@@ -73,6 +75,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                         sellPrice=t.price,
                         gain=sell_qty * (t.price - lot["price"]),
                         isLongTerm=is_long_term,
+                        assetType=lot.get("assetType"),
                     )
                     realized_gains_list.append(realized_gain)
 
@@ -81,7 +84,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                     if lot["quantity"] == 0:
                         buy_lots_queue.pop(0)  # Remove fully depleted lot
         # Filter out any lots with quantity <= 0 before adding to open_lots_by_ticker
-        open_lots_by_ticker[ticker] = [lot for lot in buy_lots_queue if lot["quantity"] > 0]
+        open_lots_by_ticker[(brokerage, ticker)] = [lot for lot in buy_lots_queue if lot["quantity"] > 0]
 
     db.add_all(realized_gains_list)
     db.commit()

@@ -2,6 +2,9 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { RealizedGain, UnrealizedLot } from '../types';
 
+type GainSortKey = 'ticker' | 'assetType' | 'brokerage' | 'buyDate' | 'sellDate' | 'quantity' | 'buyPrice' | 'price' | 'gain';
+type SortDirection = 'asc' | 'desc' | null;
+
 interface Props {
   realizedGains: RealizedGain[];
   unrealizedGains: UnrealizedLot[];
@@ -34,7 +37,11 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   
   const [isTickerMenuOpen, setIsTickerMenuOpen] = useState(false);
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
-  
+
+  // Sorting state
+  const [sortKey, setSortKey] = useState<GainSortKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+
   const tickerMenuRef = useRef<HTMLDivElement>(null);
   const brokerageMenuRef = useRef<HTMLDivElement>(null);
 
@@ -99,11 +106,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   }, [realizedGainsData, activeSubTab]);
 
   const filteredData = useMemo(() => {
-    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData; // Changed source
-    return source.filter(g => {
+    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData;
+    let result = source.filter(g => {
       const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(g.ticker);
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(g.brokerage);
-      
       if (activeSubTab === 'realized') {
         const year = new Date((g as RealizedGain).sellDate).getFullYear().toString();
         const matchesYear = selectedYear === 'Overall' || year === selectedYear;
@@ -111,7 +117,39 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       }
       return matchesTicker && matchesBrokerage;
     });
-  }, [realizedGainsData, unrealizedGainsData, selectedTickers, selectedBrokerages, selectedYear, activeSubTab]); // Changed dependency
+
+    if (sortKey && sortDirection) {
+      result = [...result].sort((a, b) => {
+        let valA: any;
+        let valB: any;
+        switch (sortKey) {
+          case 'ticker': valA = a.ticker.toLowerCase(); valB = b.ticker.toLowerCase(); break;
+          case 'assetType': valA = (a.assetType || '').toLowerCase(); valB = (b.assetType || '').toLowerCase(); break;
+          case 'brokerage': valA = a.brokerage.toLowerCase(); valB = b.brokerage.toLowerCase(); break;
+          case 'buyDate': valA = new Date(a.buyDate).getTime(); valB = new Date(b.buyDate).getTime(); break;
+          case 'sellDate':
+            valA = activeSubTab === 'realized' ? new Date((a as RealizedGain).sellDate).getTime() : 0;
+            valB = activeSubTab === 'realized' ? new Date((b as RealizedGain).sellDate).getTime() : 0;
+            break;
+          case 'quantity': valA = a.quantity; valB = b.quantity; break;
+          case 'buyPrice': valA = a.buyPrice; valB = b.buyPrice; break;
+          case 'price':
+            valA = activeSubTab === 'realized' ? (a as RealizedGain).sellPrice : (a as UnrealizedLot).currentPrice;
+            valB = activeSubTab === 'realized' ? (b as RealizedGain).sellPrice : (b as UnrealizedLot).currentPrice;
+            break;
+          case 'gain': valA = a.gain; valB = b.gain; break;
+          default: return 0;
+        }
+        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    } else {
+      result = [...result].sort((a, b) => new Date(b.buyDate).getTime() - new Date(a.buyDate).getTime());
+    }
+
+    return result;
+  }, [realizedGainsData, unrealizedGainsData, selectedTickers, selectedBrokerages, selectedYear, activeSubTab, sortKey, sortDirection]);
 
   const shortTerm = filteredData.filter(g => !g.isLongTerm);
   const longTerm = filteredData.filter(g => g.isLongTerm);
@@ -130,7 +168,31 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     setSelectedBrokerages(prev => prev.includes(broker) ? prev.filter(b => b !== broker) : [...prev, broker]);
   };
 
-  const GainTableSection = ({ title, data }: { title: string, data: any[] }) => (
+  const handleSort = (key: GainSortKey) => {
+    if (sortKey === key) {
+      if (sortDirection === 'asc') setSortDirection('desc');
+      else if (sortDirection === 'desc') { setSortKey(null); setSortDirection(null); }
+      else setSortDirection('asc');
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIndicator = ({ column }: { column: GainSortKey }) => {
+    if (sortKey !== column) return <svg className="w-3 h-3 ml-1 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
+    return (
+      <span className="ml-1 text-indigo-600">
+        {sortDirection === 'asc' ? (
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
+        ) : (
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+        )}
+      </span>
+    );
+  };
+
+  const GainTableSection = ({ title, data }: { title: string, data: (RealizedGain | UnrealizedLot)[] }) => (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">{title}</h3>
@@ -142,32 +204,54 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
-          <table className="w-full text-left min-w-[800px]">
+          <table className="w-full text-left min-w-[900px]">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-200">
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Symbol</th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Brokerage</th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Acquired</th>
-                {activeSubTab === 'realized' && <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Sold</th>}
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Qty</th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cost/Sh</th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{activeSubTab === 'realized' ? 'Sold/Sh' : 'Mkt/Sh'}</th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Total Gain</th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('ticker')}>
+                  <div className="flex items-center">Ticker <SortIndicator column="ticker" /></div>
+                </th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('assetType')}>
+                  <div className="flex items-center">Asset Type <SortIndicator column="assetType" /></div>
+                </th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('brokerage')}>
+                  <div className="flex items-center">Brokerage <SortIndicator column="brokerage" /></div>
+                </th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('buyDate')}>
+                  <div className="flex items-center">Bought <SortIndicator column="buyDate" /></div>
+                </th>
+                {activeSubTab === 'realized' && (
+                  <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('sellDate')}>
+                    <div className="flex items-center">Sold <SortIndicator column="sellDate" /></div>
+                  </th>
+                )}
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors text-right" onClick={() => handleSort('quantity')}>
+                  <div className="flex items-center justify-end">Qty <SortIndicator column="quantity" /></div>
+                </th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors text-right" onClick={() => handleSort('buyPrice')}>
+                  <div className="flex items-center justify-end">Cost/Sh <SortIndicator column="buyPrice" /></div>
+                </th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors text-right" onClick={() => handleSort('price')}>
+                  <div className="flex items-center justify-end">{activeSubTab === 'realized' ? 'Sold/Sh' : 'Mkt/Sh'} <SortIndicator column="price" /></div>
+                </th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors text-right" onClick={() => handleSort('gain')}>
+                  <div className="flex items-center justify-end">Total Gain <SortIndicator column="gain" /></div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredData.map((g: RealizedGain | UnrealizedLot) => (
+              {data.map((g: RealizedGain | UnrealizedLot) => (
                 <tr key={g.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-tight">
                       {g.ticker}
                     </span>
                   </td>
+                  <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{g.assetType || '—'}</td>
                   <td className="px-4 py-3">
                     <span className="text-[11px] font-bold text-slate-600">{g.brokerage}</span>
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{g.buyDate}</td>
-                  {activeSubTab === 'realized' && <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{(g as RealizedGain).sellDate}</td>}
+                  <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{new Date(g.buyDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                  {activeSubTab === 'realized' && <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{new Date((g as RealizedGain).sellDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>}
                   <td className="px-4 py-3 text-right text-[11px] text-slate-900 font-bold">{g.quantity}</td>
                   <td className="px-4 py-3 text-right text-[11px] text-slate-500">${g.buyPrice.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right text-[11px] text-slate-500">${(activeSubTab === 'realized' ? (g as RealizedGain).sellPrice : (g as UnrealizedLot).currentPrice).toFixed(2)}</td>
@@ -376,13 +460,13 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             </div>
 
             <div className="relative" ref={tickerMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter z-10">Symbol</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter z-10">Ticker</label>
               <button
                 onClick={() => setIsTickerMenuOpen(!isTickerMenuOpen)}
                 className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
-                  {selectedTickers.length === 0 ? 'All Symbols' : selectedTickers.length === 1 ? selectedTickers[0] : `${selectedTickers.length} Symbols`}
+                  {selectedTickers.length === 0 ? 'All Tickers' : selectedTickers.length === 1 ? selectedTickers[0] : `${selectedTickers.length} Tickers`}
                 </span>
                 <svg className={`w-4 h-4 text-slate-400 transition-transform ${isTickerMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

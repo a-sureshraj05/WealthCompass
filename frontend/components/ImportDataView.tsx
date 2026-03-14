@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { usePlaidLink } from 'react-plaid-link';
-import { parseStatement, createPlaidLinkToken, exchangePlaidToken, syncPlaidTransactions, fetchConnectedBrokerages } from '../services/apiService';
+import React, { useState, useEffect, useCallback } from 'react';
+import { parseStatement, getBrokerageConnectUrl, fetchBrokerageConnections, syncBrokerageTransactions, deleteBrokerageConnection } from '../services/apiService';
 import { Transaction } from '../types';
 
 interface Props {
@@ -15,9 +14,8 @@ const BROKERAGES = [
   { name: 'Other', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }
 ];
 
-// --- Main component ---
 const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
-  const [activeTab, setActiveTab] = useState<'manual' | 'plaid'>('manual');
+  const [activeTab, setActiveTab] = useState<'manual' | 'connect'>('manual');
 
   // Manual state
   const [selectedBroker, setSelectedBroker] = useState('');
@@ -25,49 +23,22 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
   const [uploadError, setUploadError] = useState('');
   const [showSuccessPrompt, setShowSuccessPrompt] = useState(false);
 
-  // Plaid state
-  const [plaidBroker, setPlaidBroker] = useState('');
-  const plaidBrokerRef = useRef('');
-  const [linkToken, setLinkToken] = useState<string | null>(null);
-  const [connectedBrokerages, setConnectedBrokerages] = useState<{ id: number; brokerage: string }[]>([]);
-  const [plaidStatus, setPlaidStatus] = useState('');
+  // Connect state
+  const [connectBroker, setConnectBroker] = useState('');
+  const [connections, setConnections] = useState<{ id: number; brokerage: string; authorization_id: string }[]>([]);
+  const [connectStatus, setConnectStatus] = useState('');
 
-  // Fetch link token once on mount
-  useEffect(() => {
-    createPlaidLinkToken().then(setLinkToken).catch(console.error);
-  }, []);
-
-  const { open: openPlaid, ready: plaidReady } = usePlaidLink({
-    token: linkToken ?? "",
-    onSuccess: async (public_token) => {
-      const broker = plaidBrokerRef.current;
-      if (!broker) { setPlaidStatus('Please select a brokerage first.'); return; }
-      setLoading(true);
-      setPlaidStatus('');
-      try {
-        await exchangePlaidToken(public_token, broker);
-        await loadConnectedBrokerages();
-        setPlaidStatus(`Successfully connected ${broker}!`);
-      } catch {
-        setPlaidStatus('Failed to connect brokerage.');
-      } finally {
-        setLoading(false);
-      }
-    },
-  });
-
-  const loadConnectedBrokerages = useCallback(async () => {
+  const loadConnections = useCallback(async () => {
     try {
-      const data = await fetchConnectedBrokerages();
-      setConnectedBrokerages(data);
+      setConnections(await fetchBrokerageConnections());
     } catch (e) {
       console.error(e);
     }
   }, []);
 
   useEffect(() => {
-    loadConnectedBrokerages();
-  }, [loadConnectedBrokerages]);
+    loadConnections();
+  }, [loadConnections]);
 
   // --- Manual handlers ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,15 +80,56 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
     }
   };
 
+  // --- Connect handlers ---
+  const handleConnect = async () => {
+    if (!connectBroker) { setConnectStatus('Please select a brokerage first.'); return; }
+    setConnectStatus('');
+    setLoading(true);
+    try {
+      const url = await getBrokerageConnectUrl(connectBroker);
+      window.open(url, '_blank');
+      setConnectStatus(`A new tab has opened. Connect your ${connectBroker} account, then click "Refresh Connections" below.`);
+    } catch {
+      setConnectStatus('Failed to get connection URL.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefreshConnections = async () => {
+    setLoading(true);
+    try {
+      await loadConnections();
+      setConnectStatus('Connections refreshed.');
+    } catch {
+      setConnectStatus('Failed to refresh connections.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteConnection = async (authorizationId: string, brokerage: string) => {
+    if (!window.confirm(`Remove ${brokerage} connection?`)) return;
+    setLoading(true);
+    try {
+      await deleteBrokerageConnection(authorizationId);
+      await loadConnections();
+      setConnectStatus(`${brokerage} disconnected.`);
+    } catch {
+      setConnectStatus('Failed to remove connection.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSync = async () => {
     setLoading(true);
-    setPlaidStatus('');
+    setConnectStatus('');
     try {
-      const result = await syncPlaidTransactions();
-      setPlaidStatus(result.message);
+      const result = await syncBrokerageTransactions();
+      setConnectStatus(result.message);
     } catch {
-      setPlaidStatus('Failed to sync transactions.');
+      setConnectStatus('Failed to sync transactions.');
     } finally {
       setLoading(false);
     }
@@ -139,10 +151,10 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
           Manual Upload
         </button>
         <button
-          onClick={() => setActiveTab('plaid')}
-          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'plaid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          onClick={() => setActiveTab('connect')}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'connect' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          Connect via Plaid
+          Connect Brokerage
         </button>
       </div>
 
@@ -218,33 +230,42 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
             </>
           )}
 
-          {/* ── Plaid Tab ── */}
-          {activeTab === 'plaid' && (
+          {/* ── Connect Tab ── */}
+          {activeTab === 'connect' && (
             <div className="space-y-8">
               {/* Connected brokerages */}
-              {connectedBrokerages.length > 0 && (
+              {connections.length > 0 && (
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-3">Connected Brokerages</label>
                   <div className="flex flex-wrap gap-2">
-                    {connectedBrokerages.map((item) => (
-                      <span key={item.id} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-sm font-bold">
+                    {connections.map((item) => (
+                      <span key={item.id} className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-sm font-bold">
                         ✓ {item.brokerage}
+                        <button
+                          onClick={() => handleDeleteConnection(item.authorization_id, item.brokerage)}
+                          className="text-emerald-400 hover:text-rose-600 transition-colors ml-1"
+                          title="Remove connection"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </span>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Select brokerage for new connection */}
+              {/* Select brokerage */}
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-4">1. Select Brokerage to Connect</label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {BROKERAGES.map((broker) => (
                     <button
                       key={broker.name}
-                      onClick={() => { setPlaidBroker(broker.name); plaidBrokerRef.current = broker.name; }}
+                      onClick={() => setConnectBroker(broker.name)}
                       className={`flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-200 ${
-                        plaidBroker === broker.name
+                        connectBroker === broker.name
                           ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
                           : 'border-slate-100 hover:border-slate-200 text-slate-500'
                       }`}
@@ -260,36 +281,43 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading }) => {
 
               {/* Connect button */}
               <div className="space-y-3">
-                <label className="block text-sm font-bold text-slate-700">2. Connect via Plaid</label>
+                <label className="block text-sm font-bold text-slate-700">2. Connect Your Brokerage</label>
                 <button
-                  onClick={() => openPlaid()}
-                  disabled={!plaidReady || !linkToken}
+                  onClick={handleConnect}
+                  disabled={!connectBroker}
                   className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors shadow-lg"
                 >
-                  Connect Brokerage via Plaid
+                  Connect Brokerage
                 </button>
               </div>
 
-              {/* Sync button */}
-              {connectedBrokerages.length > 0 && (
-                <div className="space-y-3">
-                  <label className="block text-sm font-bold text-slate-700">3. Sync Latest Transactions</label>
+              {/* Refresh + Sync */}
+              <div className="space-y-3">
+                <label className="block text-sm font-bold text-slate-700">3. After Connecting</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={handleRefreshConnections}
+                    className="py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+                  >
+                    Refresh Connections
+                  </button>
                   <button
                     onClick={handleSync}
-                    className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors shadow-xl"
+                    disabled={connections.length === 0}
+                    className="py-3 bg-slate-900 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors shadow-xl"
                   >
                     Sync Transactions
                   </button>
                 </div>
-              )}
+              </div>
 
-              {plaidStatus && (
+              {connectStatus && (
                 <div className={`p-4 rounded-2xl border text-sm font-medium ${
-                  plaidStatus.includes('Successfully') || plaidStatus.includes('Synced')
+                  connectStatus.includes('Synced') || connectStatus.includes('refreshed') || connectStatus.includes('tab has opened')
                     ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
                     : 'bg-rose-50 border-rose-100 text-rose-700'
                 }`}>
-                  {plaidStatus}
+                  {connectStatus}
                 </div>
               )}
             </div>

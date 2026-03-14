@@ -1,13 +1,38 @@
-.gemini/
+# Environment / secrets
 .env
-.DS_Store
-backend/tests/sample/
-db/wealthcompass.db
-wealthcompass.db
+.env.*
+*.env
+.gemini/
 GoogleAIStudio/
+
+# Database files (contain real user data)
+*.db
+*.sqlite
+*.sqlite3
+/db/
+
+# macOS
+.DS_Store
+
+# VSCode
+/.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Claude Code
+.claude/
+
+# Misc
+backend/tests/sample/
 last_commit_hash.txt
 .flake8
-/.vscode/
 
 # Ignore user-specific SQL session/query files
 sql/*.sql
