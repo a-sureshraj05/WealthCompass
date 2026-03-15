@@ -5,12 +5,15 @@ type DateRangeType = 'all' | '30d' | '90d' | 'ytd' | 'custom';
 type SortKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'action' | 'quantity' | 'price' | 'amount';
 type SortDirection = 'asc' | 'desc' | null;
 
+type VisibilityFilter = 'active' | 'hidden' | 'all';
+
 interface Props {
   transactions: Transaction[];
   onRemove: (id: string) => void;
+  onSoftDelete: (id: string, isDeleted: boolean) => void;
 }
 
-const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
+const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete }) => {
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([]);
   const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
@@ -22,6 +25,8 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('active');
+
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
   const [isAssetTypeMenuOpen, setIsAssetTypeMenuOpen] = useState(false);
   const [isTickerMenuOpen, setIsTickerMenuOpen] = useState(false);
@@ -110,6 +115,10 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
     const startOfYear = new Date(now.getFullYear(), 0, 1);
 
     let result = transactions.filter((t) => {
+      const matchesVisibility =
+        visibilityFilter === 'all' ||
+        (visibilityFilter === 'active' && !t.is_deleted) ||
+        (visibilityFilter === 'hidden' && t.is_deleted);
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.map(b => b.toLowerCase().trim()).includes((t.brokerage || '').toLowerCase().trim());
       const matchesAssetType = selectedAssetTypes.length === 0 || selectedAssetTypes.map(at => at.toLowerCase()).includes((t.assetType || '').toLowerCase());
       const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(t.ticker);
@@ -126,7 +135,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
         matchesDate = matchesStart && matchesEnd;
       }
 
-      return matchesBrokerage && matchesAssetType && matchesTicker && matchesDate;
+      return matchesVisibility && matchesBrokerage && matchesAssetType && matchesTicker && matchesDate;
     });
 
     // Apply Sorting
@@ -182,7 +191,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
     }
 
     return result;
-  }, [transactions, selectedBrokerages, selectedAssetTypes, selectedTickers, dateRangeType, startDate, endDate, sortKey, sortDirection]);
+  }, [transactions, visibilityFilter, selectedBrokerages, selectedAssetTypes, selectedTickers, dateRangeType, startDate, endDate, sortKey, sortDirection]);
 
   const resetFilters = () => {
     setSelectedBrokerages([]);
@@ -193,6 +202,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
     setEndDate('');
     setSortKey(null);
     setSortDirection(null);
+    setVisibilityFilter('active');
   };
 
   const SortIndicator = ({ column }: { column: SortKey }) => {
@@ -385,7 +395,27 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
             </div>
           </div>
 
-          <button 
+          {/* Visibility Filter */}
+          <div className="relative">
+            <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter z-10">Show</label>
+            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+              {(['active', 'hidden', 'all'] as VisibilityFilter[]).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setVisibilityFilter(v)}
+                  className={`px-3 py-2 text-xs font-bold capitalize transition-colors ${
+                    visibilityFilter === v
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-500 hover:text-indigo-600'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
             onClick={resetFilters}
             className="text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest px-2"
           >
@@ -412,7 +442,12 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-200">
-                <th 
+                <th className="px-4 py-4 w-10" title="Hide transaction from calculations">
+                  <svg className="w-3.5 h-3.5 text-slate-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                  </svg>
+                </th>
+                <th
                   className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group/header"
                   onClick={() => handleSort('date')}
                 >
@@ -481,9 +516,18 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove }) => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredTransactions.map((t) => (
-                <tr key={`${t.brokerage}-${t.id}`} className="hover:bg-slate-50 transition-colors group">
+                <tr key={`${t.brokerage}-${t.id}`} className={`hover:bg-slate-50 transition-colors group ${t.is_deleted ? 'opacity-40' : ''}`}>
+                  <td className="px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={t.is_deleted}
+                      onChange={() => onSoftDelete(t.id, !t.is_deleted)}
+                      className="w-4 h-4 rounded border-slate-300 text-slate-400 focus:ring-slate-400 cursor-pointer"
+                      title={t.is_deleted ? 'Restore transaction' : 'Hide from calculations'}
+                    />
+                  </td>
                   <td className="px-6 py-4 text-sm text-slate-500 font-medium whitespace-nowrap">
-                    {new Date(t.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {new Date(t.date).toLocaleDateString('en-CA')}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
