@@ -19,6 +19,7 @@ interface Props {
   onAddTransactions: (t: Transaction[]) => void;
   onRemoveHolding: (id: string) => void;
   onRemoveTransaction: (id: string) => void;
+  onSoftDeleteTransaction: (id: string, isDeleted: boolean) => void;
   onClearAll: () => void;
   setLoading: (l: boolean) => void;
 }
@@ -34,6 +35,7 @@ const DashboardView: React.FC<Props> = ({
   onAddTransactions,
   onRemoveHolding,
   onRemoveTransaction,
+  onSoftDeleteTransaction,
   onClearAll,
   setLoading,
 }) => {
@@ -70,7 +72,7 @@ const DashboardView: React.FC<Props> = ({
             Clear All Data
           </button>
         </div>
-        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} />
+        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} />
       </div>
     );
   }

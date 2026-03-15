@@ -4,7 +4,7 @@ import { StockHolding, PortfolioStats, Transaction, DateRangeType, RealizedGain,
 import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, triggerRealizedGainsProcess } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, triggerRealizedGainsProcess } from './services/apiService';
 
 const App: React.FC = () => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
@@ -130,6 +130,18 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSoftDeleteTransaction = async (id: string, isDeleted: boolean) => {
+    // Optimistic update — flip immediately so checkbox responds instantly
+    setTransactions(prev => prev.map(t => t.id === id ? { ...t, is_deleted: isDeleted } : t));
+    try {
+      await softDeleteTransaction(id, isDeleted);
+    } catch (error) {
+      // Revert on failure
+      setTransactions(prev => prev.map(t => t.id === id ? { ...t, is_deleted: !isDeleted } : t));
+      console.error("Failed to update transaction:", error);
+    }
+  };
+
   const handleClearAll = () => {
     if (window.confirm("Are you sure you want to clear all data? This cannot be undone.")) {
       setHoldings([]);
@@ -167,6 +179,7 @@ const App: React.FC = () => {
             onAddTransactions={handleAddTransactions}
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
+            onSoftDeleteTransaction={handleSoftDeleteTransaction}
             onClearAll={handleClearAll}
             setLoading={setLoading}
           />

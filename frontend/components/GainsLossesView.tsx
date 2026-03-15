@@ -250,8 +250,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                   <td className="px-4 py-3">
                     <span className="text-[11px] font-bold text-slate-600">{g.brokerage}</span>
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{new Date(g.buyDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                  {activeSubTab === 'realized' && <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{new Date((g as RealizedGain).sellDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>}
+                  <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{new Date(g.buyDate).toLocaleDateString('en-CA')}</td>
+                  {activeSubTab === 'realized' && <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{new Date((g as RealizedGain).sellDate).toLocaleDateString('en-CA')}</td>}
                   <td className="px-4 py-3 text-right text-[11px] text-slate-900 font-bold">{g.quantity.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right text-[11px] text-slate-500">${g.buyPrice.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right text-[11px] text-slate-500">${(activeSubTab === 'realized' ? (g as RealizedGain).sellPrice : (g as UnrealizedLot).currentPrice).toFixed(2)}</td>

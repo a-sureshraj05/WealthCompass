@@ -44,6 +44,7 @@ export interface Transaction {
   costPerShare: number;
   totalCost: number;
   assetType: string;
+  is_deleted: boolean;
 }
 
 export interface RealizedGain {

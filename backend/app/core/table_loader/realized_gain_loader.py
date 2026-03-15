@@ -14,16 +14,16 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
     # First, delete existing realized gains
     delete(db, brokerage_name)
 
-    # Fetch all transactions, or filtered by brokerage
+    # Fetch all non-soft-deleted transactions, or filtered by brokerage
     if brokerage_name:
         transactions = (
             db.query(DBTransaction)
-            .filter(DBTransaction.brokerage == brokerage_name)
+            .filter(DBTransaction.brokerage == brokerage_name, DBTransaction.is_deleted == False)
             .order_by(DBTransaction.date)
             .all()
         )
     else:
-        transactions = db.query(DBTransaction).order_by(DBTransaction.date).all()
+        transactions = db.query(DBTransaction).filter(DBTransaction.is_deleted == False).order_by(DBTransaction.date).all()
 
     realized_gains_list = []
     open_lots_by_ticker: Dict[str, List[Dict[str, Any]]] = {}

@@ -80,6 +80,7 @@ class Transaction(BaseModel):
     costPerShare: float
     totalCost: float
     assetType: str
+    is_deleted: bool = False
 
     class Config:
         from_attributes = True
@@ -93,8 +94,15 @@ def get_transactions(
     start_date: Optional[datetime.date] = Query(None),
     end_date: Optional[datetime.date] = Query(None),
     source: Optional[str] = Query("all"),  # "all" | "manual" | "snaptrade"
+    visibility: Optional[str] = Query("active"),  # "active" | "hidden" | "all"
 ):
     query = db.query(DBTransaction)
+
+    if visibility == "active":
+        query = query.filter(DBTransaction.is_deleted == False)
+    elif visibility == "hidden":
+        query = query.filter(DBTransaction.is_deleted == True)
+    # "all" applies no is_deleted filter
 
     if brokerages:
         query = query.filter(DBTransaction.brokerage.in_(brokerages))
@@ -110,6 +118,18 @@ def get_transactions(
         query = query.filter(DBTransaction.source == source)
 
     return query.all()
+
+
+@router.patch("/transactions/{transaction_id}/hidden")
+def set_transaction_hidden(transaction_id: int, is_deleted: bool, db: Session = Depends(get_db)):
+    transaction = (
+        db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
+    )
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    transaction.is_deleted = is_deleted
+    db.commit()
+    return {"message": "Transaction updated successfully"}
 
 
 @router.delete("/transactions/{transaction_id}")

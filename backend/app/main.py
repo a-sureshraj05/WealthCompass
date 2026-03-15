@@ -19,6 +19,14 @@ app = FastAPI()
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
+    # Migration: add is_deleted column to transactions if it doesn't exist
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    columns = [col["name"] for col in inspector.get_columns("transactions")]
+    if "is_deleted" not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
 
 
 app.include_router(transactions.router, prefix="/api/v1")

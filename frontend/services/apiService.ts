@@ -45,6 +45,7 @@ export const fetchTransactions = async (
   endDate?: string | null
 ): Promise<Transaction[]> => {
   const params = new URLSearchParams();
+  params.append("visibility", "all"); // always fetch all so frontend can filter active/hidden
   if (brokerages && brokerages.length > 0) {
     brokerages.forEach(b => params.append("brokerages", b));
   }
@@ -58,15 +59,23 @@ export const fetchTransactions = async (
     params.append("end_date", endDate);
   }
 
-  const queryString = params.toString();
-  const url = `/api/v1/transactions${queryString ? `?${queryString}` : ''}`;
+  const url = `/api/v1/transactions?${params.toString()}`;
 
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch transactions: ${response.status} ${response.statusText}`);
   }
   const data = await response.json();
-  return data.map((item: any) => ({ ...item, id: String(item.id) }));
+  return data.map((item: any) => ({ ...item, id: String(item.id), is_deleted: !!item.is_deleted }));
+};
+
+export const softDeleteTransaction = async (id: string, isDeleted: boolean): Promise<void> => {
+  const response = await fetch(`/api/v1/transactions/${id}/hidden?is_deleted=${isDeleted}`, {
+    method: "PATCH",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to update transaction: ${response.status} ${response.statusText}`);
+  }
 };
 
 export const removeTransaction = async (id: string): Promise<void> => {

@@ -407,21 +407,27 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
                       const lotGain = lot.quantity * (lot.currentPrice - lot.buyPrice);
                       return (
                         <tr key={`${h.id}-lot-${idx}`} className="bg-indigo-50/40 border-t border-indigo-100/60">
-                          <td className="px-4 py-3"></td>
-                          <td className="px-6 py-3" colSpan={2}>
-                            <div className="flex items-center gap-2 pl-4">
-                              <div className="w-px h-4 bg-slate-300"></div>
+                          <td className="px-4 py-3">
+                            <div className="flex justify-center">
+                              <div className="w-px h-full min-h-[20px] bg-slate-200"></div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 pl-2">
+                              <div className="w-3 h-px bg-slate-300"></div>
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${
                                 lot.isLongTerm ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'
                               }`}>
                                 {lot.isLongTerm ? 'Long Term' : 'Short Term'}
                               </span>
-                              <span className="text-[11px] text-slate-400 font-medium">
-                                Bought {new Date(lot.buyDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                              </span>
                             </div>
                           </td>
-                          <td className="px-6 py-3"></td>
+                          <td className="px-6 py-3">
+                            <span className="text-[11px] text-slate-400 font-medium">Bought</span>
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <span className="text-[11px] text-slate-500 font-bold">{new Date(lot.buyDate).toLocaleDateString('en-CA')}</span>
+                          </td>
                           <td className="px-6 py-3 text-right text-[11px] text-slate-600 font-medium">{lot.quantity.toFixed(2)}</td>
                           <td className="px-6 py-3 text-right text-[11px] text-slate-500">${lot.buyPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="px-6 py-3 text-right text-[11px] text-slate-500">${(lot.quantity * lot.buyPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>

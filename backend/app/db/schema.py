@@ -19,6 +19,7 @@ class Transaction(Base):
     totalCost = Column(Float)
     assetType = Column(String)
     source = Column(String)
+    is_deleted = Column(Boolean, default=False, nullable=False, server_default="0")
 
 
 class ManualRawTransaction(Base):
