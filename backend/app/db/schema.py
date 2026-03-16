@@ -19,7 +19,10 @@ class Transaction(Base):
     totalCost = Column(Float)
     assetType = Column(String)
     source = Column(String)
+    raw_id = Column(Integer, nullable=True)
     is_deleted = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_override = Column(Boolean, default=False, nullable=False, server_default="0")
+    original_values = Column(String, nullable=True)
 
 
 class ManualRawTransaction(Base):

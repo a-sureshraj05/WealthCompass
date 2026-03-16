@@ -11,9 +11,11 @@ interface Props {
   transactions: Transaction[];
   onRemove: (id: string) => void;
   onSoftDelete: (id: string, isDeleted: boolean) => void;
+  onUpdate: (id: string, updates: Partial<Transaction>) => void;
+  onRevert: (id: string) => void;
 }
 
-const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete }) => {
+const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert }) => {
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([]);
   const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
@@ -26,6 +28,8 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('active');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<Partial<Transaction>>({});
 
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
   const [isAssetTypeMenuOpen, setIsAssetTypeMenuOpen] = useState(false);
@@ -421,6 +425,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
           >
             Reset
           </button>
+
         </div>
       </div>
 
@@ -515,67 +520,171 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredTransactions.map((t) => (
-                <tr key={`${t.brokerage}-${t.id}`} className={`hover:bg-slate-50 transition-colors group ${t.is_deleted ? 'opacity-40' : ''}`}>
-                  <td className="px-4 py-4 text-center">
-                    <input
-                      type="checkbox"
-                      checked={t.is_deleted}
-                      onChange={() => onSoftDelete(t.id, !t.is_deleted)}
-                      className="w-4 h-4 rounded border-slate-300 text-slate-400 focus:ring-slate-400 cursor-pointer"
-                      title={t.is_deleted ? 'Restore transaction' : 'Hide from calculations'}
-                    />
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500 font-medium whitespace-nowrap">
-                    {new Date(t.date).toLocaleDateString('en-CA')}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                      t.brokerage.toLowerCase().includes('robinhood') ? 'bg-orange-100 text-orange-700' :
-                      t.brokerage.toLowerCase().includes('schwab') ? 'bg-fuchsia-100 text-fuchsia-800' :
-                      'bg-slate-100 text-slate-600'
-                    }`}>
-                      {t.brokerage}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                      (t.assetType || '').toLowerCase() === 'options' ? 'bg-purple-100 text-purple-700' : ((t.assetType || '').toLowerCase() === 'equity' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600')
-                    }`}>
-                      {formatAssetType(t.assetType || '')}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-tight">
-                      {t.ticker}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                      ['BUY', 'BTO'].includes(t.action.toUpperCase()) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                    }`}>
-                      {t.action}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-700 font-bold text-right">{t.quantity}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500 font-medium text-right">${t.price.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="text-sm font-black text-slate-900">
-                      ${(t.quantity * t.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => onRemove(t.id)}
-                      className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {filteredTransactions.map((t) => {
+                const isEditing = editingId === t.id;
+                const inputCls = "w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400";
+
+                const startEdit = () => {
+                  setEditingId(t.id);
+                  setEditDraft({
+                    date: t.date.slice(0, 10),
+                    brokerage: t.brokerage,
+                    assetType: t.assetType,
+                    ticker: t.ticker,
+                    action: t.action,
+                    quantity: t.quantity,
+                    price: t.price,
+                  });
+                };
+
+                const saveEdit = () => {
+                  onUpdate(t.id, editDraft);
+                  setEditingId(null);
+                  setEditDraft({});
+                };
+
+                const cancelEdit = () => {
+                  setEditingId(null);
+                  setEditDraft({});
+                };
+
+                return (
+                  <tr key={`${t.brokerage}-${t.id}`} className={`transition-colors group ${isEditing ? 'bg-indigo-50/60' : 'hover:bg-slate-50'} ${t.is_deleted && !isEditing ? 'opacity-40' : ''}`}>
+                    {/* Hide checkbox */}
+                    <td className="px-4 py-4 text-center">
+                      {!isEditing && (
+                        <input
+                          type="checkbox"
+                          checked={t.is_deleted}
+                          onChange={() => onSoftDelete(t.id, !t.is_deleted)}
+                          className="w-4 h-4 rounded border-slate-300 text-slate-400 focus:ring-slate-400 cursor-pointer"
+                          title={t.is_deleted ? 'Restore transaction' : 'Hide from calculations'}
+                        />
+                      )}
+                    </td>
+
+                    {/* Date */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {isEditing ? (
+                        <input type="date" className={inputCls} value={editDraft.date as string || ''}
+                          onChange={e => setEditDraft(d => ({ ...d, date: e.target.value }))} />
+                      ) : (
+                        <span className="text-sm text-slate-500 font-medium">{new Date(t.date).toLocaleDateString('en-CA')}</span>
+                      )}
+                    </td>
+
+                    {/* Brokerage */}
+                    <td className="px-6 py-4">
+                      {isEditing ? (
+                        <input className={inputCls} value={editDraft.brokerage || ''}
+                          onChange={e => setEditDraft(d => ({ ...d, brokerage: e.target.value }))} />
+                      ) : (
+                        <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                          t.brokerage.toLowerCase().includes('robinhood') ? 'bg-orange-100 text-orange-700' :
+                          t.brokerage.toLowerCase().includes('schwab') ? 'bg-fuchsia-100 text-fuchsia-800' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>{t.brokerage}</span>
+                      )}
+                    </td>
+
+                    {/* Asset Type */}
+                    <td className="px-6 py-4">
+                      {isEditing ? (
+                        <input className={inputCls} value={editDraft.assetType || ''}
+                          onChange={e => setEditDraft(d => ({ ...d, assetType: e.target.value }))} />
+                      ) : (
+                        <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                          (t.assetType || '').toLowerCase() === 'options' ? 'bg-purple-100 text-purple-700' :
+                          (t.assetType || '').toLowerCase() === 'equity' ? 'bg-blue-100 text-blue-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>{formatAssetType(t.assetType || '')}</span>
+                      )}
+                    </td>
+
+                    {/* Ticker */}
+                    <td className="px-6 py-4">
+                      {isEditing ? (
+                        <input className={inputCls} value={editDraft.ticker || ''}
+                          onChange={e => setEditDraft(d => ({ ...d, ticker: e.target.value.toUpperCase() }))} />
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-tight">{t.ticker}</span>
+                      )}
+                    </td>
+
+                    {/* Action */}
+                    <td className="px-6 py-4">
+                      {isEditing ? (
+                        <input className={inputCls} value={editDraft.action || ''}
+                          onChange={e => setEditDraft(d => ({ ...d, action: e.target.value.toUpperCase() }))} />
+                      ) : (
+                        <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                          ['BUY', 'BTO'].includes(t.action.toUpperCase()) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                        }`}>{t.action}</span>
+                      )}
+                    </td>
+
+                    {/* Quantity */}
+                    <td className="px-6 py-4 text-right">
+                      {isEditing ? (
+                        <input type="number" className={inputCls + ' text-right'} value={editDraft.quantity ?? ''}
+                          onChange={e => setEditDraft(d => ({ ...d, quantity: parseFloat(e.target.value) }))} />
+                      ) : (
+                        <span className="text-sm text-slate-700 font-bold">{t.quantity}</span>
+                      )}
+                    </td>
+
+                    {/* Price */}
+                    <td className="px-6 py-4 text-right">
+                      {isEditing ? (
+                        <input type="number" className={inputCls + ' text-right'} value={editDraft.price ?? ''}
+                          onChange={e => setEditDraft(d => ({ ...d, price: parseFloat(e.target.value) }))} />
+                      ) : (
+                        <span className="text-sm text-slate-500 font-medium">${t.price.toFixed(2)}</span>
+                      )}
+                    </td>
+
+                    {/* Total Amount */}
+                    <td className="px-6 py-4 text-right">
+                      <div className="text-sm font-black text-slate-900">
+                        ${((isEditing ? (editDraft.quantity ?? t.quantity) * (editDraft.price ?? t.price) : t.quantity * t.price)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-6 py-4 text-right">
+                      {isEditing ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={saveEdit} className="p-1.5 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all" title="Save">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          </button>
+                          <button onClick={cancelEdit} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg transition-all" title="Cancel">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-1.5">
+                          {t.is_override && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-amber-100 text-amber-600">edited</span>
+                          )}
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            {t.is_override && (
+                              <button onClick={() => onRevert(t.id)} className="p-1.5 text-slate-300 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Revert to original">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                              </button>
+                            )}
+                            <button onClick={startEdit} className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit transaction">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            </button>
+                            <button onClick={() => onRemove(t.id)} className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete transaction">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -147,7 +147,7 @@ def sync(db: Session) -> int:
                 amount = float(txn.get("amount") or 0)
                 currency = txn.get("currency", {}).get("code", "USD") if isinstance(txn.get("currency"), dict) else "USD"
 
-                db.add(SnaptradeTransaction(
+                db_snaptrade = SnaptradeTransaction(
                     authorization_id=str(txn.get("brokerage_authorization", "")),
                     brokerage=brokerage_name,
                     date=date,
@@ -160,7 +160,9 @@ def sync(db: Session) -> int:
                     currency=currency,
                     assetType=asset_type,
                     snaptrade_transaction_id=txn_id,
-                ))
+                )
+                db.add(db_snaptrade)
+                db.flush()  # Get db_snaptrade.id before inserting transaction
 
                 # Also insert into unified Transaction table
                 db.add(DBTransaction(
@@ -175,6 +177,7 @@ def sync(db: Session) -> int:
                     totalCost=abs(amount),
                     assetType=asset_type,
                     source="snaptrade",
+                    raw_id=db_snaptrade.id,
                 ))
 
                 total_synced += 1

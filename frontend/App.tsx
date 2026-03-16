@@ -4,7 +4,7 @@ import { StockHolding, PortfolioStats, Transaction, DateRangeType, RealizedGain,
 import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, triggerRealizedGainsProcess } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions } from './services/apiService';
 
 const App: React.FC = () => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
@@ -13,6 +13,7 @@ const App: React.FC = () => {
   const [unrealizedGains, setUnrealizedGains] = useState<UnrealizedLot[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses'>('dashboardView');
+  const transactionsDirty = React.useRef(false);
 
   // Filter states for transactions
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
@@ -130,15 +131,49 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateTransaction = async (id: string, updates: Partial<Transaction>) => {
+    try {
+      await updateTransaction(id, updates as any);
+      setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates, is_override: true } : t));
+      transactionsDirty.current = true;
+    } catch (error) {
+      console.error("Failed to update transaction:", error);
+    }
+  };
+
+  const handleRevertTransaction = async (id: string) => {
+    try {
+      await revertTransaction(id);
+      await getTransactions();
+      transactionsDirty.current = true;
+    } catch (error) {
+      console.error("Failed to revert transaction:", error);
+    }
+  };
+
   const handleSoftDeleteTransaction = async (id: string, isDeleted: boolean) => {
     // Optimistic update — flip immediately so checkbox responds instantly
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, is_deleted: isDeleted } : t));
     try {
       await softDeleteTransaction(id, isDeleted);
+      transactionsDirty.current = true;
     } catch (error) {
       // Revert on failure
       setTransactions(prev => prev.map(t => t.id === id ? { ...t, is_deleted: !isDeleted } : t));
       console.error("Failed to update transaction:", error);
+    }
+  };
+
+  const handleResetData = async () => {
+    if (!window.confirm('Reset all transactions from raw source data? This will clear any edits and soft-deletes, then recalculate all gains and holdings.')) return;
+    setLoading(true);
+    try {
+      await resetTransactions();
+      await Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains()]);
+    } catch (error) {
+      console.error('Failed to reset data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -150,27 +185,37 @@ const App: React.FC = () => {
     }
   };
 
+  const handleProcessGains = async () => {
+    setLoading(true);
+    try {
+      await triggerRealizedGainsProcess();
+      await Promise.all([getHoldings(), getRealizedGains(), getUnrealizedGains()]);
+      transactionsDirty.current = false;
+    } catch (error) {
+      console.error("Failed to process gains:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSetActiveTab = (tab: typeof activeTab) => {
+    if (tab === 'gainsLosses' && transactionsDirty.current) {
+      handleProcessGains();
+    }
+    setActiveTab(tab);
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onProcessGains={async () => {
-        setLoading(true);
-        try {
-          await triggerRealizedGainsProcess();
-          await Promise.all([getHoldings(), getRealizedGains(), getUnrealizedGains()]);
-        } catch (error) {
-          console.error("Failed to process gains:", error);
-        } finally {
-          setLoading(false);
-        }
-      }} />
-      
+      <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
+
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar stats={stats} />
-        
+
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <DashboardView
             activeTab={activeTab}
-            setActiveTab={setActiveTab}
+            setActiveTab={handleSetActiveTab}
             holdings={holdings}
             transactions={transactions}
             realizedGains={realizedGains}
@@ -180,6 +225,10 @@ const App: React.FC = () => {
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
             onSoftDeleteTransaction={handleSoftDeleteTransaction}
+            onUpdateTransaction={handleUpdateTransaction}
+            onRevertTransaction={handleRevertTransaction}
+            onResetData={handleResetData}
+            onProcessGains={handleProcessGains}
             onClearAll={handleClearAll}
             setLoading={setLoading}
           />

@@ -27,6 +27,18 @@ def startup_event():
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE transactions ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0"))
             conn.commit()
+    if "is_override" not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN is_override BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
+    if "original_values" not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN original_values TEXT"))
+            conn.commit()
+    if "raw_id" not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN raw_id INTEGER"))
+            conn.commit()
 
 
 app.include_router(transactions.router, prefix="/api/v1")
