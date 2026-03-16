@@ -55,6 +55,7 @@ def parse_statement_import_endpoint(
                 assetType=asset_type,
             )
             db.add(db_raw)
+            db.flush()  # Get db_raw.id before inserting transaction
 
             # Insert into unified Transaction table
             db_transaction = DBTransaction(
@@ -69,9 +70,10 @@ def parse_statement_import_endpoint(
                 totalCost=transaction_data["totalCost"],
                 assetType=asset_type,
                 source="manual",
+                raw_id=db_raw.id,
             )
             db.add(db_transaction)
-            db.flush()  # Flush to assign ID before commit, if needed by subsequent logic
+            db.flush()
             new_transaction_ids.append(db_transaction.id)
         db.commit()
 

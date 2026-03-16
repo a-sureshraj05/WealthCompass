@@ -66,7 +66,28 @@ export const fetchTransactions = async (
     throw new Error(`Failed to fetch transactions: ${response.status} ${response.statusText}`);
   }
   const data = await response.json();
-  return data.map((item: any) => ({ ...item, id: String(item.id), is_deleted: !!item.is_deleted }));
+  return data.map((item: any) => ({ ...item, id: String(item.id), is_deleted: !!item.is_deleted, is_override: !!item.is_override }));
+};
+
+export const updateTransaction = async (id: string, updates: {
+  date?: string; brokerage?: string; ticker?: string; name?: string; action?: string;
+  quantity?: number; price?: number; costPerShare?: number; totalCost?: number; assetType?: string;
+}): Promise<void> => {
+  const response = await fetch(`/api/v1/transactions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!response.ok) throw new Error(`Failed to update transaction: ${response.status}`);
+};
+
+export const revertTransaction = async (id: string): Promise<void> => {
+  console.log('[revertTransaction] POST', `/api/v1/transactions/${id}/revert`);
+  const response = await fetch(`/api/v1/transactions/${id}/revert`, { method: "POST" });
+  console.log('[revertTransaction] status:', response.status);
+  if (!response.ok) throw new Error(`Failed to revert transaction: ${response.status}`);
+  const data = await response.json();
+  console.log('[revertTransaction] response:', data);
 };
 
 export const softDeleteTransaction = async (id: string, isDeleted: boolean): Promise<void> => {
@@ -162,6 +183,11 @@ export const syncBrokerageTransactions = async (): Promise<{ message: string }> 
   const response = await fetch("/api/v1/brokerage/sync", { method: "POST" });
   if (!response.ok) throw new Error("Failed to sync transactions");
   return response.json();
+};
+
+export const resetTransactions = async (): Promise<void> => {
+  const response = await fetch("/api/v1/transactions/reset", { method: "POST" });
+  if (!response.ok) throw new Error(`Failed to reset transactions: ${response.status}`);
 };
 
 export const triggerRealizedGainsProcess = async (): Promise<void> => {

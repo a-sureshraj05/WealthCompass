@@ -45,6 +45,7 @@ export interface Transaction {
   totalCost: number;
   assetType: string;
   is_deleted: boolean;
+  is_override: boolean;
 }
 
 export interface RealizedGain {
