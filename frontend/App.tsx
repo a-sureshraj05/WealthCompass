@@ -43,6 +43,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [unrealizedGains, setUnrealizedGains] = useState<UnrealizedLot[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses'>('dashboardView');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const transactionsDirty = React.useRef(false);
 
   // Filter states for transactions
@@ -251,10 +252,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar stats={stats} onLogout={onLogout} />
+        <Navbar stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} />
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <DashboardView

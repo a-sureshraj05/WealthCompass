@@ -5,15 +5,18 @@ import { PortfolioStats } from '../types';
 interface Props {
   stats: PortfolioStats;
   onLogout: () => void;
+  sidebarCollapsed: boolean;
 }
 
-const Navbar: React.FC<Props> = ({ stats, onLogout }) => {
+const Navbar: React.FC<Props> = ({ stats, onLogout, sidebarCollapsed }) => {
   return (
     <nav className="h-16 border-b bg-white flex items-center justify-between px-8 shrink-0">
       <div className="flex items-center space-x-2">
-        <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-          WealthCompass
-        </h1>
+        {sidebarCollapsed && (
+          <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+            WealthCompass
+          </h1>
+        )}
       </div>
 
       <div className="hidden md:flex items-center space-x-8">
