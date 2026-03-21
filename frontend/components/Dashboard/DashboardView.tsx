@@ -67,7 +67,7 @@ const DashboardView: React.FC<Props> = ({
             Refresh Data
           </button>
         </div>
-        <HoldingsView holdings={holdings} unrealizedGains={unrealizedGains} onRemove={onRemoveHolding} />
+        <HoldingsView holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} onRemove={onRemoveHolding} />
       </div>
     );
   }

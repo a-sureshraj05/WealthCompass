@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { StockHolding, UnrealizedLot } from '../types';
+import { StockHolding, UnrealizedLot, RealizedGain } from '../types';
 import { fetchAnalystData } from '../services/apiService';
 
 type SortKey = 'brokerage' | 'assetType' | 'ticker' | 'quantity' | 'averageCostPerShare' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain';
@@ -8,10 +8,11 @@ type SortDirection = 'asc' | 'desc' | null;
 interface Props {
   holdings: StockHolding[];
   unrealizedGains: UnrealizedLot[];
+  realizedGains: RealizedGain[];
   onRemove: (id: string) => void;
 }
 
-const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) => {
+const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, realizedGains, onRemove }) => {
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([]);
   const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
@@ -28,6 +29,7 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [analystMedian, setAnalystMedian] = useState<Record<string, number>>({});
+  const [keepPct, setKeepPct] = useState(50);
 
   useEffect(() => {
     if (holdings.length === 0) return;
@@ -55,6 +57,18 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
     if (!type) return '';
     return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
   };
+
+  // Sum realized gain stats by (brokerage, ticker)
+  const realizedByHolding = useMemo(() => {
+    const map: Record<string, { gain: number; buyCost: number }> = {};
+    realizedGains.forEach(g => {
+      const key = `${g.brokerage}::${g.ticker}`;
+      if (!map[key]) map[key] = { gain: 0, buyCost: 0 };
+      map[key].gain += g.gain;
+      map[key].buyCost += g.quantity * g.buyPrice;
+    });
+    return map;
+  }, [realizedGains]);
 
   // Group unrealized lots by (brokerage, ticker) for quick lookup
   const lotsByHolding = useMemo(() => {
@@ -275,7 +289,33 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
             </div>
           </div>
 
-          <button onClick={resetFilters} className="text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest px-2">
+          <div className="w-px h-8 bg-slate-200 shrink-0" />
+
+          <div className="relative shrink-0">
+            <div className="absolute -top-2 left-2 bg-white px-1 z-10 flex items-center gap-1">
+              <span className="text-[9px] font-black text-indigo-500 uppercase tracking-tighter">After-Tax Keep</span>
+              <div className="relative group">
+                <svg className="w-3 h-3 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="absolute left-0 bottom-5 w-56 bg-slate-900 text-white text-[11px] font-normal normal-case tracking-normal rounded-xl px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed">
+                  Applied to <span className="text-emerald-400 font-bold">profits only</span>. Losses are always counted at <span className="text-rose-400 font-bold">100%</span>.
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+              <input
+                type="range"
+                min={0} max={100} step={5}
+                value={keepPct}
+                onChange={e => setKeepPct(Number(e.target.value))}
+                className="w-28 accent-indigo-600 cursor-pointer"
+              />
+              <span className="text-sm font-bold text-indigo-600 w-8 text-right">{keepPct}%</span>
+            </div>
+          </div>
+
+          <button onClick={resetFilters} className="text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest px-2 shrink-0">
             Reset
           </button>
         </div>
@@ -343,6 +383,12 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
                 </th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors text-right" onClick={() => handleSort('gain')}>
                   <div className="flex items-center justify-end">Unrealized Gain <SortIndicator column="gain" /></div>
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                  Realized Gain
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                  Total Gain
                 </th>
                 <th className="px-6 py-4"></th>
               </tr>
@@ -428,6 +474,47 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
                         )}
                       </td>
                       <td className="px-6 py-4 text-right">
+                        {(() => {
+                          const r = realizedByHolding[rowKey];
+                          if (!r) return <div className="text-xs text-slate-300">—</div>;
+                          const displayGain = r.gain > 0 ? r.gain * (keepPct / 100) : r.gain;
+                          const pct = r.buyCost > 0 ? (displayGain / r.buyCost) * 100 : null;
+                          return (
+                            <div>
+                              <div className={`text-sm font-black ${displayGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                <span className="text-xs font-bold">{displayGain >= 0 ? '+' : '-'}</span>${Math.abs(displayGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                              {pct !== null && (
+                                <div className={`text-xs font-bold ${pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {(() => {
+                          const r = realizedByHolding[rowKey];
+                          const afterTaxRealized = r ? (r.gain > 0 ? r.gain * (keepPct / 100) : r.gain) : 0;
+                          const total = gain + afterTaxRealized;
+                          const totalCostBasis = h.totalCost + (r?.buyCost ?? 0);
+                          const pct = totalCostBasis > 0 ? (total / totalCostBasis) * 100 : null;
+                          return (
+                            <div>
+                              <div className={`text-sm font-black ${total >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                <span className="text-xs font-bold">{total >= 0 ? '+' : '-'}</span>${Math.abs(total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                              {pct !== null && (
+                                <div className={`text-xs font-bold ${pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
                         <button
                           onClick={() => onRemove(h.id)}
                           className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
@@ -479,6 +566,8 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
                               </div>
                             )}
                           </td>
+                          <td className="px-6 py-3"></td>
+                          <td className="px-6 py-3"></td>
                           <td className="px-6 py-3"></td>
                         </tr>
                       );
