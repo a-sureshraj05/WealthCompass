@@ -4,9 +4,30 @@ import { StockHolding, PortfolioStats, Transaction, DateRangeType, RealizedGain,
 import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import LoginPage from './components/LoginPage';
 import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, fetchCashBalance, fetchAnalystData } from './services/apiService';
 
 const App: React.FC = () => {
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('wc_token'));
+
+  const handleLogin = (newToken: string) => {
+    localStorage.setItem('wc_token', newToken);
+    setToken(newToken);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('wc_token');
+    setToken(null);
+  };
+
+  if (!token) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  return <AuthenticatedApp onLogout={handleLogout} />;
+};
+
+const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
   const [cashBalance, setCashBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -211,7 +232,7 @@ const App: React.FC = () => {
       <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar stats={stats} />
+        <Navbar stats={stats} onLogout={onLogout} />
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <DashboardView

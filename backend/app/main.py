@@ -6,12 +6,13 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".gemini", ".env"))
 load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 
 from backend.app.core.database import engine
 from backend.app.db.schema import Base
 
-from .api import manual_import, transactions, brokerage, analyst
+from .api import manual_import, transactions, brokerage, analyst, auth
+from .api.auth import get_current_user
 
 app = FastAPI()
 
@@ -41,10 +42,11 @@ def startup_event():
             conn.commit()
 
 
-app.include_router(transactions.router, prefix="/api/v1")
-app.include_router(manual_import.router, prefix="/api/v1")
-app.include_router(brokerage.router, prefix="/api/v1/brokerage")
-app.include_router(analyst.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(transactions.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(manual_import.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(brokerage.router, prefix="/api/v1/brokerage", dependencies=[Depends(get_current_user)])
+app.include_router(analyst.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")

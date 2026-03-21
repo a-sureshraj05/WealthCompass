@@ -4,3 +4,6 @@ sqlalchemy
 google-cloud-aiplatform
 python-dotenv
 yfinance
+bcrypt
+python-jose[cryptography]
+python-multipart
