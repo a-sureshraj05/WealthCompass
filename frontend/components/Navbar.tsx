@@ -4,9 +4,10 @@ import { PortfolioStats } from '../types';
 
 interface Props {
   stats: PortfolioStats;
+  onLogout: () => void;
 }
 
-const Navbar: React.FC<Props> = ({ stats }) => {
+const Navbar: React.FC<Props> = ({ stats, onLogout }) => {
   return (
     <nav className="h-16 border-b bg-white flex items-center justify-between px-8 shrink-0">
       <div className="flex items-center space-x-2">
@@ -45,7 +46,13 @@ const Navbar: React.FC<Props> = ({ stats }) => {
           <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
             SA
           </div>
-<span className="text-sm font-medium text-slate-700">Account Holder</span>
+          <span className="text-sm font-medium text-slate-700">Account Holder</span>
+          <button
+            onClick={onLogout}
+            className="text-xs font-bold text-slate-400 hover:text-rose-600 transition-colors px-2 py-1 rounded-lg hover:bg-rose-50"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     </nav>

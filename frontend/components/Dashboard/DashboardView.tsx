@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { StockHolding, PortfolioStats, Transaction, RealizedGain, UnrealizedLot } from '../../types';
 import SummaryCards from './SummaryCards';
 import PortfolioVisuals from './PortfolioVisuals';
@@ -23,6 +23,7 @@ interface Props {
   onUpdateTransaction: (id: string, updates: Partial<Transaction>) => void;
   onRevertTransaction: (id: string) => void;
   onResetData: () => void;
+  onSyncTransactions: () => Promise<string>;
   onProcessGains: () => void;
   setLoading: (l: boolean) => void;
 }
@@ -42,9 +43,14 @@ const DashboardView: React.FC<Props> = ({
   onUpdateTransaction,
   onRevertTransaction,
   onResetData,
+  onSyncTransactions,
   onProcessGains,
   setLoading,
 }) => {
+  const [syncMessage, setSyncMessage] = useState('');
+
+  useEffect(() => { setSyncMessage(''); }, [activeTab]);
+
   if (activeTab === 'importData') {
     return <ImportDataView onAddTransactions={onAddTransactions} setLoading={setLoading} initialTab="connect" />;
   }
@@ -71,13 +77,26 @@ const DashboardView: React.FC<Props> = ({
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900">Transaction History</h2>
-          <button
-            onClick={onResetData}
-            className="px-4 py-2 text-sm font-medium text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-amber-200"
-          >
-            Reset Data
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => { setSyncMessage(''); const msg = await onSyncTransactions(); setSyncMessage(msg); }}
+              className="px-4 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-indigo-200"
+            >
+              Sync Transactions
+            </button>
+            <button
+              onClick={onResetData}
+              className="px-4 py-2 text-sm font-medium text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-amber-200"
+            >
+              Reset Data
+            </button>
+          </div>
         </div>
+        {syncMessage && (
+          <p className={`text-sm font-medium px-4 py-2 rounded-lg ${syncMessage.startsWith('Failed') ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-700'}`}>
+            {syncMessage}
+          </p>
+        )}
         <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} />
       </div>
     );
