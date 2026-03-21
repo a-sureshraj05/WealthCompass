@@ -5,10 +5,20 @@ import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LoginPage from './components/LoginPage';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, fetchCashBalance, fetchAnalystData } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, fetchCashBalance, fetchAnalystData, syncBrokerageTransactions } from './services/apiService';
 
 const App: React.FC = () => {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('wc_token'));
+  const [token, setToken] = useState<string | null>(null);
+  const [validating, setValidating] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('wc_token');
+    if (!stored) { setValidating(false); return; }
+    fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${stored}` } })
+      .then(res => { if (res.ok) setToken(stored); else localStorage.removeItem('wc_token'); })
+      .catch(() => {})
+      .finally(() => setValidating(false));
+  }, []);
 
   const handleLogin = (newToken: string) => {
     localStorage.setItem('wc_token', newToken);
@@ -20,10 +30,8 @@ const App: React.FC = () => {
     setToken(null);
   };
 
-  if (!token) {
-    return <LoginPage onLogin={handleLogin} />;
-  }
-
+  if (validating) return null;
+  if (!token) return <LoginPage onLogin={handleLogin} />;
   return <AuthenticatedApp onLogout={handleLogout} />;
 };
 
@@ -206,6 +214,20 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   };
 
+  const handleSyncTransactions = async (): Promise<string> => {
+    setLoading(true);
+    try {
+      const result = await syncBrokerageTransactions();
+      await Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains()]);
+      return result.message;
+    } catch (error) {
+      console.error('Failed to sync transactions:', error);
+      return 'Failed to sync transactions.';
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const handleProcessGains = async () => {
     setLoading(true);
@@ -250,6 +272,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             onUpdateTransaction={handleUpdateTransaction}
             onRevertTransaction={handleRevertTransaction}
             onResetData={handleResetData}
+            onSyncTransactions={handleSyncTransactions}
             onProcessGains={handleProcessGains}
             setLoading={setLoading}
           />

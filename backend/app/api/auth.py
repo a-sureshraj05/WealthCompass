@@ -1,4 +1,5 @@
 import os
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -14,7 +15,7 @@ from backend.app.db.schema import User
 
 router = APIRouter()
 
-SECRET_KEY = os.getenv("JWT_SECRET", "change-me-in-production")
+SECRET_KEY = os.getenv("JWT_SECRET") or secrets.token_hex(32)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24h
 
