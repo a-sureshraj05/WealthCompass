@@ -419,8 +419,13 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className={`text-sm font-black ${gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {gain >= 0 ? '+' : ''}${gain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          <span className="text-xs font-bold">{gain >= 0 ? '+' : '-'}</span>${Math.abs(gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
+                        {h.averageCostPerShare > 0 && (
+                          <div className={`text-xs font-bold ${gain >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {gain >= 0 ? '+' : '-'}{Math.abs((h.currentPrice - h.averageCostPerShare) / h.averageCostPerShare * 100).toFixed(1)}%
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button
@@ -467,7 +472,12 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
                           <td className="px-6 py-3"></td>
                           <td className="px-6 py-3 text-right text-[11px] text-slate-500">${(lot.quantity * lot.currentPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className={`px-6 py-3 text-right text-[11px] font-black ${lotGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {lotGain >= 0 ? '+' : ''}${lotGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <span className="font-medium">{lotGain >= 0 ? '+' : '-'}</span>${Math.abs(lotGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {lot.buyPrice > 0 && (
+                              <div className="text-[10px] font-bold">
+                                {lotGain >= 0 ? '+' : '-'}{Math.abs((lot.currentPrice - lot.buyPrice) / lot.buyPrice * 100).toFixed(1)}%
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-3"></td>
                         </tr>
