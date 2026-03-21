@@ -217,7 +217,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       disabled={!manualText || !selectedBroker}
                       className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors shadow-xl"
                     >
-                      Parse with Gemini AI
+                      Parse Statement
                     </button>
                   </div>
                 </div>
@@ -332,7 +332,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
             </svg>
             <span className="text-xs font-semibold uppercase tracking-wider">End-to-End Encrypted</span>
           </div>
-          <span className="text-xs italic">Parsing powered by Google Gemini Flash</span>
+          <span className="text-xs italic">Statements processed locally and securely</span>
         </div>
       </div>
 
