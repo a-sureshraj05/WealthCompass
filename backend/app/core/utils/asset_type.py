@@ -44,12 +44,31 @@ ASSET_TYPE_MAP: dict = {
     "dividend": "",
 }
 
+# Ticker-based overrides — takes precedence over asset type string
+TICKER_OVERRIDES: dict = {
+    # Fidelity money market funds
+    "SPAXX": "Cash",
+    "FDRXX": "Cash",
+    "FZFXX": "Cash",
+    "FCASH": "Cash",
+    # Vanguard money market funds
+    "VMFXX": "Cash",
+    "VUSXX": "Cash",
+    "VMRXX": "Cash",
+    # Schwab money market funds
+    "SWVXX": "Cash",
+    "SNSXX": "Cash",
+}
 
-def normalize(raw: str) -> str:
+
+def normalize(raw: str, ticker: str = "") -> str:
     """
     Normalize a raw asset type string to a standard value.
+    Ticker-based overrides take precedence over asset type string.
     Returns empty string if unknown or not applicable.
     """
+    if ticker and ticker.upper() in TICKER_OVERRIDES:
+        return TICKER_OVERRIDES[ticker.upper()]
     if not raw:
         return ""
     return ASSET_TYPE_MAP.get(raw.strip().lower(), "Other")

@@ -256,7 +256,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                   <td className="px-4 py-3 text-right text-[11px] text-slate-500">${g.buyPrice.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right text-[11px] text-slate-500">${(activeSubTab === 'realized' ? (g as RealizedGain).sellPrice : (g as UnrealizedLot).currentPrice).toFixed(2)}</td>
                   <td className={`px-4 py-3 text-right text-[11px] font-black ${g.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {g.gain >= 0 ? '+' : ''}${g.gain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span className="font-medium">{g.gain >= 0 ? '+' : '-'}</span>${Math.abs(g.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                 </tr>
               ))}
@@ -302,7 +302,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => `$${val}`} />
                   <Tooltip 
                     cursor={{ fill: '#f8fafc' }}
-                    formatter={(value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    formatter={(value: number) => `${value < 0 ? '-' : ''}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '10px' }} />
@@ -333,7 +333,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                       ))}
                     </Pie>
                     <Tooltip 
-                      formatter={(value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                      formatter={(value: number) => `${value < 0 ? '-' : ''}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                     />
                     <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
@@ -499,7 +499,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain
             </div>
             <div className="text-2xl font-black">
-              ${(stats.stTotal + stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {(stats.stTotal + stats.ltTotal) < 0 ? '-' : ''}${Math.abs(stats.stTotal + stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
           <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center">
@@ -519,7 +519,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               <p className="text-[10px] text-emerald-600 font-medium">{activeSubTab === 'realized' ? 'Closed positions' : 'Open lots'} held ≤ 1 year</p>
             </div>
             <div className={`text-xl font-black ${stats.stTotal >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-              {stats.stTotal >= 0 ? '+' : ''}${stats.stTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <span className="font-medium">{stats.stTotal >= 0 ? '+' : '-'}</span>${Math.abs(stats.stTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
           <GainTableSection title="Short-Term" data={shortTerm} />
@@ -533,7 +533,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               <p className="text-[10px] text-indigo-600 font-medium">{activeSubTab === 'realized' ? 'Closed positions' : 'Open lots'} held {'>'} 1 year</p>
             </div>
             <div className={`text-xl font-black ${stats.ltTotal >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>
-              {stats.ltTotal >= 0 ? '+' : ''}${stats.ltTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <span className="font-medium">{stats.ltTotal >= 0 ? '+' : '-'}</span>${Math.abs(stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
           <GainTableSection title="Long-Term" data={longTerm} />

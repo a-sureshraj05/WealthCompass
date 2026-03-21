@@ -190,6 +190,35 @@ export const resetTransactions = async (): Promise<void> => {
   if (!response.ok) throw new Error(`Failed to reset transactions: ${response.status}`);
 };
 
+export interface AnalystData {
+  ticker: string;
+  currentPrice?: number;
+  targetLow?: number;
+  targetHigh?: number;
+  targetMedian?: number;
+  targetMean?: number;
+  analystCount?: number;
+  recommendation?: string;
+  sector?: string;
+}
+
+export const fetchAnalystData = async (tickers: string[]): Promise<AnalystData[]> => {
+  const response = await fetch("/api/v1/analyst/batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(tickers),
+  });
+  if (!response.ok) throw new Error("Failed to fetch analyst data");
+  return response.json();
+};
+
+export const fetchCashBalance = async (): Promise<number> => {
+  const response = await fetch("/api/v1/cash-balance");
+  if (!response.ok) throw new Error("Failed to fetch cash balance");
+  const data = await response.json();
+  return data.balance;
+};
+
 export const triggerRealizedGainsProcess = async (): Promise<void> => {
   const response = await fetch("/api/v1/realized-gains/process", {
     method: "POST",

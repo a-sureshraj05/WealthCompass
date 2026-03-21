@@ -8,14 +8,17 @@ export interface StockHolding {
   currentPrice: number;
   marketValue: number;
   assetType?: string;
+  sector?: string;
 }
 
 export interface PortfolioStats {
   totalValue: number;
+  investmentValue: number;
   totalGain: number;
   gainPercentage: number;
   dayChange: number;
   dayChangePercentage: number;
+  buyingPower: number;
 }
 
 export interface AnalysisInsight {

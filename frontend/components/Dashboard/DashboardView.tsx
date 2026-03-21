@@ -24,7 +24,6 @@ interface Props {
   onRevertTransaction: (id: string) => void;
   onResetData: () => void;
   onProcessGains: () => void;
-  onClearAll: () => void;
   setLoading: (l: boolean) => void;
 }
 
@@ -44,7 +43,6 @@ const DashboardView: React.FC<Props> = ({
   onRevertTransaction,
   onResetData,
   onProcessGains,
-  onClearAll,
   setLoading,
 }) => {
   if (activeTab === 'importData') {
@@ -57,10 +55,10 @@ const DashboardView: React.FC<Props> = ({
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900">Portfolio Holdings</h2>
           <button
-            onClick={onClearAll}
-            className="px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200"
+            onClick={onProcessGains}
+            className="px-4 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-indigo-200"
           >
-            Clear All Data
+            Refresh Data
           </button>
         </div>
         <HoldingsView holdings={holdings} unrealizedGains={unrealizedGains} onRemove={onRemoveHolding} />

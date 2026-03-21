@@ -39,7 +39,7 @@ def parse_statement_import_endpoint(
 
         new_transaction_ids = []
         for transaction_data in parsed_transactions_data:
-            asset_type = normalize_asset_type(transaction_data["assetType"])
+            asset_type = normalize_asset_type(transaction_data["assetType"], ticker=transaction_data["ticker"])
 
             # Insert into ManualRawTransaction (raw log)
             db_raw = DBManualRawTransaction(
