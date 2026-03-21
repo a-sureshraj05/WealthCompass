@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { StockHolding } from '../types';
+import { StockHolding } from '../../types';
 import { getPortfolioInsights } from '../../services/apiService';
 
 interface Props {
@@ -26,7 +26,7 @@ const AIInsights: React.FC<Props> = ({ holdings }) => {
   return (
     <div className="bg-white p-6 rounded-2xl border shadow-sm relative overflow-hidden group">
       <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 group-hover:bg-indigo-100 transition-colors" />
-      
+
       <div className="relative">
         <div className="flex items-center space-x-2 mb-6">
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">

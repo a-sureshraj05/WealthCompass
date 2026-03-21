@@ -37,6 +37,10 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
         ticker_groups[key].append(t)
 
     for (brokerage, ticker), ticker_transactions in ticker_groups.items():
+        # Skip Cash asset types — money market funds don't have gains
+        if ticker_transactions and ticker_transactions[0].assetType == "Cash":
+            continue
+
         # Sort by date for FIFO
         sorted_transactions = sorted(ticker_transactions, key=lambda x: x.date)
 

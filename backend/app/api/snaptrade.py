@@ -133,7 +133,7 @@ def sync(db: Session) -> int:
                 brokerage_name = txn.get("institution") or brokerage_name
                 symbol_type = symbol_info.get("type") or {}
                 raw_asset_type = symbol_type.get("description", "") if isinstance(symbol_type, dict) else ""
-                asset_type = normalize_asset_type(raw_asset_type)
+                asset_type = normalize_asset_type(raw_asset_type, ticker=ticker)
 
                 raw_date = txn.get("trade_date") or txn.get("settlement_date") or ""
                 try:

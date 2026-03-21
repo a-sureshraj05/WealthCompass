@@ -9,13 +9,32 @@ interface Props {
 
 const COLORS = ['#6366f1', '#a855f7', '#ec4899', '#f97316', '#10b981', '#0ea5e9', '#64748b'];
 
+const SectorTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const { name, value, tickers } = payload[0].payload;
+  return (
+    <div style={{ borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} className="bg-white border p-3 text-xs">
+      <p className="font-bold text-slate-800 mb-1">{name}</p>
+      <p className="text-slate-500 mb-2">${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+      <div className="flex flex-wrap gap-1">
+        {tickers.map((t: string) => (
+          <span key={t} className="bg-indigo-50 text-indigo-700 font-semibold px-1.5 py-0.5 rounded">{t}</span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
   const allocationData = React.useMemo(() => {
-    const sectors: Record<string, number> = {};
+    const sectors: Record<string, { value: number; tickers: string[] }> = {};
     holdings.forEach(h => {
-      sectors[h.category] = (sectors[h.category] || 0) + (h.quantity * h.currentPrice);
+      const key = h.sector || h.assetType || 'Other';
+      if (!sectors[key]) sectors[key] = { value: 0, tickers: [] };
+      sectors[key].value += h.marketValue;
+      if (!sectors[key].tickers.includes(h.ticker)) sectors[key].tickers.push(h.ticker);
     });
-    return Object.entries(sectors).map(([name, value]) => ({ name, value }));
+    return Object.entries(sectors).map(([name, { value, tickers }]) => ({ name, value, tickers }));
   }, [holdings]);
 
   const brokerageData = React.useMemo(() => {
@@ -49,21 +68,24 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
               <Pie
                 data={allocationData}
                 cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
+                cy="42%"
+                innerRadius={55}
+                outerRadius={75}
                 paddingAngle={5}
                 dataKey="value"
               >
-                {allocationData.map((entry, index) => (
+                {allocationData.map((_entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip
-                formatter={(value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+              <Tooltip content={<SectorTooltip />} />
+              <Legend
+                verticalAlign="bottom"
+                align="center"
+                iconType="circle"
+                iconSize={7}
+                wrapperStyle={{ fontSize: '12px', lineHeight: '20px', paddingTop: '8px' }}
               />
-              <Legend verticalAlign="bottom" align="center" iconType="circle" />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -83,7 +105,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
               />
               <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {brokerageData.map((entry, index) => (
+                {brokerageData.map((_entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
                 ))}
               </Bar>

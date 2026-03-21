@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { StockHolding, UnrealizedLot } from '../types';
+import { fetchAnalystData } from '../services/apiService';
 
 type SortKey = 'brokerage' | 'assetType' | 'ticker' | 'quantity' | 'averageCostPerShare' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain';
 type SortDirection = 'asc' | 'desc' | null;
@@ -26,6 +27,19 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
 
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [analystMedian, setAnalystMedian] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (holdings.length === 0) return;
+    const tickers = [...new Set(holdings.map(h => h.ticker))];
+    fetchAnalystData(tickers)
+      .then(data => {
+        const map: Record<string, number> = {};
+        data.forEach(d => { if (d.targetMedian) map[d.ticker] = d.targetMedian; });
+        setAnalystMedian(map);
+      })
+      .catch(console.error);
+  }, [holdings]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -321,6 +335,9 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors text-right" onClick={() => handleSort('currentPrice')}>
                   <div className="flex items-center justify-end">Current Price <SortIndicator column="currentPrice" /></div>
                 </th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                  Median Analyst Target
+                </th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors text-right" onClick={() => handleSort('marketValue')}>
                   <div className="flex items-center justify-end">Market Value <SortIndicator column="marketValue" /></div>
                 </th>
@@ -383,6 +400,21 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-500 font-medium text-right">${h.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-6 py-4 text-right">
+                        {analystMedian[h.ticker] ? (() => {
+                          const pct = ((analystMedian[h.ticker] - h.currentPrice) / h.currentPrice) * 100;
+                          return (
+                            <div>
+                              <div className="text-sm font-bold text-indigo-600">${analystMedian[h.ticker].toFixed(2)}</div>
+                              <div className={`text-xs font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                              </div>
+                            </div>
+                          );
+                        })() : (
+                          <div className="text-xs text-slate-300">—</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
                         <div className="text-sm font-black text-slate-900">${h.marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -432,6 +464,7 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, onRemove }) 
                           <td className="px-6 py-3 text-right text-[11px] text-slate-500">${lot.buyPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="px-6 py-3 text-right text-[11px] text-slate-500">${(lot.quantity * lot.buyPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="px-6 py-3 text-right text-[11px] text-slate-500">${lot.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-6 py-3"></td>
                           <td className="px-6 py-3 text-right text-[11px] text-slate-500">${(lot.quantity * lot.currentPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className={`px-6 py-3 text-right text-[11px] font-black ${lotGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                             {lotGain >= 0 ? '+' : ''}${lotGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core import process
 from backend.app.core.database import get_db
+from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 from backend.app.db.schema import \
     Holding as DBHolding  # Alias to avoid name collision
 from backend.app.db.schema import ManualRawTransaction as DBManualRawTransaction
@@ -285,7 +286,7 @@ def reset_transactions(db: Session = Depends(get_db)):
             price=raw.price,
             costPerShare=raw.costPerShare,
             totalCost=raw.totalCost,
-            assetType=raw.assetType,
+            assetType=normalize_asset_type(raw.assetType, ticker=raw.ticker),
             source="manual",
             raw_id=raw.id,
         ))
@@ -303,7 +304,7 @@ def reset_transactions(db: Session = Depends(get_db)):
             price=raw.price,
             costPerShare=raw.price,
             totalCost=raw.amount,
-            assetType=raw.assetType,
+            assetType=normalize_asset_type(raw.assetType, ticker=raw.ticker),
             source="snaptrade",
             raw_id=raw.id,
         ))
@@ -311,6 +312,22 @@ def reset_transactions(db: Session = Depends(get_db)):
     db.commit()
     process.process_transactions(db)
     return {"message": "Transactions reset and reprocessed from raw tables."}
+
+
+@router.get("/cash-balance")
+def get_cash_balance(db: Session = Depends(get_db)):
+    """Return total cash balance from Cash asset type transactions (BUY adds, SELL subtracts)."""
+    cash_txns = db.query(DBTransaction).filter(
+        DBTransaction.assetType == "Cash",
+        DBTransaction.is_deleted == False,
+    ).all()
+    balance = 0.0
+    for t in cash_txns:
+        if t.action.upper() == "BUY":
+            balance += t.totalCost
+        elif t.action.upper() == "SELL":
+            balance -= t.totalCost
+    return {"balance": round(balance, 2)}
 
 
 @router.get("/holdings", response_model=List[Holding])

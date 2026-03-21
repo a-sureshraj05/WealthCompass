@@ -4,10 +4,11 @@ import { StockHolding, PortfolioStats, Transaction, DateRangeType, RealizedGain,
 import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, fetchCashBalance, fetchAnalystData } from './services/apiService';
 
 const App: React.FC = () => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
+  const [cashBalance, setCashBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [realizedGains, setRealizedGains] = useState<RealizedGain[]>([]);
   const [unrealizedGains, setUnrealizedGains] = useState<UnrealizedLot[]>([]);
@@ -24,7 +25,13 @@ const App: React.FC = () => {
 
   const getHoldings = useCallback(async () => {
     try {
-      setHoldings(await fetchHoldings());
+      const [h, cash] = await Promise.all([fetchHoldings(), fetchCashBalance()]);
+      const tickers = [...new Set(h.map(x => x.ticker))];
+      const analystData = tickers.length > 0 ? await fetchAnalystData(tickers) : [];
+      const sectorMap: Record<string, string> = {};
+      analystData.forEach(a => { if (a.sector) sectorMap[a.ticker] = a.sector; });
+      setHoldings(h.map(x => ({ ...x, sector: sectorMap[x.ticker] })));
+      setCashBalance(cash);
     } catch (error) {
       console.error("Failed to fetch holdings:", error);
     }
@@ -97,16 +104,17 @@ const App: React.FC = () => {
   }, [getTransactions]); // Depend on getTransactions
 
   const stats = useMemo((): PortfolioStats => {
-    const totalValue = holdings.reduce((sum, h) => sum + h.marketValue, 0);
+    const investmentValue = holdings.reduce((sum, h) => sum + h.marketValue, 0);
+    const totalValue = investmentValue + cashBalance;
     const totalCost = holdings.reduce((sum, h) => sum + h.totalCost, 0);
-    const totalGain = totalValue - totalCost;
+    const totalGain = investmentValue - totalCost;
     const gainPercentage = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
-    
-    const dayChange = totalValue * 0.012; 
+
+    const dayChange = investmentValue * 0.012;
     const dayChangePercentage = 1.2;
 
-    return { totalValue, totalGain, gainPercentage, dayChange, dayChangePercentage };
-  }, [holdings]);
+    return { totalValue, investmentValue, totalGain, gainPercentage, dayChange, dayChangePercentage, buyingPower: cashBalance };
+  }, [holdings, cashBalance]);
 
   const handleAddHoldings = (newHoldings: StockHolding[]) => {
     setHoldings(newHoldings);
@@ -177,13 +185,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleClearAll = () => {
-    if (window.confirm("Are you sure you want to clear all data? This cannot be undone.")) {
-      setHoldings([]);
-      setTransactions([]);
-      // TODO: Implement backend call to clear all holdings and transactions
-    }
-  };
 
   const handleProcessGains = async () => {
     setLoading(true);
@@ -229,7 +230,6 @@ const App: React.FC = () => {
             onRevertTransaction={handleRevertTransaction}
             onResetData={handleResetData}
             onProcessGains={handleProcessGains}
-            onClearAll={handleClearAll}
             setLoading={setLoading}
           />
         </main>
