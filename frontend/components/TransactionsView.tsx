@@ -178,8 +178,8 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
             valB = b.price;
             break;
           case 'amount':
-            valA = a.quantity * a.price;
-            valB = b.quantity * b.price;
+            valA = a.totalCost || (a.quantity * a.price);
+            valB = b.totalCost || (b.quantity * b.price);
             break;
           default:
             return 0;
@@ -646,7 +646,12 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     {/* Total Amount */}
                     <td className="px-6 py-4 text-right">
                       <div className="text-sm font-black text-slate-900">
-                        ${((isEditing ? (editDraft.quantity ?? t.quantity) * (editDraft.price ?? t.price) : t.quantity * t.price)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ${(() => {
+                          const amount = isEditing
+                            ? ((editDraft.quantity ?? t.quantity) * (editDraft.price ?? t.price)) || t.totalCost
+                            : t.totalCost || (t.quantity * t.price);
+                          return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        })()}
                       </div>
                     </td>
 

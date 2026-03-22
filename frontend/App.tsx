@@ -5,7 +5,7 @@ import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LoginPage from './components/LoginPage';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchAnalystData, syncBrokerageTransactions } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchAnalystData } from './services/apiService';
 
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(null);
@@ -233,12 +233,12 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const handleSyncTransactions = async (): Promise<string> => {
     setLoading(true);
     try {
-      const result = await syncBrokerageTransactions();
+      await resetTransactions();
       await Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains()]);
-      return result.message;
+      return 'Transactions reprocessed from raw data.';
     } catch (error) {
-      console.error('Failed to sync transactions:', error);
-      return 'Failed to sync transactions.';
+      console.error('Failed to reprocess transactions:', error);
+      return 'Failed to reprocess transactions.';
     } finally {
       setLoading(false);
     }

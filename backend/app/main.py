@@ -40,6 +40,18 @@ def startup_event():
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE transactions ADD COLUMN raw_id INTEGER"))
             conn.commit()
+    if "option_symbol" not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN option_symbol TEXT"))
+            conn.commit()
+
+    # Migration: add option_symbol to snaptrade_transactions if it doesn't exist
+    if "snaptrade_transactions" in inspector.get_table_names():
+        st_columns = [col["name"] for col in inspector.get_columns("snaptrade_transactions")]
+        if "option_symbol" not in st_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE snaptrade_transactions ADD COLUMN option_symbol TEXT"))
+                conn.commit()
 
 
 app.include_router(auth.router, prefix="/api/v1")

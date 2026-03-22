@@ -31,6 +31,7 @@ class Transaction(Base):
     is_deleted = Column(Boolean, default=False, nullable=False, server_default="0")
     is_override = Column(Boolean, default=False, nullable=False, server_default="0")
     original_values = Column(String, nullable=True)
+    option_symbol = Column(String, nullable=True)  # OCC option symbol e.g. MSFT250117C00400000
 
 
 class ManualRawTransaction(Base):
@@ -138,6 +139,13 @@ class SnaptradeConnection(Base):
     account_id = Column(String)              # Snaptrade account ID
 
 
+class SnaptradeIgnoredAccount(Base):
+    __tablename__ = "snaptrade_ignored_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(String, unique=True, nullable=False)
+
+
 class SnaptradeTransaction(Base):
     __tablename__ = "snaptrade_transactions"
 
@@ -153,4 +161,5 @@ class SnaptradeTransaction(Base):
     amount = Column(Float)
     currency = Column(String)
     assetType = Column(String)
+    option_symbol = Column(String, nullable=True)  # OCC option symbol e.g. MSFT250117C00400000
     snaptrade_transaction_id = Column(String, unique=True)  # prevents duplicates

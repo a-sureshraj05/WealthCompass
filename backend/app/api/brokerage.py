@@ -38,6 +38,29 @@ def get_connections(db: Session = Depends(get_db)):
     raise HTTPException(status_code=400, detail=f"Unknown provider: {PROVIDER}")
 
 
+@router.get("/accounts")
+def get_accounts(db: Session = Depends(get_db)):
+    """Return list of all user accounts across connected brokerages."""
+    if PROVIDER == "snaptrade":
+        try:
+            return snaptrade.get_accounts(db)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    raise HTTPException(status_code=400, detail=f"Unknown provider: {PROVIDER}")
+
+
+@router.delete("/accounts/{account_id}")
+def ignore_account(account_id: str, db: Session = Depends(get_db)):
+    """Hide an account from WealthCompass (does not affect SnapTrade connection)."""
+    if PROVIDER == "snaptrade":
+        try:
+            snaptrade.ignore_account(account_id, db)
+            return {"message": "Account hidden."}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    raise HTTPException(status_code=400, detail=f"Unknown provider: {PROVIDER}")
+
+
 @router.delete("/connections/{authorization_id}")
 def delete_connection(authorization_id: str, db: Session = Depends(get_db)):
     """Delete a brokerage connection from provider and local DB."""
@@ -54,12 +77,12 @@ def delete_connection(authorization_id: str, db: Session = Depends(get_db)):
 def sync(
     start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
-    auth_ids: Optional[List[str]] = Query(None, description="Authorization IDs to sync"),
+    account_ids: Optional[List[str]] = Query(None, description="Account IDs to sync"),
     db: Session = Depends(get_db),
 ):
-    """Sync transactions from connected brokerages, optionally filtered by date range and authorization IDs."""
+    """Sync transactions from connected brokerages, optionally filtered by date range and account IDs."""
     if PROVIDER == "snaptrade":
-        total = snaptrade.sync(db, start_date=start_date, end_date=end_date, auth_ids=auth_ids)
+        total = snaptrade.sync(db, start_date=start_date, end_date=end_date, account_ids=account_ids)
         if total > 0:
             process.process_transactions(db)
         return {"message": f"Synced {total} new transactions."}

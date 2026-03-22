@@ -255,6 +255,29 @@ def set_transaction_hidden(transaction_id: int, is_deleted: bool, db: Session = 
     return {"message": "Transaction updated successfully"}
 
 
+@router.delete("/transactions/raw")
+def delete_raw_data(source: Optional[str] = None, brokerage: Optional[str] = None, db: Session = Depends(get_db)):
+    """Delete raw source data. source=manual|snaptrade|None(both). Optionally filter by brokerage."""
+    if source in (None, "manual"):
+        q = db.query(DBManualRawTransaction)
+        if brokerage:
+            q = q.filter(DBManualRawTransaction.brokerage == brokerage)
+        q.delete(synchronize_session=False)
+    if source in (None, "snaptrade"):
+        q = db.query(DBSnaptradeTransaction)
+        if brokerage:
+            q = q.filter(DBSnaptradeTransaction.brokerage == brokerage)
+        q.delete(synchronize_session=False)
+    # Also clear processed data that was derived from the deleted raw rows
+    db.query(DBTransaction).delete(synchronize_session=False)
+    db.query(DBHolding).delete(synchronize_session=False)
+    db.query(DBRealizedGain).delete(synchronize_session=False)
+    db.query(DBUnrealizedGain).delete(synchronize_session=False)
+    db.commit()
+    label = source or "all"
+    return {"message": f"Deleted {label} raw data and all processed data."}
+
+
 @router.delete("/transactions/{transaction_id}")
 def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
     transaction = (
@@ -320,6 +343,7 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
             costPerShare=raw.price,
             totalCost=raw.amount,
             assetType=normalize_asset_type(raw.assetType, ticker=raw.ticker),
+            option_symbol=raw.option_symbol,
             source="snaptrade",
             raw_id=raw.id,
         ))

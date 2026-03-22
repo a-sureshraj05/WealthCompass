@@ -55,6 +55,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                         "price": t.price,
                         "brokerage": t.brokerage,
                         "assetType": t.assetType,
+                        "option_symbol": getattr(t, "option_symbol", None),
                     }
                 )
             elif t.action.upper() == "SELL":
