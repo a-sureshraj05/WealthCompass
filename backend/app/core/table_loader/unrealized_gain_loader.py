@@ -24,10 +24,18 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
         if not open_lots:
             continue
 
-        current_price = get_stock_price(ticker)
+        # For options, use OCC symbol for price lookup (e.g. MSFT250117C00400000)
+        # Expired options return None from yfinance → treat as $0 (worthless)
+        option_symbol = open_lots[0].get("option_symbol") if open_lots else None
+        price_ticker = option_symbol if option_symbol else ticker
+        current_price = get_stock_price(price_ticker)
         if current_price is None:
-            print(f"Warning: Could not fetch current price for {ticker} ({brokerage}). Skipping.")
-            continue
+            if option_symbol:
+                print(f"[unrealized_gain_loader] Option {option_symbol} has no price data (likely expired). Using $0.")
+                current_price = 0.0
+            else:
+                print(f"Warning: Could not fetch current price for {ticker} ({brokerage}). Skipping.")
+                continue
 
         for lot in open_lots:
             # Ensure lot quantity is positive before processing

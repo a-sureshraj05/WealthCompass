@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { parseStatement, getBrokerageConnectUrl, fetchBrokerageConnections, syncBrokerageTransactions, deleteBrokerageConnection } from '../services/apiService';
+import { parseStatement, getBrokerageConnectUrl, fetchBrokerageConnections, fetchBrokerageAccounts, ignoreBrokerageAccount, syncBrokerageTransactions, deleteBrokerageConnection, deleteRawData } from '../services/apiService';
 import { Transaction } from '../types';
 
 interface Props {
@@ -27,11 +27,18 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
   // Connect state
   const [connectBroker, setConnectBroker] = useState('');
   const [connections, setConnections] = useState<{ id: number; brokerage: string; authorization_id: string }[]>([]);
+  const [accounts, setAccounts] = useState<{ id: string; name: string; brokerage: string; authorization_id: string }[]>([]);
   const [connectStatus, setConnectStatus] = useState('');
+  const [syncStartDate, setSyncStartDate] = useState('');
+  const [syncEndDate, setSyncEndDate] = useState('');
+  const [syncBrokerage, setSyncBrokerage] = useState('');
+  const [syncAccountIds, setSyncAccountIds] = useState<string[]>([]);
 
   const loadConnections = useCallback(async () => {
     try {
-      setConnections(await fetchBrokerageConnections());
+      const [conns, accts] = await Promise.all([fetchBrokerageConnections(), fetchBrokerageAccounts()]);
+      setConnections(conns);
+      setAccounts(accts);
     } catch (e) {
       console.error(e);
     }
@@ -127,7 +134,15 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
     setLoading(true);
     setConnectStatus('');
     try {
-      const result = await syncBrokerageTransactions();
+      // If specific accounts selected, use those. If only a brokerage selected with no accounts,
+      // use all accounts under that brokerage. Otherwise sync everything.
+      let accountIds: string[] | undefined;
+      if (syncAccountIds.length > 0) {
+        accountIds = syncAccountIds;
+      } else if (syncBrokerage) {
+        accountIds = accounts.filter(a => a.authorization_id === syncBrokerage).map(a => a.id);
+      }
+      const result = await syncBrokerageTransactions(syncStartDate || undefined, syncEndDate || undefined, accountIds);
       setConnectStatus(result.message);
     } catch {
       setConnectStatus('Failed to sync transactions.');
@@ -295,6 +310,88 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
               {/* Refresh + Sync */}
               <div className="space-y-3">
                 <label className="block text-sm font-bold text-slate-700">3. After Connecting</label>
+
+                {/* Hierarchical brokerage → account selector */}
+                {connections.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Brokerage</label>
+                      <select
+                        value={syncBrokerage}
+                        onChange={e => { setSyncBrokerage(e.target.value); setSyncAccountIds([]); }}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="">All Brokerages</option>
+                        {connections.map(c => (
+                          <option key={c.authorization_id} value={c.authorization_id}>{c.brokerage}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {syncBrokerage && (() => {
+                      const filteredAccounts = accounts.filter(a => a.authorization_id === syncBrokerage);
+                      return filteredAccounts.length > 0 ? (
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Accounts</label>
+                          <div className="flex flex-col gap-2">
+                            {filteredAccounts.map(a => (
+                              <div key={a.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm transition-colors ${syncAccountIds.includes(a.id) ? 'bg-indigo-50 border-indigo-300' : 'bg-slate-50 border-slate-200'}`}>
+                                <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 accent-indigo-600 shrink-0"
+                                    checked={syncAccountIds.includes(a.id)}
+                                    onChange={() => setSyncAccountIds(prev => prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id])}
+                                  />
+                                  <p className={`font-semibold ${syncAccountIds.includes(a.id) ? 'text-indigo-700' : 'text-slate-700'}`}>
+                                    {a.name || 'Brokerage Account'}
+                                  </p>
+                                </label>
+                                <button
+                                  onClick={async () => {
+                                    if (!window.confirm(`Hide "${a.name || 'this account'}" from WealthCompass?`)) return;
+                                    await ignoreBrokerageAccount(a.id);
+                                    setSyncAccountIds(prev => prev.filter(id => id !== a.id));
+                                    await loadConnections();
+                                  }}
+                                  className="text-slate-300 hover:text-rose-500 transition-colors shrink-0"
+                                  title="Hide account"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-slate-400">Leave all unchecked to sync all accounts for this brokerage.</p>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Start Date</label>
+                    <input
+                      type="date"
+                      value={syncStartDate}
+                      onChange={e => setSyncStartDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">End Date</label>
+                    <input
+                      type="date"
+                      value={syncEndDate}
+                      onChange={e => setSyncEndDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">Leave blank to sync all available transactions.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={handleRefreshConnections}
@@ -321,6 +418,55 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                   {connectStatus}
                 </div>
               )}
+
+              {/* Danger Zone */}
+              <div className="border border-rose-100 rounded-2xl p-5 space-y-3">
+                <p className="text-xs font-bold text-rose-400 uppercase tracking-widest">Danger Zone</p>
+                <div className="grid grid-cols-1 gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('Delete all SnapTrade raw transaction data? This cannot be undone.')) return;
+                      setLoading(true);
+                      try {
+                        const res = await deleteRawData('snaptrade');
+                        setConnectStatus(res.message);
+                      } catch { setConnectStatus('Failed to delete SnapTrade raw data.'); }
+                      finally { setLoading(false); }
+                    }}
+                    className="w-full py-2.5 text-sm font-semibold text-rose-600 border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors"
+                  >
+                    Delete SnapTrade Raw Data
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('Delete all manually uploaded raw transaction data? This cannot be undone.')) return;
+                      setLoading(true);
+                      try {
+                        const res = await deleteRawData('manual');
+                        setConnectStatus(res.message);
+                      } catch { setConnectStatus('Failed to delete manual raw data.'); }
+                      finally { setLoading(false); }
+                    }}
+                    className="w-full py-2.5 text-sm font-semibold text-rose-600 border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors"
+                  >
+                    Delete Manual Upload Raw Data
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('Delete ALL raw data (SnapTrade + manual uploads) and all processed data? This is a full reset and cannot be undone.')) return;
+                      setLoading(true);
+                      try {
+                        const res = await deleteRawData();
+                        setConnectStatus(res.message);
+                      } catch { setConnectStatus('Failed to delete all raw data.'); }
+                      finally { setLoading(false); }
+                    }}
+                    className="w-full py-2.5 text-sm font-bold text-white bg-rose-500 rounded-xl hover:bg-rose-600 transition-colors"
+                  >
+                    Delete All Data (Full Reset)
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

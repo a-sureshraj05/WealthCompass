@@ -4,7 +4,7 @@ from datetime import datetime
 from snaptrade_client import SnapTrade
 from sqlalchemy.orm import Session
 
-from backend.app.db.schema import SnaptradeConnection, SnaptradeTransaction, Transaction as DBTransaction
+from backend.app.db.schema import SnaptradeConnection, SnaptradeIgnoredAccount, SnaptradeTransaction, Transaction as DBTransaction
 from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 
 # --- Snaptrade client setup ---
@@ -20,9 +20,53 @@ BROKERAGE_SLUG_MAP = {
     "Other": None,
 }
 
+# Brokerage + action combinations that should be treated as cash (ticker=CASH, assetType=Cash)
+CASH_ACTION_MAP: dict[str, set[str]] = {
+    "Robinhood": {"WITHDRAWAL", "CONTRIBUTION", "DEPOSIT", "FEE"},
+}
+
+
+def _build_occ_symbol(option_symbol) -> str:
+    """Extract OCC option ticker from SnapTrade option_symbol dict. Returns '' if data is missing.
+    SnapTrade's 'ticker' field is already the OCC symbol (e.g. 'NFLX  280616C00090000').
+    We strip spaces so yfinance can look it up (e.g. 'NFLX280616C00090000').
+    """
+    if not option_symbol:
+        return ""
+    raw_ticker = option_symbol.get("ticker", "") if isinstance(option_symbol, dict) else getattr(option_symbol, "ticker", "")
+    occ = raw_ticker.replace(" ", "")
+    print(f"[OCC] raw_ticker={raw_ticker!r} → occ={occ!r}")
+    return occ
+
 
 def get_client() -> SnapTrade:
     return SnapTrade(client_id=CLIENT_ID, consumer_key=CONSUMER_KEY)
+
+
+def _extract_auth_id(brokerage_authorization) -> str:
+    """Extract authorization ID whether the field is a string, dict, or object."""
+    if not brokerage_authorization:
+        return ""
+    if isinstance(brokerage_authorization, dict):
+        return str(brokerage_authorization.get("id", ""))
+    if hasattr(brokerage_authorization, "id"):
+        return str(brokerage_authorization.id)
+    return str(brokerage_authorization)
+
+
+def _build_auth_brokerage_map(client) -> dict:
+    """Build a map of authorization_id → brokerage name."""
+    auth_resp = client.connections.list_brokerage_authorizations(
+        query_params={"userId": USER_ID, "userSecret": USER_SECRET}
+    )
+    auth_map = {}
+    for auth in auth_resp.body:
+        auth_id = _extract_auth_id(auth.get("id") or auth.get("authorization_id"))
+        brokerage_info = auth.get("brokerage") or {}
+        brokerage_name = brokerage_info.get("name", "Unknown") if isinstance(brokerage_info, dict) else str(brokerage_info)
+        print(f"[SnapTrade Auth] id={auth_id} brokerage={brokerage_name}")
+        auth_map[auth_id] = brokerage_name
+    return auth_map
 
 
 def get_connect_url(brokerage: str) -> str:
@@ -32,12 +76,48 @@ def get_connect_url(brokerage: str) -> str:
     body = {"userId": USER_ID, "userSecret": USER_SECRET}
     if slug:
         body["broker"] = slug
-    body["immediateRedirect"] = True
     resp = client.authentication.login_snap_trade_user(
         query_params={"userId": USER_ID, "userSecret": USER_SECRET},
         body=body,
     )
     return resp.body.get("redirectURI") or resp.body.get("loginLink", "")
+
+
+def ignore_account(account_id: str, db: Session) -> None:
+    """Add an account to the ignore list."""
+    if not db.query(SnaptradeIgnoredAccount).filter(SnaptradeIgnoredAccount.account_id == account_id).first():
+        db.add(SnaptradeIgnoredAccount(account_id=account_id))
+        db.commit()
+
+
+def get_accounts(db: Session) -> list:
+    """Return list of user accounts from Snaptrade API, excluding ignored accounts."""
+    ignored_ids = {row.account_id for row in db.query(SnaptradeIgnoredAccount).all()}
+    client = get_client()
+    auth_brokerage_map = _build_auth_brokerage_map(client)
+
+    resp = client.account_information.list_user_accounts(
+        query_params={"userId": USER_ID, "userSecret": USER_SECRET}
+    )
+    result = []
+    for account in resp.body:
+        account_id = account.get("id")
+        if account_id in ignored_ids:
+            continue
+        auth_id = _extract_auth_id(account.get("brokerage_authorization"))
+        brokerage_name = auth_brokerage_map.get(auth_id, "Unknown")
+        account_name = account.get("name", "") or ""
+        # Strip brokerage name prefix from account name (e.g. E*TRADE prefixes all accounts)
+        if account_name.upper().startswith(brokerage_name.upper()):
+            account_name = account_name[len(brokerage_name):].strip(" -–:")
+
+        result.append({
+            "id": account.get("id"),
+            "name": account_name,
+            "brokerage": brokerage_name,
+            "authorization_id": auth_id,
+        })
+    return result
 
 
 def get_connections(db: Session) -> list:
@@ -71,17 +151,19 @@ def delete_connection(authorization_id: str, db: Session) -> None:
         db.commit()
 
 
-def sync(db: Session) -> int:
+def sync(db: Session, start_date: str = None, end_date: str = None, account_ids: list = None) -> int:
     """Fetch latest connections and transactions from Snaptrade, store in DB."""
     client = get_client()
     total_synced = 0
+    ignored_ids = {row.account_id for row in db.query(SnaptradeIgnoredAccount).all()}
 
-    # Refresh connections from Snaptrade
+    # Refresh connections from Snaptrade and build auth → brokerage map
+    auth_brokerage_map = _build_auth_brokerage_map(client)
     auth_resp = client.connections.list_brokerage_authorizations(
         query_params={"userId": USER_ID, "userSecret": USER_SECRET}
     )
     for auth in auth_resp.body:
-        auth_id = auth.get("id") or auth.get("authorization_id")
+        auth_id = _extract_auth_id(auth.get("id") or auth.get("authorization_id"))
         brokerage_info = auth.get("brokerage") or {}
         brokerage_name = brokerage_info.get("name", "Unknown") if isinstance(brokerage_info, dict) else str(brokerage_info)
         brokerage_slug = brokerage_info.get("slug", "") if isinstance(brokerage_info, dict) else ""
@@ -105,20 +187,41 @@ def sync(db: Session) -> int:
 
     for account in accounts_resp.body:
         account_id = account.get("id")
-        brokerage_info = account.get("brokerage") or {}
-        brokerage_name = brokerage_info.get("name", "Unknown") if isinstance(brokerage_info, dict) else str(brokerage_info)
+        account_auth_id = _extract_auth_id(account.get("brokerage_authorization"))
+        brokerage_name = auth_brokerage_map.get(account_auth_id, "Unknown")
+        print(f"[SnapTrade Account] id={account_id} brokerage={brokerage_name} name={account.get('name')} auth_id={account_auth_id}")
+
+        # Skip ignored accounts
+        if account_id in ignored_ids:
+            continue
+
+        # Skip if caller specified account_ids and this account isn't in the list
+        if account_ids and account_id not in account_ids:
+            continue
 
         try:
+            query_params = {
+                "userId": USER_ID,
+                "userSecret": USER_SECRET,
+                "accounts": account_id,
+            }
+            if start_date:
+                query_params["startDate"] = start_date
+            if end_date:
+                query_params["endDate"] = end_date
+
             txn_resp = client.transactions_and_reporting.get_activities(
-                query_params={
-                    "userId": USER_ID,
-                    "userSecret": USER_SECRET,
-                    "accounts": account_id,
-                }
+                query_params=query_params
             )
 
             for txn in txn_resp.body:
                 txn_id = str(txn.get("id", ""))
+                symbol_info = txn.get("symbol") or {}
+                raw_ticker = symbol_info.get("symbol") or symbol_info.get("raw_symbol", "")
+                raw_symbol_type = (txn.get("symbol") or {}).get("type") or {}
+                raw_symbol_type_desc = raw_symbol_type.get("description", "") if isinstance(raw_symbol_type, dict) else str(raw_symbol_type)
+                print(f"[SnapTrade Txn] id={txn_id} type={txn.get('type')} ticker={raw_ticker} symbol_type={raw_symbol_type_desc!r} option_type={txn.get('option_type')!r} option_symbol={txn.get('option_symbol')!r} date={txn.get('trade_date')} amount={txn.get('amount')} units={txn.get('units')}")
+
                 if not txn_id:
                     continue
 
@@ -127,21 +230,34 @@ def sync(db: Session) -> int:
                 ).first():
                     continue
 
+                action = str(txn.get("type", "")).upper()
+
                 symbol_info = txn.get("symbol") or {}
-                ticker = symbol_info.get("symbol") or symbol_info.get("raw_symbol", "UNKNOWN")
+                is_cash_action = action in CASH_ACTION_MAP.get(brokerage_name, set())
+                ticker = "CASH" if is_cash_action else (symbol_info.get("symbol") or symbol_info.get("raw_symbol", "UNKNOWN"))
                 name = symbol_info.get("description", "")
                 brokerage_name = txn.get("institution") or brokerage_name
                 symbol_type = symbol_info.get("type") or {}
                 raw_asset_type = symbol_type.get("description", "") if isinstance(symbol_type, dict) else ""
-                asset_type = normalize_asset_type(raw_asset_type, ticker=ticker)
+
+                # Detect options via option_symbol / option_type fields (more reliable than symbol type description)
+                raw_option_symbol = txn.get("option_symbol")
+                option_type = txn.get("option_type")
+                is_option = bool(raw_option_symbol or option_type)
+                occ_symbol = _build_occ_symbol(raw_option_symbol) if is_option else ""
+
+                if is_cash_action:
+                    asset_type = "Cash"
+                elif is_option:
+                    asset_type = "Options"
+                else:
+                    asset_type = normalize_asset_type(raw_asset_type, ticker=ticker)
 
                 raw_date = txn.get("trade_date") or txn.get("settlement_date") or ""
                 try:
                     date = datetime.strptime(str(raw_date)[:10], "%Y-%m-%d")
                 except Exception:
                     date = datetime.now()
-
-                action = str(txn.get("type", "")).upper()
                 quantity = float(txn.get("units") or 0)
                 price = float(txn.get("price") or 0)
                 amount = float(txn.get("amount") or 0)
@@ -159,6 +275,7 @@ def sync(db: Session) -> int:
                     amount=abs(amount),
                     currency=currency,
                     assetType=asset_type,
+                    option_symbol=occ_symbol or None,
                     snaptrade_transaction_id=txn_id,
                 )
                 db.add(db_snaptrade)
@@ -176,6 +293,7 @@ def sync(db: Session) -> int:
                     costPerShare=price,
                     totalCost=abs(amount),
                     assetType=asset_type,
+                    option_symbol=occ_symbol or None,
                     source="snaptrade",
                     raw_id=db_snaptrade.id,
                 ))

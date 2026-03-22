@@ -255,6 +255,29 @@ def set_transaction_hidden(transaction_id: int, is_deleted: bool, db: Session = 
     return {"message": "Transaction updated successfully"}
 
 
+@router.delete("/transactions/raw")
+def delete_raw_data(source: Optional[str] = None, brokerage: Optional[str] = None, db: Session = Depends(get_db)):
+    """Delete raw source data. source=manual|snaptrade|None(both). Optionally filter by brokerage."""
+    if source in (None, "manual"):
+        q = db.query(DBManualRawTransaction)
+        if brokerage:
+            q = q.filter(DBManualRawTransaction.brokerage == brokerage)
+        q.delete(synchronize_session=False)
+    if source in (None, "snaptrade"):
+        q = db.query(DBSnaptradeTransaction)
+        if brokerage:
+            q = q.filter(DBSnaptradeTransaction.brokerage == brokerage)
+        q.delete(synchronize_session=False)
+    # Also clear processed data that was derived from the deleted raw rows
+    db.query(DBTransaction).delete(synchronize_session=False)
+    db.query(DBHolding).delete(synchronize_session=False)
+    db.query(DBRealizedGain).delete(synchronize_session=False)
+    db.query(DBUnrealizedGain).delete(synchronize_session=False)
+    db.commit()
+    label = source or "all"
+    return {"message": f"Deleted {label} raw data and all processed data."}
+
+
 @router.delete("/transactions/{transaction_id}")
 def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
     transaction = (
@@ -267,15 +290,28 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
     return {"message": "Transaction deleted successfully"}
 
 
+@router.post("/transactions/clear")
+def clear_processed_data(db: Session = Depends(get_db)):
+    """Clear all processed tables (transactions, holdings, gains) but keep raw source tables intact."""
+    db.query(DBTransaction).delete()
+    db.query(DBHolding).delete()
+    db.query(DBRealizedGain).delete()
+    db.query(DBUnrealizedGain).delete()
+    db.commit()
+    return {"message": "All processed data cleared. Raw tables preserved."}
+
+
 @router.post("/transactions/reset")
-def reset_transactions(db: Session = Depends(get_db)):
-    """Clear transactions table and re-seed from raw source tables with proper raw_id linkage."""
+def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(get_db)):
+    """Clear transactions table and re-seed from raw source tables. Optionally filter by brokerage."""
     db.query(DBTransaction).delete()
     db.commit()
 
     # Re-seed from manual raw transactions
-    manual_raws = db.query(DBManualRawTransaction).all()
-    for raw in manual_raws:
+    manual_q = db.query(DBManualRawTransaction)
+    if brokerage:
+        manual_q = manual_q.filter(DBManualRawTransaction.brokerage == brokerage)
+    for raw in manual_q.all():
         db.add(DBTransaction(
             brokerage=raw.brokerage,
             date=raw.date,
@@ -292,8 +328,10 @@ def reset_transactions(db: Session = Depends(get_db)):
         ))
 
     # Re-seed from snaptrade transactions
-    snaptrade_raws = db.query(DBSnaptradeTransaction).all()
-    for raw in snaptrade_raws:
+    snaptrade_q = db.query(DBSnaptradeTransaction)
+    if brokerage:
+        snaptrade_q = snaptrade_q.filter(DBSnaptradeTransaction.brokerage == brokerage)
+    for raw in snaptrade_q.all():
         db.add(DBTransaction(
             brokerage=raw.brokerage,
             date=raw.date,
@@ -305,13 +343,15 @@ def reset_transactions(db: Session = Depends(get_db)):
             costPerShare=raw.price,
             totalCost=raw.amount,
             assetType=normalize_asset_type(raw.assetType, ticker=raw.ticker),
+            option_symbol=raw.option_symbol,
             source="snaptrade",
             raw_id=raw.id,
         ))
 
     db.commit()
-    process.process_transactions(db)
-    return {"message": "Transactions reset and reprocessed from raw tables."}
+    process.process_transactions(db, brokerage_name=brokerage)
+    label = brokerage if brokerage else "all brokerages"
+    return {"message": f"Transactions reset and reprocessed for {label}."}
 
 
 @router.get("/cash-balance")

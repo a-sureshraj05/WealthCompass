@@ -1,25 +1,72 @@
+import re
 import yfinance as yf
 import pandas as pd
 from typing import Union
 
+# OCC option symbol: up to 6-char root + YYMMDD + C/P + 8-digit strike (e.g. MSFT281215C00400000)
+_OCC_RE = re.compile(r'^([A-Z]{1,6})(\d{6})([CP])(\d{8})$')
+
+
+def _parse_occ(symbol: str):
+    """Return (underlying, expiry_str 'YYYY-MM-DD', call_put 'c'/'p', strike float) or None."""
+    m = _OCC_RE.match(symbol)
+    if not m:
+        return None
+    underlying, yymmdd, cp, strike_raw = m.groups()
+    yy, mm, dd = yymmdd[:2], yymmdd[2:4], yymmdd[4:]
+    year = int(yy) + 2000
+    expiry = f"{year}-{mm}-{dd}"
+    strike = int(strike_raw) / 1000.0
+    return underlying, expiry, cp.lower(), strike
+
+
+def _get_option_price(occ_symbol: str) -> Union[float, None]:
+    """Fetch current mid-price for an OCC option symbol via the underlying's option chain."""
+    parsed = _parse_occ(occ_symbol)
+    if not parsed:
+        return None
+    underlying, expiry, cp, strike = parsed
+    try:
+        ticker = yf.Ticker(underlying)
+        chain = ticker.option_chain(expiry)
+        df = chain.calls if cp == 'c' else chain.puts
+        row = df[df['strike'] == strike]
+        if row.empty:
+            # Try nearest strike in case of floating-point mismatch
+            row = df.iloc[(df['strike'] - strike).abs().argsort()[:1]]
+            if abs(row.iloc[0]['strike'] - strike) > 0.01:
+                print(f"[option_price] No exact strike match for {occ_symbol} (closest={row.iloc[0]['strike']})")
+                return None
+        bid = float(row.iloc[0].get('bid', 0) or 0)
+        ask = float(row.iloc[0].get('ask', 0) or 0)
+        last = float(row.iloc[0].get('lastPrice', 0) or 0)
+        if bid > 0 and ask > 0:
+            price = (bid + ask) / 2
+        elif last > 0:
+            price = last
+        else:
+            price = None
+        print(f"[option_price] {occ_symbol} → underlying={underlying} expiry={expiry} strike={strike} {cp.upper()} bid={bid} ask={ask} last={last} → price={price}")
+        return price
+    except Exception as e:
+        print(f"[option_price] Error fetching chain for {occ_symbol}: {e}")
+        return None
+
+
 def get_stock_price(ticker_symbol: str, period: str = '1d') -> Union[float, None]:
     """
     Fetches the latest closing stock price for a given ticker symbol.
-    
-    Args:
-        ticker_symbol: The stock ticker symbol (e.g., 'AAPL').
-        period: The time period for which to fetch data (e.g., '1d').
-        
-    Returns:
-        A float representing the latest closing price, or None if an error occurs or data is not found.
+    Handles OCC option symbols (e.g. MSFT281215C00400000) via the option chain.
     """
+    # Route option symbols through the chain lookup
+    if _OCC_RE.match(ticker_symbol):
+        return _get_option_price(ticker_symbol)
+
     try:
         ticker = yf.Ticker(ticker_symbol)
         historical_data = ticker.history(period=period)
-        # print(f"Fetching stock price for: {historical_data}") # Keep this line for debugging if needed
 
         if not historical_data.empty and 'Close' in historical_data.columns:
-            # Return the latest closing price as a scalar float
             return historical_data['Close'].iloc[-1].item()
         else:
             return None

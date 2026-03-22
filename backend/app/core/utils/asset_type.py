@@ -25,6 +25,13 @@ ASSET_TYPE_MAP: dict = {
     "options": "Options",
     "option": "Options",
     "derivative": "Options",
+    "equity option": "Options",
+    "listed option": "Options",
+    "call option": "Options",
+    "put option": "Options",
+    "non_standard_option": "Options",
+    "index option": "Options",
+    "security type is not defined": "Options",
 
     # Crypto
     "crypto": "Crypto",
