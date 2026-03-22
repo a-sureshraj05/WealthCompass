@@ -28,6 +28,9 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
   const [connectBroker, setConnectBroker] = useState('');
   const [connections, setConnections] = useState<{ id: number; brokerage: string; authorization_id: string }[]>([]);
   const [connectStatus, setConnectStatus] = useState('');
+  const [syncStartDate, setSyncStartDate] = useState('');
+  const [syncEndDate, setSyncEndDate] = useState('');
+  const [syncAuthIds, setSyncAuthIds] = useState<string[]>([]);
 
   const loadConnections = useCallback(async () => {
     try {
@@ -127,7 +130,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
     setLoading(true);
     setConnectStatus('');
     try {
-      const result = await syncBrokerageTransactions();
+      const result = await syncBrokerageTransactions(syncStartDate || undefined, syncEndDate || undefined, syncAuthIds.length > 0 ? syncAuthIds : undefined);
       setConnectStatus(result.message);
     } catch {
       setConnectStatus('Failed to sync transactions.');
@@ -295,6 +298,49 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
               {/* Refresh + Sync */}
               <div className="space-y-3">
                 <label className="block text-sm font-bold text-slate-700">3. After Connecting</label>
+
+                {/* Brokerage multi-select */}
+                {connections.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Brokerages to Sync</label>
+                    <div className="flex flex-wrap gap-2">
+                      {connections.map(c => (
+                        <label key={c.authorization_id} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer text-sm font-medium transition-colors ${syncAuthIds.includes(c.authorization_id) ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-indigo-200'}`}>
+                          <input
+                            type="checkbox"
+                            className="w-3.5 h-3.5 accent-indigo-600"
+                            checked={syncAuthIds.includes(c.authorization_id)}
+                            onChange={() => setSyncAuthIds(prev => prev.includes(c.authorization_id) ? prev.filter(id => id !== c.authorization_id) : [...prev, c.authorization_id])}
+                          />
+                          {c.brokerage}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-400">Leave all unchecked to sync all connected brokerages.</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Start Date</label>
+                    <input
+                      type="date"
+                      value={syncStartDate}
+                      onChange={e => setSyncStartDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">End Date</label>
+                    <input
+                      type="date"
+                      value={syncEndDate}
+                      onChange={e => setSyncEndDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">Leave blank to sync all available transactions.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={handleRefreshConnections}

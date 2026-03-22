@@ -198,14 +198,26 @@ export const deleteBrokerageConnection = async (authorizationId: string): Promis
   if (!response.ok) throw new Error("Failed to delete connection");
 };
 
-export const syncBrokerageTransactions = async (): Promise<{ message: string }> => {
-  const response = await apiFetch("/api/v1/brokerage/sync", { method: "POST" });
+export const syncBrokerageTransactions = async (startDate?: string, endDate?: string, authIds?: string[]): Promise<{ message: string }> => {
+  const params = new URLSearchParams();
+  if (startDate) params.append("start_date", startDate);
+  if (endDate) params.append("end_date", endDate);
+  if (authIds && authIds.length > 0) authIds.forEach(id => params.append("auth_ids", id));
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const response = await apiFetch(`/api/v1/brokerage/sync${query}`, { method: "POST" });
   if (!response.ok) throw new Error("Failed to sync transactions");
   return response.json();
 };
 
-export const resetTransactions = async (): Promise<void> => {
-  const response = await apiFetch("/api/v1/transactions/reset", { method: "POST" });
+export const clearProcessedData = async (): Promise<{ message: string }> => {
+  const response = await apiFetch("/api/v1/transactions/clear", { method: "POST" });
+  if (!response.ok) throw new Error("Failed to clear data");
+  return response.json();
+};
+
+export const resetTransactions = async (brokerage?: string): Promise<void> => {
+  const params = brokerage ? `?brokerage=${encodeURIComponent(brokerage)}` : "";
+  const response = await apiFetch(`/api/v1/transactions/reset${params}`, { method: "POST" });
   if (!response.ok) throw new Error(`Failed to reset transactions: ${response.status}`);
 };
 

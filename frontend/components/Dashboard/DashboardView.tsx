@@ -22,7 +22,8 @@ interface Props {
   onSoftDeleteTransaction: (id: string, isDeleted: boolean) => void;
   onUpdateTransaction: (id: string, updates: Partial<Transaction>) => void;
   onRevertTransaction: (id: string) => void;
-  onResetData: () => void;
+  onResetData: (brokerage?: string) => void;
+  onClearData: () => void;
   onSyncTransactions: () => Promise<string>;
   onProcessGains: () => void;
   setLoading: (l: boolean) => void;
@@ -43,6 +44,7 @@ const DashboardView: React.FC<Props> = ({
   onUpdateTransaction,
   onRevertTransaction,
   onResetData,
+  onClearData,
   onSyncTransactions,
   onProcessGains,
   setLoading,
@@ -85,13 +87,20 @@ const DashboardView: React.FC<Props> = ({
               Sync Transactions
             </button>
             <button
-              onClick={onResetData}
+              onClick={() => { if (window.confirm('Clear all processed data? Raw tables (uploaded statements, SnapTrade) will be preserved.')) onClearData(); }}
+              className="px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200"
+            >
+              Clear Processed Data
+            </button>
+            <button
+              onClick={() => onResetData()}
               className="px-4 py-2 text-sm font-medium text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-amber-200"
             >
               Reset Data
             </button>
           </div>
         </div>
+
         {syncMessage && (
           <p className={`text-sm font-medium px-4 py-2 rounded-lg ${syncMessage.startsWith('Failed') ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-700'}`}>
             {syncMessage}

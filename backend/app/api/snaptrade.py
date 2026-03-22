@@ -71,7 +71,7 @@ def delete_connection(authorization_id: str, db: Session) -> None:
         db.commit()
 
 
-def sync(db: Session) -> int:
+def sync(db: Session, start_date: str = None, end_date: str = None, auth_ids: list = None) -> int:
     """Fetch latest connections and transactions from Snaptrade, store in DB."""
     client = get_client()
     total_synced = 0
@@ -107,14 +107,26 @@ def sync(db: Session) -> int:
         account_id = account.get("id")
         brokerage_info = account.get("brokerage") or {}
         brokerage_name = brokerage_info.get("name", "Unknown") if isinstance(brokerage_info, dict) else str(brokerage_info)
+        account_auth_id = str(account.get("brokerage_authorization", "") or "")
+        print(f"[SnapTrade Account] id={account_id} brokerage={brokerage_name} name={account.get('name')} number={account.get('number')} auth_id={account_auth_id}")
+
+        # Skip if caller specified auth_ids and this account isn't in the list
+        if auth_ids and account_auth_id not in auth_ids:
+            continue
 
         try:
+            query_params = {
+                "userId": USER_ID,
+                "userSecret": USER_SECRET,
+                "accounts": account_id,
+            }
+            if start_date:
+                query_params["startDate"] = start_date
+            if end_date:
+                query_params["endDate"] = end_date
+
             txn_resp = client.transactions_and_reporting.get_activities(
-                query_params={
-                    "userId": USER_ID,
-                    "userSecret": USER_SECRET,
-                    "accounts": account_id,
-                }
+                query_params=query_params
             )
 
             for txn in txn_resp.body:

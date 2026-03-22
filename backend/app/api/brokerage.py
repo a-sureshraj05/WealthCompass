@@ -1,6 +1,7 @@
 import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -50,10 +51,15 @@ def delete_connection(authorization_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/sync")
-def sync(db: Session = Depends(get_db)):
-    """Sync latest transactions from all connected brokerages."""
+def sync(
+    start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+    auth_ids: Optional[List[str]] = Query(None, description="Authorization IDs to sync"),
+    db: Session = Depends(get_db),
+):
+    """Sync transactions from connected brokerages, optionally filtered by date range and authorization IDs."""
     if PROVIDER == "snaptrade":
-        total = snaptrade.sync(db)
+        total = snaptrade.sync(db, start_date=start_date, end_date=end_date, auth_ids=auth_ids)
         if total > 0:
             process.process_transactions(db)
         return {"message": f"Synced {total} new transactions."}

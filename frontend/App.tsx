@@ -5,7 +5,7 @@ import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LoginPage from './components/LoginPage';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, fetchCashBalance, fetchAnalystData, syncBrokerageTransactions } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchAnalystData, syncBrokerageTransactions } from './services/apiService';
 
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(null);
@@ -16,7 +16,7 @@ const App: React.FC = () => {
     if (!stored) { setValidating(false); return; }
     fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${stored}` } })
       .then(res => { if (res.ok) setToken(stored); else localStorage.removeItem('wc_token'); })
-      .catch(() => {})
+      .catch(() => { localStorage.removeItem('wc_token'); })
       .finally(() => setValidating(false));
   }, []);
 
@@ -202,14 +202,29 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   };
 
-  const handleResetData = async () => {
-    if (!window.confirm('Reset all transactions from raw source data? This will clear any edits and soft-deletes, then recalculate all gains and holdings.')) return;
+  const handleResetData = async (brokerage?: string) => {
     setLoading(true);
     try {
-      await resetTransactions();
+      await resetTransactions(brokerage);
       await Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains()]);
     } catch (error) {
       console.error('Failed to reset data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearData = async () => {
+    setLoading(true);
+    try {
+      await clearProcessedData();
+      setTransactions([]);
+      setHoldings([]);
+      setRealizedGains([]);
+      setUnrealizedGains([]);
+      setCashBalance(0);
+    } catch (error) {
+      console.error('Failed to clear data:', error);
     } finally {
       setLoading(false);
     }
@@ -273,6 +288,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             onUpdateTransaction={handleUpdateTransaction}
             onRevertTransaction={handleRevertTransaction}
             onResetData={handleResetData}
+            onClearData={handleClearData}
             onSyncTransactions={handleSyncTransactions}
             onProcessGains={handleProcessGains}
             setLoading={setLoading}
