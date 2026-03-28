@@ -335,3 +335,59 @@ export const deleteLotAssignment = async (assignmentId: number): Promise<void> =
   const response = await apiFetch(`/api/v1/lot-assignments/${assignmentId}`, { method: "DELETE" });
   if (!response.ok) throw new Error("Failed to delete lot assignment");
 };
+
+// --- Options ---
+
+export interface OptionsPosition {
+  id: number;
+  brokerage: string;
+  ticker: string;
+  buyDate: string;
+  quantity: number;
+  retainQuantity: number;
+  sellableQuantity: number;
+  buyPrice: number;
+  currentPrice: number;
+  unrealizedGain: number;
+  isLongTerm: boolean;
+}
+
+export interface OptionsCalculator {
+  outstandingPremium: number;
+  realizedLosses: number;
+  currentYearShortTermGains: number;
+  unrealizedGains: number;
+  taxEstimate: number;
+  totalNeeded: number;
+  totalSellableValue: number;
+  totalSellableQty: number;
+  projectedGainPct: number | null;
+  targetPricePerContract: number | null;
+  taxYear: number;
+}
+
+export const fetchOptionsPositions = async (): Promise<OptionsPosition[]> => {
+  const response = await apiFetch("/api/v1/options/positions");
+  if (!response.ok) throw new Error("Failed to fetch options positions");
+  return response.json();
+};
+
+export const updateOptionsRetain = async (
+  brokerage: string,
+  ticker: string,
+  buyDate: string,
+  retainQuantity: number,
+): Promise<void> => {
+  const response = await apiFetch("/api/v1/options/retain", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ brokerage, ticker, buy_date: buyDate, retain_quantity: retainQuantity }),
+  });
+  if (!response.ok) throw new Error("Failed to update retain quantity");
+};
+
+export const fetchOptionsCalculator = async (): Promise<OptionsCalculator> => {
+  const response = await apiFetch("/api/v1/options/calculator");
+  if (!response.ok) throw new Error("Failed to fetch options calculator");
+  return response.json();
+};

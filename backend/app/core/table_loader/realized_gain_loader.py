@@ -1,6 +1,7 @@
 from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 from backend.app.db.schema import LotAssignment, RealizedGain, Transaction as DBTransaction
+from backend.app.core.utils.ticker import underlying_ticker
 
 
 def delete(db: Session, brokerage_name: str = None):
@@ -30,12 +31,14 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
     realized_gains_list = []
     open_lots_by_ticker: Dict[str, List[Dict[str, Any]]] = {}
 
-    # Group by (brokerage, ticker)
+    # Group by (brokerage, ticker, option_symbol) so equity and each unique option
+    # contract are matched separately. Equity transactions have option_symbol = None/"".
     ticker_groups: Dict[tuple, List[DBTransaction]] = {}
     for t in transactions:
-        ticker_groups.setdefault((t.brokerage, t.ticker), []).append(t)
+        key = (t.brokerage, t.ticker, getattr(t, "option_symbol", None) or "")
+        ticker_groups.setdefault(key, []).append(t)
 
-    for (brokerage, ticker), ticker_transactions in ticker_groups.items():
+    for (brokerage, ticker, option_symbol), ticker_transactions in ticker_groups.items():
         # Skip Cash asset types
         if ticker_transactions and ticker_transactions[0].assetType == "Cash":
             continue
@@ -53,7 +56,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
             sell_cost_per_unit = sell_txn.totalCost / sell_txn.quantity if sell_txn.quantity else sell_txn.price
             realized_gains_list.append(RealizedGain(
                 brokerage=sell_txn.brokerage,
-                ticker=ticker,
+                ticker=underlying_ticker(ticker),
                 buyDate=lot["date"],
                 sellDate=sell_txn.date,
                 quantity=qty,
@@ -75,6 +78,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                     "price": t.price,
                     "cost_per_unit": cost_per_unit,
                     "brokerage": t.brokerage,
+                    "ticker": t.ticker,
                     "assetType": t.assetType,
                     "option_symbol": getattr(t, "option_symbol", None),
                 })
@@ -110,7 +114,12 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                     if lot["quantity"] <= 0:
                         buy_lots_queue.pop(0)
 
-        open_lots_by_ticker[(brokerage, ticker)] = [l for l in buy_lots_queue if l["quantity"] > 0]
+        open = [l for l in buy_lots_queue if l["quantity"] > 0]
+        if open:
+            # Key for unrealized_gain_loader: use option_symbol as ticker for options
+            # so each unique contract gets its own price lookup
+            lot_key_ticker = option_symbol if option_symbol else ticker
+            open_lots_by_ticker.setdefault((brokerage, lot_key_ticker), []).extend(open)
 
     db.add_all(realized_gains_list)
     db.commit()
