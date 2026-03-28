@@ -46,12 +46,13 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const transactionsDirty = React.useRef(false);
 
-  // Filter states for transactions
+  // Shared filters — reflected across all pages
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
+  const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([]);
   const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
-  const [dateRangeType, setDateRangeType] = useState<DateRangeType>('all'); // New date range type state
+  const [dateRangeType, setDateRangeType] = useState<DateRangeType>('all');
 
   const getHoldings = useCallback(async () => {
     try {
@@ -292,6 +293,12 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             onSyncTransactions={handleSyncTransactions}
             onProcessGains={handleProcessGains}
             setLoading={setLoading}
+            selectedBrokerages={selectedBrokerages}
+            setSelectedBrokerages={setSelectedBrokerages}
+            selectedAssetTypes={selectedAssetTypes}
+            setSelectedAssetTypes={setSelectedAssetTypes}
+            selectedTickers={selectedTickers}
+            setSelectedTickers={setSelectedTickers}
           />
         </main>
       </div>

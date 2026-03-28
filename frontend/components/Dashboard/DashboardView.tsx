@@ -27,6 +27,12 @@ interface Props {
   onSyncTransactions: () => Promise<string>;
   onProcessGains: () => void;
   setLoading: (l: boolean) => void;
+  selectedBrokerages: string[];
+  setSelectedBrokerages: (v: string[]) => void;
+  selectedAssetTypes: string[];
+  setSelectedAssetTypes: (v: string[]) => void;
+  selectedTickers: string[];
+  setSelectedTickers: (v: string[]) => void;
 }
 
 const DashboardView: React.FC<Props> = ({
@@ -48,6 +54,12 @@ const DashboardView: React.FC<Props> = ({
   onSyncTransactions,
   onProcessGains,
   setLoading,
+  selectedBrokerages,
+  setSelectedBrokerages,
+  selectedAssetTypes,
+  setSelectedAssetTypes,
+  selectedTickers,
+  setSelectedTickers,
 }) => {
   const [syncMessage, setSyncMessage] = useState('');
 
@@ -69,7 +81,7 @@ const DashboardView: React.FC<Props> = ({
             Refresh Data
           </button>
         </div>
-        <HoldingsView holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} onRemove={onRemoveHolding} />
+        <HoldingsView holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} onRemove={onRemoveHolding} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} />
       </div>
     );
   }
@@ -106,7 +118,7 @@ const DashboardView: React.FC<Props> = ({
             {syncMessage}
           </p>
         )}
-        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} />
+        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} />
       </div>
     );
   }
@@ -123,7 +135,7 @@ const DashboardView: React.FC<Props> = ({
             Refresh Data
           </button>
         </div>
-        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} />
+        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} />
       </div>
     );
   }

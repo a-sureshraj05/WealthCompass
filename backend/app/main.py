@@ -11,7 +11,7 @@ from fastapi import FastAPI, Depends
 from backend.app.core.database import engine
 from backend.app.db.schema import Base
 
-from .api import manual_import, transactions, brokerage, analyst, auth
+from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments
 from .api.auth import get_current_user
 
 app = FastAPI()
@@ -45,6 +45,18 @@ def startup_event():
             conn.execute(text("ALTER TABLE transactions ADD COLUMN option_symbol TEXT"))
             conn.commit()
 
+    # Migration: create lot_assignments table if it doesn't exist
+    if "lot_assignments" not in inspector.get_table_names():
+        with engine.connect() as conn:
+            conn.execute(text(
+                "CREATE TABLE lot_assignments ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "sell_transaction_id INTEGER NOT NULL, "
+                "buy_transaction_id INTEGER NOT NULL, "
+                "quantity REAL NOT NULL)"
+            ))
+            conn.commit()
+
     # Migration: add option_symbol to snaptrade_transactions if it doesn't exist
     if "snaptrade_transactions" in inspector.get_table_names():
         st_columns = [col["name"] for col in inspector.get_columns("snaptrade_transactions")]
@@ -59,6 +71,7 @@ app.include_router(transactions.router, prefix="/api/v1", dependencies=[Depends(
 app.include_router(manual_import.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(brokerage.router, prefix="/api/v1/brokerage", dependencies=[Depends(get_current_user)])
 app.include_router(analyst.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(lot_assignments.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")

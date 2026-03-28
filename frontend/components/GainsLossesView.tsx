@@ -8,6 +8,10 @@ type SortDirection = 'asc' | 'desc' | null;
 interface Props {
   realizedGains: RealizedGain[];
   unrealizedGains: UnrealizedLot[];
+  selectedBrokerages: string[];
+  setSelectedBrokerages: (v: string[]) => void;
+  selectedTickers: string[];
+  setSelectedTickers: (v: string[]) => void;
 }
 
 // Removed client-side UnrealizedLot interface definition, now imported from types.ts
@@ -25,10 +29,8 @@ interface Props {
 
 const COLORS = ['#6366f1', '#a855f7', '#ec4899', '#f97316', '#10b981', '#0ea5e9', '#64748b'];
 
-const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, unrealizedGains: unrealizedGainsData }) => {
+const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, unrealizedGains: unrealizedGainsData, selectedBrokerages, setSelectedBrokerages, selectedTickers, setSelectedTickers }) => {
   const [activeSubTab, setActiveSubTab] = useState<'realized' | 'unrealized'>('realized');
-  const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
-  const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<string>('Overall');
   
   // Tax Rate State
@@ -161,11 +163,11 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   }, [shortTerm, longTerm]);
 
   const toggleTicker = (ticker: string) => {
-    setSelectedTickers(prev => prev.includes(ticker) ? prev.filter(t => t !== ticker) : [...prev, ticker]);
+    setSelectedTickers(selectedTickers.includes(ticker) ? selectedTickers.filter(t => t !== ticker) : [...selectedTickers, ticker]);
   };
 
   const toggleBrokerage = (broker: string) => {
-    setSelectedBrokerages(prev => prev.includes(broker) ? prev.filter(b => b !== broker) : [...prev, broker]);
+    setSelectedBrokerages(selectedBrokerages.includes(broker) ? selectedBrokerages.filter(b => b !== broker) : [...selectedBrokerages, broker]);
   };
 
   const handleSort = (key: GainSortKey) => {
