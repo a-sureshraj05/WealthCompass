@@ -1,95 +1,116 @@
 from typing import Any, Dict, List
 from sqlalchemy.orm import Session
-from backend.app.db.schema import RealizedGain, Transaction as DBTransaction
+from backend.app.db.schema import LotAssignment, RealizedGain, Transaction as DBTransaction
+
 
 def delete(db: Session, brokerage_name: str = None):
-    # Clear existing realized gains for the given brokerage, or all if none specified
     if brokerage_name:
         db.query(RealizedGain).filter(RealizedGain.brokerage == brokerage_name).delete()
     else:
         db.query(RealizedGain).delete()
     db.commit()
 
+
 def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, Any]]]:
-    # First, delete existing realized gains
     delete(db, brokerage_name)
 
-    # Fetch all non-soft-deleted transactions, or filtered by brokerage
+    # Fetch all non-soft-deleted transactions, ordered by date
+    q = db.query(DBTransaction).filter(DBTransaction.is_deleted == False)
     if brokerage_name:
-        transactions = (
-            db.query(DBTransaction)
-            .filter(DBTransaction.brokerage == brokerage_name, DBTransaction.is_deleted == False)
-            .order_by(DBTransaction.date)
-            .all()
-        )
-    else:
-        transactions = db.query(DBTransaction).filter(DBTransaction.is_deleted == False).order_by(DBTransaction.date).all()
+        q = q.filter(DBTransaction.brokerage == brokerage_name)
+    transactions = q.order_by(DBTransaction.date).all()
+
+    # Load explicit lot assignments: sell_transaction_id → [LotAssignment]
+    sell_ids = [t.id for t in transactions if t.action.upper() == "SELL"]
+    all_assignments: Dict[int, List[LotAssignment]] = {}
+    if sell_ids:
+        for a in db.query(LotAssignment).filter(LotAssignment.sell_transaction_id.in_(sell_ids)).all():
+            all_assignments.setdefault(a.sell_transaction_id, []).append(a)
 
     realized_gains_list = []
     open_lots_by_ticker: Dict[str, List[Dict[str, Any]]] = {}
 
-    # Group transactions by (brokerage, ticker) to keep FIFO separate per brokerage
+    # Group by (brokerage, ticker)
     ticker_groups: Dict[tuple, List[DBTransaction]] = {}
     for t in transactions:
-        key = (t.brokerage, t.ticker)
-        if key not in ticker_groups:
-            ticker_groups[key] = []
-        ticker_groups[key].append(t)
+        ticker_groups.setdefault((t.brokerage, t.ticker), []).append(t)
 
     for (brokerage, ticker), ticker_transactions in ticker_groups.items():
-        # Skip Cash asset types — money market funds don't have gains
+        # Skip Cash asset types
         if ticker_transactions and ticker_transactions[0].assetType == "Cash":
             continue
 
-        # Sort by date for FIFO
-        sorted_transactions = sorted(ticker_transactions, key=lambda x: x.date)
+        sorted_transactions = sorted(ticker_transactions, key=lambda x: (x.date, x.id))
 
+        # Each lot tracks its transaction_id so explicit assignments can find it
         buy_lots_queue: List[Dict[str, Any]] = []
+
+        def _record_gain(lot, sell_txn, qty):
+            is_long_term = (sell_txn.date - lot["date"]).days > 365
+            # Use cost_per_unit derived from the source totalCost — this already reflects
+            # the options multiplier (100 shares/contract) as reported by the brokerage.
+            buy_cost_per_unit = lot["cost_per_unit"]
+            sell_cost_per_unit = sell_txn.totalCost / sell_txn.quantity if sell_txn.quantity else sell_txn.price
+            realized_gains_list.append(RealizedGain(
+                brokerage=sell_txn.brokerage,
+                ticker=ticker,
+                buyDate=lot["date"],
+                sellDate=sell_txn.date,
+                quantity=qty,
+                buyPrice=lot["price"],
+                sellPrice=sell_txn.price,
+                gain=qty * (sell_cost_per_unit - buy_cost_per_unit),
+                isLongTerm=is_long_term,
+                assetType=lot.get("assetType"),
+            ))
 
         for t in sorted_transactions:
             if t.action.upper() == "BUY":
-                buy_lots_queue.append(
-                    {
-                        "date": t.date,
-                        "quantity": t.quantity,
-                        "price": t.price,
-                        "brokerage": t.brokerage,
-                        "assetType": t.assetType,
-                        "option_symbol": getattr(t, "option_symbol", None),
-                    }
-                )
+                # cost_per_unit = actual dollars paid per contract/share from source
+                cost_per_unit = (t.totalCost / t.quantity) if t.quantity else t.price
+                buy_lots_queue.append({
+                    "transaction_id": t.id,
+                    "date": t.date,
+                    "quantity": t.quantity,
+                    "price": t.price,
+                    "cost_per_unit": cost_per_unit,
+                    "brokerage": t.brokerage,
+                    "assetType": t.assetType,
+                    "option_symbol": getattr(t, "option_symbol", None),
+                })
+
             elif t.action.upper() == "SELL":
-                remaining_to_sell = t.quantity
-                while remaining_to_sell > 0 and len(buy_lots_queue) > 0:
-                    lot = buy_lots_queue[0]
-                    sell_qty = min(remaining_to_sell, lot["quantity"])
+                remaining = t.quantity
 
-                    buy_date_dt = lot["date"]
-                    sell_date_dt = t.date
-
-                    diff_days = (sell_date_dt - buy_date_dt).days
-                    is_long_term = diff_days > 365
-
-                    realized_gain = RealizedGain(
-                        brokerage=t.brokerage,
-                        ticker=ticker,
-                        buyDate=buy_date_dt,
-                        sellDate=sell_date_dt,
-                        quantity=sell_qty,
-                        buyPrice=lot["price"],
-                        sellPrice=t.price,
-                        gain=sell_qty * (t.price - lot["price"]),
-                        isLongTerm=is_long_term,
-                        assetType=lot.get("assetType"),
+                # Step 1: consume explicit lot assignments first
+                for assignment in all_assignments.get(t.id, []):
+                    if remaining <= 0:
+                        break
+                    lot = next(
+                        (l for l in buy_lots_queue if l["transaction_id"] == assignment.buy_transaction_id),
+                        None,
                     )
-                    realized_gains_list.append(realized_gain)
+                    if not lot:
+                        print(f"[realized_gain_loader] WARNING: lot assignment references missing/depleted buy {assignment.buy_transaction_id} for sell {t.id}")
+                        continue
+                    qty = min(assignment.quantity, lot["quantity"], remaining)
+                    _record_gain(lot, t, qty)
+                    lot["quantity"] -= qty
+                    remaining -= qty
+                    if lot["quantity"] <= 0:
+                        buy_lots_queue.remove(lot)
 
-                    lot["quantity"] -= sell_qty
-                    remaining_to_sell -= sell_qty
-                    if lot["quantity"] == 0:
-                        buy_lots_queue.pop(0)  # Remove fully depleted lot
-        # Filter out any lots with quantity <= 0 before adding to open_lots_by_ticker
-        open_lots_by_ticker[(brokerage, ticker)] = [lot for lot in buy_lots_queue if lot["quantity"] > 0]
+                # Step 2: FIFO for any remaining unassigned quantity
+                while remaining > 0 and buy_lots_queue:
+                    lot = buy_lots_queue[0]
+                    qty = min(remaining, lot["quantity"])
+                    _record_gain(lot, t, qty)
+                    lot["quantity"] -= qty
+                    remaining -= qty
+                    if lot["quantity"] <= 0:
+                        buy_lots_queue.pop(0)
+
+        open_lots_by_ticker[(brokerage, ticker)] = [l for l in buy_lots_queue if l["quantity"] > 0]
 
     db.add_all(realized_gains_list)
     db.commit()

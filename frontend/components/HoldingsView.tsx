@@ -10,12 +10,15 @@ interface Props {
   unrealizedGains: UnrealizedLot[];
   realizedGains: RealizedGain[];
   onRemove: (id: string) => void;
+  selectedBrokerages: string[];
+  setSelectedBrokerages: (v: string[]) => void;
+  selectedAssetTypes: string[];
+  setSelectedAssetTypes: (v: string[]) => void;
+  selectedTickers: string[];
+  setSelectedTickers: (v: string[]) => void;
 }
 
-const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, realizedGains, onRemove }) => {
-  const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
-  const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([]);
-  const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
+const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, realizedGains, onRemove, selectedBrokerages, setSelectedBrokerages, selectedAssetTypes, setSelectedAssetTypes, selectedTickers, setSelectedTickers }) => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
@@ -98,9 +101,9 @@ const HoldingsView: React.FC<Props> = ({ holdings, unrealizedGains, realizedGain
   const allAssetTypes = useMemo(() => Array.from(new Set(holdings.map(h => (h.assetType || '').toUpperCase()).filter(Boolean))).sort(), [holdings]);
   const allTickers = useMemo(() => Array.from(new Set(holdings.map(h => h.ticker))).sort(), [holdings]);
 
-  const toggleBrokerage = (b: string) => setSelectedBrokerages(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
-  const toggleAssetType = (t: string) => setSelectedAssetTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
-  const toggleTicker = (t: string) => setSelectedTickers(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  const toggleBrokerage = (b: string) => setSelectedBrokerages(selectedBrokerages.includes(b) ? selectedBrokerages.filter(x => x !== b) : [...selectedBrokerages, b]);
+  const toggleAssetType = (t: string) => setSelectedAssetTypes(selectedAssetTypes.includes(t) ? selectedAssetTypes.filter(x => x !== t) : [...selectedAssetTypes, t]);
+  const toggleTicker = (t: string) => setSelectedTickers(selectedTickers.includes(t) ? selectedTickers.filter(x => x !== t) : [...selectedTickers, t]);
 
   const resetFilters = () => {
     setSelectedBrokerages([]);

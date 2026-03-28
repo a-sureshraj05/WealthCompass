@@ -78,11 +78,12 @@ def sync(
     start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
     account_ids: Optional[List[str]] = Query(None, description="Account IDs to sync"),
+    tickers: Optional[List[str]] = Query(None, description="Only import transactions for these tickers"),
     db: Session = Depends(get_db),
 ):
-    """Sync transactions from connected brokerages, optionally filtered by date range and account IDs."""
+    """Sync transactions from connected brokerages, optionally filtered by date range, account IDs, and tickers."""
     if PROVIDER == "snaptrade":
-        total = snaptrade.sync(db, start_date=start_date, end_date=end_date, account_ids=account_ids)
+        total = snaptrade.sync(db, start_date=start_date, end_date=end_date, account_ids=account_ids, tickers=tickers)
         if total > 0:
             process.process_transactions(db)
         return {"message": f"Synced {total} new transactions."}

@@ -4,6 +4,11 @@ from sqlalchemy.orm import Session
 from backend.app.db.schema import UnrealizedGain
 from backend.app.core.stock_fetcher import get_stock_price
 
+_OPTIONS_MULTIPLIER = 100  # 1 contract = 100 underlying shares
+
+def _multiplier(asset_type: str) -> int:
+    return _OPTIONS_MULTIPLIER if (asset_type or "").lower() == "options" else 1
+
 def delete(db: Session, brokerage_name: str = None):
     # Clear existing unrealized gains for the given brokerage, or all if none specified
     if brokerage_name:
@@ -50,6 +55,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
                 diff_days = (today - buy_date_dt).days
                 is_long_term = diff_days > 365
 
+                m = _multiplier(lot.get("assetType"))
                 unrealized_gain = UnrealizedGain(
                     brokerage=lot["brokerage"],
                     ticker=ticker,
@@ -57,7 +63,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
                     quantity=lot["quantity"],
                     buyPrice=lot["price"],
                     currentPrice=current_price,
-                    unrealizedGain=lot["quantity"] * (current_price - lot["price"]),
+                    unrealizedGain=lot["quantity"] * m * (current_price - lot["price"]),
                     isLongTerm=is_long_term,
                     assetType=lot.get("assetType"),
                 )

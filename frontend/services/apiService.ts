@@ -209,11 +209,12 @@ export const deleteBrokerageConnection = async (authorizationId: string): Promis
   if (!response.ok) throw new Error("Failed to delete connection");
 };
 
-export const syncBrokerageTransactions = async (startDate?: string, endDate?: string, accountIds?: string[]): Promise<{ message: string }> => {
+export const syncBrokerageTransactions = async (startDate?: string, endDate?: string, accountIds?: string[], tickers?: string[]): Promise<{ message: string }> => {
   const params = new URLSearchParams();
   if (startDate) params.append("start_date", startDate);
   if (endDate) params.append("end_date", endDate);
   if (accountIds && accountIds.length > 0) accountIds.forEach(id => params.append("account_ids", id));
+  if (tickers && tickers.length > 0) tickers.forEach(t => params.append("tickers", t));
   const query = params.toString() ? `?${params.toString()}` : "";
   const response = await apiFetch(`/api/v1/brokerage/sync${query}`, { method: "POST" });
   if (!response.ok) throw new Error("Failed to sync transactions");
@@ -275,4 +276,62 @@ export const triggerRealizedGainsProcess = async (): Promise<void> => {
   if (!response.ok) {
     throw new Error(`Failed to trigger realized gains processing: ${response.status} ${response.statusText}`);
   }
+};
+
+// --- Lot Assignments ---
+
+export interface OpenBuyLot {
+  id: number;
+  date: string;
+  ticker: string;
+  quantity: number;
+  available_quantity: number;
+  price: number;
+  brokerage: string;
+}
+
+export interface LotAssignment {
+  id: number;
+  sell_transaction_id: number;
+  buy_transaction_id: number;
+  quantity: number;
+}
+
+export const fetchOpenBuys = async (sellTransactionId: string): Promise<OpenBuyLot[]> => {
+  const response = await apiFetch(`/api/v1/lot-assignments/open-buys?sell_transaction_id=${sellTransactionId}`);
+  if (!response.ok) throw new Error("Failed to fetch open buy lots");
+  return response.json();
+};
+
+export const fetchLotAssignments = async (sellTransactionId?: string): Promise<LotAssignment[]> => {
+  const query = sellTransactionId ? `?sell_transaction_id=${sellTransactionId}` : '';
+  const response = await apiFetch(`/api/v1/lot-assignments${query}`);
+  if (!response.ok) throw new Error("Failed to fetch lot assignments");
+  return response.json();
+};
+
+export const createLotAssignment = async (
+  sellTransactionId: string,
+  buyTransactionId: number,
+  quantity: number,
+): Promise<LotAssignment> => {
+  const response = await apiFetch("/api/v1/lot-assignments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sell_transaction_id: parseInt(sellTransactionId),
+      buy_transaction_id: buyTransactionId,
+      quantity,
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to create lot assignment");
+  }
+  return response.json();
+};
+
+export const deleteLotAssignment = async (assignmentId: number): Promise<void> => {
+  const response = await apiFetch(`/api/v1/lot-assignments/${assignmentId}`, { method: "DELETE" });
+  if (!response.ok) throw new Error("Failed to delete lot assignment");
 };

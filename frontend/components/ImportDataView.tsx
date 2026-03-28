@@ -33,6 +33,8 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
   const [syncEndDate, setSyncEndDate] = useState('');
   const [syncBrokerage, setSyncBrokerage] = useState('');
   const [syncAccountIds, setSyncAccountIds] = useState<string[]>([]);
+  const [syncTickerInput, setSyncTickerInput] = useState('');
+  const [syncTickers, setSyncTickers] = useState<string[]>([]);
 
   const loadConnections = useCallback(async () => {
     try {
@@ -142,7 +144,12 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
       } else if (syncBrokerage) {
         accountIds = accounts.filter(a => a.authorization_id === syncBrokerage).map(a => a.id);
       }
-      const result = await syncBrokerageTransactions(syncStartDate || undefined, syncEndDate || undefined, accountIds);
+      // Include any ticker still typed in the input field (user may not have pressed Enter)
+      const effectiveTickers = [...syncTickers];
+      if (syncTickerInput.trim() && !effectiveTickers.includes(syncTickerInput.trim())) {
+        effectiveTickers.push(syncTickerInput.trim());
+      }
+      const result = await syncBrokerageTransactions(syncStartDate || undefined, syncEndDate || undefined, accountIds, effectiveTickers.length > 0 ? effectiveTickers : undefined);
       setConnectStatus(result.message);
     } catch {
       setConnectStatus('Failed to sync transactions.');
@@ -391,7 +398,53 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                     />
                   </div>
                 </div>
-                <p className="text-xs text-slate-400">Leave blank to sync all available transactions.</p>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Filter by Ticker (optional)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={syncTickerInput}
+                      onChange={e => setSyncTickerInput(e.target.value.toUpperCase())}
+                      onKeyDown={e => {
+                        if ((e.key === 'Enter' || e.key === ',') && syncTickerInput.trim()) {
+                          e.preventDefault();
+                          const t = syncTickerInput.trim();
+                          if (!syncTickers.includes(t)) setSyncTickers(prev => [...prev, t]);
+                          setSyncTickerInput('');
+                        }
+                      }}
+                      placeholder="e.g. AAPL"
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      onClick={() => {
+                        const t = syncTickerInput.trim();
+                        if (t && !syncTickers.includes(t)) setSyncTickers(prev => [...prev, t]);
+                        setSyncTickerInput('');
+                      }}
+                      disabled={!syncTickerInput.trim()}
+                      className="px-3 py-2 bg-indigo-100 text-indigo-700 font-bold rounded-xl text-sm disabled:opacity-40 hover:bg-indigo-200 transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {syncTickers.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {syncTickers.map(t => (
+                        <span key={t} className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full text-xs font-bold">
+                          {t}
+                          <button onClick={() => setSyncTickers(prev => prev.filter(x => x !== t))} className="text-indigo-400 hover:text-rose-500 transition-colors">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </span>
+                      ))}
+                      <button onClick={() => setSyncTickers([])} className="text-xs text-slate-400 hover:text-rose-500 transition-colors">Clear all</button>
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-400">Leave empty to import all tickers. Press Enter or comma to add.</p>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={handleRefreshConnections}

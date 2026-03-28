@@ -1,5 +1,9 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Transaction } from '../types';
+import {
+  fetchOpenBuys, fetchLotAssignments, createLotAssignment, deleteLotAssignment,
+  OpenBuyLot, LotAssignment,
+} from '../services/apiService';
 
 type DateRangeType = 'all' | '30d' | '90d' | 'ytd' | 'custom';
 type SortKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'action' | 'quantity' | 'price' | 'amount';
@@ -13,12 +17,15 @@ interface Props {
   onSoftDelete: (id: string, isDeleted: boolean) => void;
   onUpdate: (id: string, updates: Partial<Transaction>) => void;
   onRevert: (id: string) => void;
+  selectedBrokerages: string[];
+  setSelectedBrokerages: (v: string[]) => void;
+  selectedAssetTypes: string[];
+  setSelectedAssetTypes: (v: string[]) => void;
+  selectedTickers: string[];
+  setSelectedTickers: (v: string[]) => void;
 }
 
-const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert }) => {
-  const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
-  const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([]);
-  const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
+const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert, selectedBrokerages, setSelectedBrokerages, selectedAssetTypes, setSelectedAssetTypes, selectedTickers, setSelectedTickers }) => {
   const [dateRangeType, setDateRangeType] = useState<DateRangeType>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -30,6 +37,100 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('active');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Partial<Transaction>>({});
+
+  // Track which sell transaction IDs have at least one lot assignment (for icon highlight)
+  const [mappedSellIds, setMappedSellIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetchLotAssignments('').then(all => {
+      setMappedSellIds(new Set(all.map(a => String(a.sell_transaction_id))));
+    }).catch(() => {});
+  }, []);
+
+  // Lot assignment modal state
+  const [lotModalSellId, setLotModalSellId] = useState<string | null>(null);
+  const [lotModalSellTxn, setLotModalSellTxn] = useState<Transaction | null>(null);
+  const [openBuys, setOpenBuys] = useState<OpenBuyLot[]>([]);
+  const [existingAssignments, setExistingAssignments] = useState<LotAssignment[]>([]);
+  const [assignQtys, setAssignQtys] = useState<Record<number, string>>({});
+  const [lotModalLoading, setLotModalLoading] = useState(false);
+  const [lotModalError, setLotModalError] = useState<string | null>(null);
+
+  const openLotModal = useCallback(async (t: Transaction) => {
+    setLotModalSellId(t.id);
+    setLotModalSellTxn(t);
+    setLotModalLoading(true);
+    setLotModalError(null);
+    setAssignQtys({});
+    try {
+      const [buys, assignments] = await Promise.all([
+        fetchOpenBuys(t.id),
+        fetchLotAssignments(t.id),  // filtered by sell ID
+      ]);
+      setOpenBuys(buys);
+      setExistingAssignments(assignments);
+    } catch (e: any) {
+      setLotModalError(e.message);
+    } finally {
+      setLotModalLoading(false);
+    }
+  }, []);
+
+  const closeLotModal = () => {
+    setLotModalSellId(null);
+    setLotModalSellTxn(null);
+    setOpenBuys([]);
+    setExistingAssignments([]);
+    setAssignQtys({});
+    setLotModalError(null);
+  };
+
+  const saveAssignments = async () => {
+    if (!lotModalSellId) return;
+    setLotModalLoading(true);
+    setLotModalError(null);
+    try {
+      for (const [buyIdStr, qtyStr] of Object.entries(assignQtys)) {
+        const qty = parseFloat(qtyStr);
+        if (!qty || qty <= 0) continue;
+        await createLotAssignment(lotModalSellId, parseInt(buyIdStr), qty);
+      }
+      // Refresh modal + global highlight map
+      const [buys, assignments, allAssignments] = await Promise.all([
+        fetchOpenBuys(lotModalSellId),
+        fetchLotAssignments(lotModalSellId),
+        fetchLotAssignments(),
+      ]);
+      setOpenBuys(buys);
+      setExistingAssignments(assignments);
+      setMappedSellIds(new Set(allAssignments.map(a => String(a.sell_transaction_id))));
+      setAssignQtys({});
+    } catch (e: any) {
+      setLotModalError(e.message);
+    } finally {
+      setLotModalLoading(false);
+    }
+  };
+
+  const removeAssignment = async (assignmentId: number) => {
+    if (!lotModalSellId) return;
+    setLotModalLoading(true);
+    try {
+      await deleteLotAssignment(assignmentId);
+      const [buys, assignments, allAssignments] = await Promise.all([
+        fetchOpenBuys(lotModalSellId),
+        fetchLotAssignments(lotModalSellId),
+        fetchLotAssignments(),
+      ]);
+      setOpenBuys(buys);
+      setExistingAssignments(assignments);
+      setMappedSellIds(new Set(allAssignments.map(a => String(a.sell_transaction_id))));
+    } catch (e: any) {
+      setLotModalError(e.message);
+    } finally {
+      setLotModalLoading(false);
+    }
+  };
 
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
   const [isAssetTypeMenuOpen, setIsAssetTypeMenuOpen] = useState(false);
@@ -80,22 +181,20 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
   }, [transactions]);
 
   const toggleBrokerage = (broker: string) => {
-    setSelectedBrokerages(prev =>
-      prev.includes(broker) ? prev.filter(b => b !== broker) : [...prev, broker]
+    setSelectedBrokerages(
+      selectedBrokerages.includes(broker) ? selectedBrokerages.filter(b => b !== broker) : [...selectedBrokerages, broker]
     );
   };
 
   const toggleAssetType = (type: string) => {
-    const normalizedType = type.toUpperCase(); // Normalize to uppercase
-    setSelectedAssetTypes(prev => 
-      prev.includes(normalizedType) ? prev.filter(t => t !== normalizedType) : [...prev, normalizedType]
+    const normalizedType = type.toUpperCase();
+    setSelectedAssetTypes(
+      selectedAssetTypes.includes(normalizedType) ? selectedAssetTypes.filter(t => t !== normalizedType) : [...selectedAssetTypes, normalizedType]
     );
   };
 
   const toggleTicker = (ticker: string) => {
-    setSelectedTickers(prev => 
-      prev.includes(ticker) ? prev.filter(t => t !== ticker) : [...prev, ticker]
-    );
+    setSelectedTickers(selectedTickers.includes(ticker) ? selectedTickers.filter(t => t !== ticker) : [...selectedTickers, ticker]);
   };
 
   const handleSort = (key: SortKey) => {
@@ -128,7 +227,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
       const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(t.ticker);
       
       const transactionDate = new Date(t.date).getTime();
-      
+
       let matchesDate = true;
       if (dateRangeType === '30d') matchesDate = transactionDate >= thirtyDaysAgo.getTime();
       else if (dateRangeType === '90d') matchesDate = transactionDate >= ninetyDaysAgo.getTime();
@@ -152,6 +251,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
           case 'date':
             valA = new Date(a.date).getTime();
             valB = new Date(b.date).getTime();
+            if (valA === valB) return sortDirection === 'asc' ? parseInt(a.id) - parseInt(b.id) : parseInt(b.id) - parseInt(a.id);
             break;
           case 'brokerage':
             valA = a.brokerage.toLowerCase();
@@ -190,8 +290,11 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
         return 0;
       });
     } else {
-      // Default Sort: Descending Date
-      result = [...result].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Default Sort: Descending Date, then descending ID for same-date stability
+      result = [...result].sort((a, b) => {
+        const diff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        return diff !== 0 ? diff : parseInt(b.id) - parseInt(a.id);
+      });
     }
 
     return result;
@@ -618,7 +721,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                           onChange={e => setEditDraft(d => ({ ...d, action: e.target.value.toUpperCase() }))} />
                       ) : (
                         <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                          ['BUY', 'BTO'].includes(t.action.toUpperCase()) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                          ['BUY', 'BTO', 'DEPOSIT', 'REI', 'DIV', 'DIVIDEND'].includes(t.action.toUpperCase()) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                         }`}>{t.action}</span>
                       )}
                     </td>
@@ -668,22 +771,44 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-1.5">
-                          {t.is_override && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-amber-100 text-amber-600">edited</span>
+                          {/* Lot assignment button — always visible on SELL rows */}
+                          {t.action.toUpperCase() === 'SELL' && (
+                            <button
+                              onClick={() => openLotModal(t)}
+                              className={`p-1.5 rounded-lg transition-all ${
+                                mappedSellIds.has(t.id)
+                                  ? 'text-violet-600 bg-violet-50 hover:bg-violet-100'
+                                  : 'text-slate-200 hover:text-violet-600 hover:bg-violet-50'
+                              }`}
+                              title={mappedSellIds.has(t.id) ? 'Lots manually assigned' : 'Assign buy lots to this sell'}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                            </button>
                           )}
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                            {t.is_override && (
+                          {/* Edit button — always visible, amber when overridden */}
+                          <button
+                            onClick={startEdit}
+                            className={`p-1.5 rounded-lg transition-all ${
+                              t.is_override
+                                ? 'text-amber-500 bg-amber-50 hover:bg-amber-100'
+                                : 'text-slate-200 hover:text-indigo-600 hover:bg-indigo-50'
+                            }`}
+                            title={t.is_override ? 'Edited — click to edit again' : 'Edit transaction'}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          </button>
+                          {/* Revert — hover only, only when overridden */}
+                          {t.is_override && (
+                            <div className="opacity-0 group-hover:opacity-100 transition-all">
                               <button onClick={() => onRevert(t.id)} className="p-1.5 text-slate-300 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Revert to original">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                               </button>
-                            )}
-                            <button onClick={startEdit} className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit transaction">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                            </button>
-                            <button onClick={() => onRemove(t.id)} className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete transaction">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                          </div>
+                            </div>
+                          )}
+                          {/* Delete — always visible, grayed */}
+                          <button onClick={() => onRemove(t.id)} className="p-1.5 text-slate-200 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete transaction">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
                         </div>
                       )}
                     </td>
@@ -692,6 +817,107 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
               })}
             </tbody>
           </table>
+        </div>
+      )}
+      {/* Lot Assignment Modal */}
+      {lotModalSellId && lotModalSellTxn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-slate-900">Assign Buy Lots</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Sell: <span className="font-bold text-slate-600">{lotModalSellTxn.ticker}</span> &nbsp;·&nbsp;
+                  {new Date(lotModalSellTxn.date).toLocaleDateString('en-CA')} &nbsp;·&nbsp;
+                  {lotModalSellTxn.quantity} shares @ ${lotModalSellTxn.price.toFixed(2)}
+                </p>
+              </div>
+              <button onClick={closeLotModal} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
+              {lotModalError && (
+                <div className="text-xs text-rose-600 bg-rose-50 rounded-xl px-4 py-3 font-medium">{lotModalError}</div>
+              )}
+
+              {/* Existing assignments */}
+              {existingAssignments.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Existing Assignments</p>
+                  <div className="space-y-2">
+                    {existingAssignments.map(a => {
+                      const buy = openBuys.find(b => b.id === a.buy_transaction_id);
+                      return (
+                        <div key={a.id} className="flex items-center justify-between px-4 py-2.5 bg-violet-50 rounded-xl">
+                          <div className="text-sm">
+                            <span className="font-bold text-slate-700">{a.quantity} shares</span>
+                            {buy && <span className="text-slate-400 ml-2">from {new Date(buy.date).toLocaleDateString('en-CA')} @ ${buy.price.toFixed(2)}</span>}
+                          </div>
+                          <button onClick={() => removeAssignment(a.id)} className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="Remove">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Available buy lots */}
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Available Buy Lots</p>
+                {lotModalLoading ? (
+                  <div className="text-sm text-slate-400 py-4 text-center">Loading...</div>
+                ) : openBuys.length === 0 ? (
+                  <div className="text-sm text-slate-400 py-4 text-center">No open buy lots available for this ticker.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {openBuys.map(lot => (
+                      <div key={lot.id} className="flex items-center gap-4 px-4 py-3 bg-slate-50 rounded-xl">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-slate-700">{new Date(lot.date).toLocaleDateString('en-CA')}</div>
+                          <div className="text-xs text-slate-400">
+                            {lot.available_quantity} of {lot.quantity} shares available &nbsp;·&nbsp; ${lot.price.toFixed(2)}/share
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            max={lot.available_quantity}
+                            step="any"
+                            placeholder="Qty"
+                            value={assignQtys[lot.id] ?? ''}
+                            onChange={e => setAssignQtys(prev => ({ ...prev, [lot.id]: e.target.value }))}
+                            className="w-24 px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-400 text-right"
+                          />
+                          <span className="text-xs text-slate-400">/ {lot.available_quantity}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <p className="text-xs text-slate-400">Remaining quantity falls back to FIFO automatically.</p>
+              <div className="flex gap-2">
+                <button onClick={closeLotModal} className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                <button
+                  onClick={saveAssignments}
+                  disabled={lotModalLoading || Object.values(assignQtys).every(v => !parseFloat(v))}
+                  className="px-4 py-2 text-sm font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Save Assignments
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -25,6 +25,13 @@ CASH_ACTION_MAP: dict[str, set[str]] = {
     "Robinhood": {"WITHDRAWAL", "CONTRIBUTION", "DEPOSIT", "FEE"},
 }
 
+# Action normalization: map raw SnapTrade action types to canonical actions
+ACTION_NORMALIZE_MAP: dict[str, str] = {
+    "REI": "BUY",        # Dividend reinvestment → treat as buy
+    "DIV": "DEPOSIT",    # Dividend payment → treat as deposit
+    "DIVIDEND": "DEPOSIT",
+}
+
 
 def _build_occ_symbol(option_symbol) -> str:
     """Extract OCC option ticker from SnapTrade option_symbol dict. Returns '' if data is missing.
@@ -151,7 +158,7 @@ def delete_connection(authorization_id: str, db: Session) -> None:
         db.commit()
 
 
-def sync(db: Session, start_date: str = None, end_date: str = None, account_ids: list = None) -> int:
+def sync(db: Session, start_date: str = None, end_date: str = None, account_ids: list = None, tickers: list = None) -> int:
     """Fetch latest connections and transactions from Snaptrade, store in DB."""
     client = get_client()
     total_synced = 0
@@ -231,10 +238,16 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                     continue
 
                 action = str(txn.get("type", "")).upper()
+                action = ACTION_NORMALIZE_MAP.get(action, action)
 
                 symbol_info = txn.get("symbol") or {}
                 is_cash_action = action in CASH_ACTION_MAP.get(brokerage_name, set())
                 ticker = "CASH" if is_cash_action else (symbol_info.get("symbol") or symbol_info.get("raw_symbol", "UNKNOWN"))
+
+                # Skip if caller specified tickers and this ticker isn't in the list
+                if tickers and ticker not in tickers:
+                    continue
+
                 name = symbol_info.get("description", "")
                 brokerage_name = txn.get("institution") or brokerage_name
                 symbol_type = symbol_info.get("type") or {}
@@ -253,11 +266,15 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                 else:
                     asset_type = normalize_asset_type(raw_asset_type, ticker=ticker)
 
-                raw_date = txn.get("trade_date") or txn.get("settlement_date") or ""
+                raw_date = str(txn.get("trade_date") or txn.get("settlement_date") or "")
                 try:
-                    date = datetime.strptime(str(raw_date)[:10], "%Y-%m-%d")
+                    # Try full ISO datetime first (e.g. 2024-03-15T14:32:05.000Z), fall back to date-only
+                    date = datetime.fromisoformat(raw_date.replace("Z", "+00:00").replace("+00:00", ""))
                 except Exception:
-                    date = datetime.now()
+                    try:
+                        date = datetime.strptime(raw_date[:10], "%Y-%m-%d")
+                    except Exception:
+                        date = datetime.now()
                 quantity = float(txn.get("units") or 0)
                 price = float(txn.get("price") or 0)
                 amount = float(txn.get("amount") or 0)

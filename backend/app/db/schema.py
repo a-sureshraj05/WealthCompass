@@ -146,6 +146,16 @@ class SnaptradeIgnoredAccount(Base):
     account_id = Column(String, unique=True, nullable=False)
 
 
+class LotAssignment(Base):
+    """Explicit mapping of a sell transaction to a specific buy transaction lot."""
+    __tablename__ = "lot_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sell_transaction_id = Column(Integer, nullable=False, index=True)
+    buy_transaction_id = Column(Integer, nullable=False, index=True)
+    quantity = Column(Float, nullable=False)
+
+
 class SnaptradeTransaction(Base):
     __tablename__ = "snaptrade_transactions"
 
