@@ -7,6 +7,7 @@ import ImportDataView from '../ImportDataView';
 import AIInsights from './AIInsights';
 import TransactionsView from '../TransactionsView';
 import GainsLossesView from '../GainsLossesView';
+import OptionsView from '../OptionsView';
 
 interface Props {
   activeTab: string;
@@ -81,7 +82,19 @@ const DashboardView: React.FC<Props> = ({
             Refresh Data
           </button>
         </div>
-        <HoldingsView holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} onRemove={onRemoveHolding} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} />
+        <HoldingsView
+          holdings={holdings.filter(h => (h.assetType || '').toLowerCase() !== 'options')}
+          unrealizedGains={unrealizedGains.filter(u => (u.assetType || '').toLowerCase() !== 'options')}
+          realizedGains={realizedGains.filter(r => (r.assetType || '').toLowerCase() !== 'options')}
+          onRemove={onRemoveHolding}
+          selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages}
+          selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes}
+          selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers}
+        />
+        <div className="space-y-2">
+          <h3 className="text-lg font-bold text-slate-900">Options Calculator</h3>
+          <OptionsView />
+        </div>
       </div>
     );
   }

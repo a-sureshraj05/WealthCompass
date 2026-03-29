@@ -11,7 +11,7 @@ from fastapi import FastAPI, Depends
 from backend.app.core.database import engine
 from backend.app.db.schema import Base
 
-from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments
+from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options
 from .api.auth import get_current_user
 
 app = FastAPI()
@@ -57,6 +57,20 @@ def startup_event():
             ))
             conn.commit()
 
+    # Migration: create options_retain table if it doesn't exist
+    if "options_retain" not in inspector.get_table_names():
+        with engine.connect() as conn:
+            conn.execute(text(
+                "CREATE TABLE options_retain ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "brokerage TEXT NOT NULL, "
+                "ticker TEXT NOT NULL, "
+                "buy_date DATETIME NOT NULL, "
+                "retain_quantity REAL NOT NULL DEFAULT 0, "
+                "UNIQUE(brokerage, ticker, buy_date))"
+            ))
+            conn.commit()
+
     # Migration: add option_symbol to snaptrade_transactions if it doesn't exist
     if "snaptrade_transactions" in inspector.get_table_names():
         st_columns = [col["name"] for col in inspector.get_columns("snaptrade_transactions")]
@@ -72,6 +86,7 @@ app.include_router(manual_import.router, prefix="/api/v1", dependencies=[Depends
 app.include_router(brokerage.router, prefix="/api/v1/brokerage", dependencies=[Depends(get_current_user)])
 app.include_router(analyst.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(lot_assignments.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(options.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")

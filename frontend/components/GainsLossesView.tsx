@@ -39,6 +39,9 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   
   const [isTickerMenuOpen, setIsTickerMenuOpen] = useState(false);
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
+  const [isAssetTypeMenuOpen, setIsAssetTypeMenuOpen] = useState(false);
+  const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([]);
+  const assetTypeMenuRef = useRef<HTMLDivElement>(null);
 
   // Sorting state
   const [sortKey, setSortKey] = useState<GainSortKey | null>(null);
@@ -54,6 +57,9 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       }
       if (brokerageMenuRef.current && !brokerageMenuRef.current.contains(event.target as Node)) {
         setIsBrokerageMenuOpen(false);
+      }
+      if (assetTypeMenuRef.current && !assetTypeMenuRef.current.contains(event.target as Node)) {
+        setIsAssetTypeMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -90,16 +96,22 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   }, [unrealizedGainsData, activeSubTab]);
 
   const uniqueTickers = useMemo(() => {
-    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData; // Changed source
-    const tickers = new Set(source.map(g => g.ticker));
+    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData;
+    const tickers = new Set(source.map((g: RealizedGain | UnrealizedLot) => g.ticker));
     return Array.from(tickers).sort();
-  }, [realizedGainsData, unrealizedGainsData, activeSubTab]); // Changed dependency
+  }, [realizedGainsData, unrealizedGainsData, activeSubTab]);
 
   const uniqueBrokerages = useMemo(() => {
-    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData; // Changed source
-    const brokers = new Set(source.map(g => g.brokerage));
+    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData;
+    const brokers = new Set(source.map((g: RealizedGain | UnrealizedLot) => g.brokerage));
     return Array.from(brokers).sort();
-  }, [realizedGainsData, unrealizedGainsData, activeSubTab]); // Changed dependency
+  }, [realizedGainsData, unrealizedGainsData, activeSubTab]);
+
+  const uniqueAssetTypes = useMemo(() => {
+    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData;
+    const types = new Set(source.map((g: RealizedGain | UnrealizedLot) => g.assetType || '').filter(Boolean));
+    return Array.from(types).sort();
+  }, [realizedGainsData, unrealizedGainsData, activeSubTab]);
 
   const availableYears = useMemo(() => {
     const source = activeSubTab === 'realized' ? realizedGainsData : []; // Only consider realized for years
@@ -112,12 +124,13 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     let result = source.filter(g => {
       const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(g.ticker);
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(g.brokerage);
+      const matchesAssetType = selectedAssetTypes.length === 0 || selectedAssetTypes.includes(g.assetType || '');
       if (activeSubTab === 'realized') {
         const year = new Date((g as RealizedGain).sellDate).getFullYear().toString();
         const matchesYear = selectedYear === 'Overall' || year === selectedYear;
-        return matchesTicker && matchesBrokerage && matchesYear;
+        return matchesTicker && matchesBrokerage && matchesAssetType && matchesYear;
       }
-      return matchesTicker && matchesBrokerage;
+      return matchesTicker && matchesBrokerage && matchesAssetType;
     });
 
     if (sortKey && sortDirection) {
@@ -151,7 +164,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     }
 
     return result;
-  }, [realizedGainsData, unrealizedGainsData, selectedTickers, selectedBrokerages, selectedYear, activeSubTab, sortKey, sortDirection]);
+  }, [realizedGainsData, unrealizedGainsData, selectedTickers, selectedBrokerages, selectedAssetTypes, selectedYear, activeSubTab, sortKey, sortDirection]);
 
   const shortTerm = filteredData.filter(g => !g.isLongTerm);
   const longTerm = filteredData.filter(g => g.isLongTerm);
@@ -168,6 +181,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
 
   const toggleBrokerage = (broker: string) => {
     setSelectedBrokerages(selectedBrokerages.includes(broker) ? selectedBrokerages.filter(b => b !== broker) : [...selectedBrokerages, broker]);
+  };
+
+  const toggleAssetType = (type: string) => {
+    setSelectedAssetTypes(selectedAssetTypes.includes(type) ? selectedAssetTypes.filter(t => t !== type) : [...selectedAssetTypes, type]);
   };
 
   const handleSort = (key: GainSortKey) => {
@@ -248,9 +265,19 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                       {g.ticker}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{g.assetType || '—'}</td>
                   <td className="px-4 py-3">
-                    <span className="text-[11px] font-bold text-slate-600">{g.brokerage}</span>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                      (g.assetType || '').toLowerCase() === 'options' ? 'bg-purple-100 text-purple-700' :
+                      (g.assetType || '').toLowerCase() === 'equity' ? 'bg-blue-100 text-blue-700' :
+                      'bg-slate-100 text-slate-600'
+                    }`}>{g.assetType || '—'}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                      g.brokerage.toLowerCase().includes('robinhood') ? 'bg-orange-100 text-orange-700' :
+                      g.brokerage.toLowerCase().includes('schwab') ? 'bg-fuchsia-100 text-fuchsia-800' :
+                      'bg-slate-100 text-slate-600'
+                    }`}>{g.brokerage}</span>
                   </td>
                   <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{new Date(g.buyDate).toLocaleDateString('en-CA')}</td>
                   {activeSubTab === 'realized' && <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{new Date((g as RealizedGain).sellDate).toLocaleDateString('en-CA')}</td>}
@@ -454,6 +481,37 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                       <label key={broker} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
                         <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={selectedBrokerages.includes(broker)} onChange={() => toggleBrokerage(broker)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{broker}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="relative" ref={assetTypeMenuRef}>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter z-10">Asset Type</label>
+              <button
+                onClick={() => setIsAssetTypeMenuOpen(!isAssetTypeMenuOpen)}
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer min-w-[140px] text-left"
+              >
+                <span className="truncate max-w-[100px]">
+                  {selectedAssetTypes.length === 0 ? 'All Types' : selectedAssetTypes.length === 1 ? selectedAssetTypes[0] : `${selectedAssetTypes.length} Types`}
+                </span>
+                <svg className={`w-4 h-4 text-slate-400 transition-transform ${isAssetTypeMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              {isAssetTypeMenuOpen && (
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <span className="text-[10px] font-black text-slate-400 uppercase px-2">Asset Types</span>
+                    {selectedAssetTypes.length > 0 && <button onClick={() => setSelectedAssetTypes([])} className="text-[10px] font-bold text-indigo-600 px-2">Clear</button>}
+                  </div>
+                  <div className="max-h-60 overflow-y-auto p-2 space-y-1">
+                    {uniqueAssetTypes.map(type => (
+                      <label key={type} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={selectedAssetTypes.includes(type)} onChange={() => toggleAssetType(type)} />
+                        <span className="ml-3 text-sm font-bold text-slate-700 capitalize">{type}</span>
                       </label>
                     ))}
                   </div>

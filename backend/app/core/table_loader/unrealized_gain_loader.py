@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 from backend.app.db.schema import UnrealizedGain
 from backend.app.core.stock_fetcher import get_stock_price
+from backend.app.core.utils.ticker import underlying_ticker
 
 _OPTIONS_MULTIPLIER = 100  # 1 contract = 100 underlying shares
 
@@ -58,7 +59,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
                 m = _multiplier(lot.get("assetType"))
                 unrealized_gain = UnrealizedGain(
                     brokerage=lot["brokerage"],
-                    ticker=ticker,
+                    ticker=underlying_ticker(lot.get("ticker", ticker)),
                     buyDate=buy_date_dt,
                     quantity=lot["quantity"],
                     buyPrice=lot["price"],

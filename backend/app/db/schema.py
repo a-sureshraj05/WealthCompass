@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, String
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, String, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -93,6 +93,18 @@ class UnrealizedGain(Base):
     unrealizedGain = Column(Float)
     isLongTerm = Column(Boolean)
     assetType = Column(String)
+
+
+class OptionsRetain(Base):
+    __tablename__ = "options_retain"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brokerage = Column(String, nullable=False)
+    ticker = Column(String, nullable=False)
+    buy_date = Column(DateTime, nullable=False)
+    retain_quantity = Column(Float, nullable=False, default=0)
+
+    __table_args__ = (UniqueConstraint("brokerage", "ticker", "buy_date", name="uq_options_retain"),)
 
 
 class TickerReference(Base):
