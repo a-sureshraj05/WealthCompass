@@ -68,8 +68,9 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
             ))
 
         for t in sorted_transactions:
-            if t.action.upper() == "BUY":
+            if t.action.upper() in ("BUY", "REI"):
                 # cost_per_unit = actual dollars paid per contract/share from source
+                # REI = dividend reinvestment — treated as a buy lot
                 cost_per_unit = (t.totalCost / t.quantity) if t.quantity else t.price
                 buy_lots_queue.append({
                     "transaction_id": t.id,

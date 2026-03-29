@@ -23,13 +23,13 @@ def load(db: Session, brokerage_name: str = None):
         query = query.filter(UnrealizedGain.brokerage == brokerage_name)
     unrealized_rows = query.all()
 
-    aggregated: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    aggregated: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
 
     for row in unrealized_rows:
         if row.quantity <= 0:
             continue
 
-        key = (row.brokerage, row.ticker)
+        key = (row.brokerage, row.ticker, (row.assetType or "equity").lower())
         if key not in aggregated:
             aggregated[key] = {
                 "brokerage": row.brokerage,
