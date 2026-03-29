@@ -248,9 +248,19 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                       {g.ticker}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{g.assetType || '—'}</td>
                   <td className="px-4 py-3">
-                    <span className="text-[11px] font-bold text-slate-600">{g.brokerage}</span>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                      (g.assetType || '').toLowerCase() === 'options' ? 'bg-purple-100 text-purple-700' :
+                      (g.assetType || '').toLowerCase() === 'equity' ? 'bg-blue-100 text-blue-700' :
+                      'bg-slate-100 text-slate-600'
+                    }`}>{g.assetType || '—'}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                      g.brokerage.toLowerCase().includes('robinhood') ? 'bg-orange-100 text-orange-700' :
+                      g.brokerage.toLowerCase().includes('schwab') ? 'bg-fuchsia-100 text-fuchsia-800' :
+                      'bg-slate-100 text-slate-600'
+                    }`}>{g.brokerage}</span>
                   </td>
                   <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{new Date(g.buyDate).toLocaleDateString('en-CA')}</td>
                   {activeSubTab === 'realized' && <td className="px-4 py-3 text-[11px] text-slate-500 font-medium">{new Date((g as RealizedGain).sellDate).toLocaleDateString('en-CA')}</td>}
