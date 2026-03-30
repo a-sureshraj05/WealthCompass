@@ -141,8 +141,8 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const totalGain = investmentValue - totalCost;
     const gainPercentage = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
-    const dayChange = investmentValue * 0.012;
-    const dayChangePercentage = 1.2;
+    const dayChange = holdings.reduce((sum, h) => sum + h.quantity * (h.currentPrice - (h.previousClose > 0 ? h.previousClose : h.currentPrice)), 0);
+    const dayChangePercentage = investmentValue > 0 ? (dayChange / (investmentValue - dayChange)) * 100 : 0;
 
     return { totalValue, investmentValue, totalGain, gainPercentage, dayChange, dayChangePercentage, buyingPower: cashBalance };
   }, [holdings, cashBalance]);

@@ -2,6 +2,7 @@ from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 from backend.app.db.schema import LotAssignment, RealizedGain, Transaction as DBTransaction
 from backend.app.core.utils.ticker import underlying_ticker
+from backend.app.core.transaction_actions import BUY_ACTIONS, SELL_ACTIONS, OPTION_EXPIRY_ACTIONS, OPTION_EXERCISE_ACTIONS
 
 
 def delete(db: Session, brokerage_name: str = None):
@@ -22,7 +23,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
     transactions = q.order_by(DBTransaction.date).all()
 
     # Load explicit lot assignments: sell_transaction_id → [LotAssignment]
-    sell_ids = [t.id for t in transactions if t.action.upper() == "SELL"]
+    sell_ids = [t.id for t in transactions if t.action.upper() in SELL_ACTIONS]
     all_assignments: Dict[int, List[LotAssignment]] = {}
     if sell_ids:
         for a in db.query(LotAssignment).filter(LotAssignment.sell_transaction_id.in_(sell_ids)).all():
@@ -37,6 +38,47 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
     for t in transactions:
         key = (t.brokerage, t.ticker, getattr(t, "option_symbol", None) or "")
         ticker_groups.setdefault(key, []).append(t)
+
+    # Pre-pass: compute premium-per-share adjustments from exercised options.
+    # When an option is exercised, the premium paid becomes part of the equity
+    # cost basis. Key: (brokerage, underlying_ticker, exercise_date) → $/share to add.
+    exercise_cost_adjustments: Dict[tuple, float] = {}
+    for (brokerage, ticker, option_symbol), ticker_transactions in ticker_groups.items():
+        if not option_symbol:
+            continue  # equity groups handled in main pass
+        temp_queue: List[Dict[str, Any]] = []
+        for t in sorted(ticker_transactions, key=lambda x: (x.date, x.id)):
+            if t.action.upper() in BUY_ACTIONS:
+                cpu = (t.totalCost / t.quantity) if t.quantity else t.price
+                temp_queue.append({"quantity": t.quantity, "cost_per_unit": cpu})
+            elif t.action.upper() in SELL_ACTIONS:
+                rem = t.quantity
+                while rem > 0 and temp_queue:
+                    lot = temp_queue[0]
+                    q = min(rem, lot["quantity"])
+                    lot["quantity"] -= q
+                    rem -= q
+                    if lot["quantity"] <= 0:
+                        temp_queue.pop(0)
+            elif t.action.upper() in OPTION_EXPIRY_ACTIONS:
+                # All lots expire worthless — drain the temp queue (no cost adjustment)
+                temp_queue.clear()
+            elif t.action.upper() in OPTION_EXERCISE_ACTIONS:
+                rem = t.quantity
+                premium = 0.0
+                while rem > 0 and temp_queue:
+                    lot = temp_queue[0]
+                    q = min(rem, lot["quantity"])
+                    premium += q * lot["cost_per_unit"]
+                    lot["quantity"] -= q
+                    rem -= q
+                    if lot["quantity"] <= 0:
+                        temp_queue.pop(0)
+                if t.quantity > 0 and premium > 0:
+                    underlying = underlying_ticker(option_symbol)
+                    key = (brokerage, underlying, t.date.date())
+                    extra = premium / (t.quantity * 100)  # premium per underlying share
+                    exercise_cost_adjustments[key] = exercise_cost_adjustments.get(key, 0.0) + extra
 
     for (brokerage, ticker, option_symbol), ticker_transactions in ticker_groups.items():
         # Skip Cash asset types
@@ -68,9 +110,15 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
             ))
 
         for t in sorted_transactions:
-            if t.action.upper() == "BUY":
+            if t.action.upper() in BUY_ACTIONS:
                 # cost_per_unit = actual dollars paid per contract/share from source
-                cost_per_unit = (t.totalCost / t.quantity) if t.quantity else t.price
+                # REI = dividend reinvestment — treated as a buy lot
+                cost_per_unit = (t.totalCost / t.quantity) if (t.quantity and t.totalCost) else t.price
+                # If this equity BUY is from an option exercise, add the premium
+                # per share so the cost basis reflects strike + premium.
+                if not option_symbol:
+                    ex_key = (t.brokerage, t.ticker, t.date.date())
+                    cost_per_unit += exercise_cost_adjustments.get(ex_key, 0.0)
                 buy_lots_queue.append({
                     "transaction_id": t.id,
                     "date": t.date,
@@ -83,7 +131,42 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                     "option_symbol": getattr(t, "option_symbol", None),
                 })
 
-            elif t.action.upper() == "SELL":
+            elif t.action.upper() in OPTION_EXPIRY_ACTIONS:
+                # Option expired worthless — close all open lots as a realized loss.
+                # Sell price is $0; the full premium paid becomes the loss.
+                while buy_lots_queue:
+                    lot = buy_lots_queue[0]
+                    qty = lot["quantity"]
+                    is_long_term = (t.date - lot["date"]).days > 365
+                    realized_gains_list.append(RealizedGain(
+                        brokerage=lot["brokerage"],
+                        ticker=underlying_ticker(ticker),
+                        buyDate=lot["date"],
+                        sellDate=t.date,
+                        quantity=qty,
+                        buyPrice=lot["price"],
+                        sellPrice=0.0,
+                        gain=-(qty * lot["cost_per_unit"]),
+                        isLongTerm=is_long_term,
+                        assetType=lot.get("assetType"),
+                    ))
+                    buy_lots_queue.pop(0)
+
+            elif t.action.upper() in OPTION_EXERCISE_ACTIONS:
+                # Option was exercised — close the lot from the buy queue with no
+                # separate gain/loss. The acquired equity shares are recorded as a
+                # regular BUY transaction by the brokerage (already in the DB),
+                # so the premium becomes part of the equity cost basis there.
+                remaining = t.quantity
+                while remaining > 0 and buy_lots_queue:
+                    lot = buy_lots_queue[0]
+                    qty = min(remaining, lot["quantity"])
+                    lot["quantity"] -= qty
+                    remaining -= qty
+                    if lot["quantity"] <= 0:
+                        buy_lots_queue.pop(0)
+
+            elif t.action.upper() in SELL_ACTIONS:
                 remaining = t.quantity
 
                 # Step 1: consume explicit lot assignments first

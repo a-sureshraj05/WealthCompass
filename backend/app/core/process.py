@@ -13,8 +13,8 @@ def process_transactions(db: Session, brokerage_name: str = None):
     )
 
     open_lots = realized_gain_load(db, brokerage_name)
-    unrealized_gain_load(db, open_lots, brokerage_name)
-    holding_load(db, brokerage_name)
+    prev_close_cache = unrealized_gain_load(db, open_lots, brokerage_name)
+    holding_load(db, brokerage_name, prev_close_cache)
     # ticker_reference_load(db)
 
     print(f"Finished processing for brokerage: {brokerage_name if brokerage_name else 'All'}.")

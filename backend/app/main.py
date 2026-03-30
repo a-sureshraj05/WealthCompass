@@ -71,6 +71,14 @@ def startup_event():
             ))
             conn.commit()
 
+    # Migration: add previousClose to holdings if it doesn't exist
+    if "holdings" in inspector.get_table_names():
+        holding_columns = [col["name"] for col in inspector.get_columns("holdings")]
+        if "previousClose" not in holding_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE holdings ADD COLUMN previousClose REAL DEFAULT 0.0"))
+                conn.commit()
+
     # Migration: add option_symbol to snaptrade_transactions if it doesn't exist
     if "snaptrade_transactions" in inspector.get_table_names():
         st_columns = [col["name"] for col in inspector.get_columns("snaptrade_transactions")]

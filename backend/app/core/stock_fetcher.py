@@ -53,6 +53,27 @@ def _get_option_price(occ_symbol: str) -> Union[float, None]:
         return None
 
 
+def get_stock_quote(ticker_symbol: str) -> tuple:
+    """Return (current_price, previous_close) for an equity ticker.
+    Falls back to (current, current) if only one day of data is available.
+    Returns (None, None) on failure. Does not handle OCC option symbols."""
+    if _OCC_RE.match(ticker_symbol):
+        price = _get_option_price(ticker_symbol)
+        return (price, price)
+    try:
+        hist = yf.Ticker(ticker_symbol).history(period='1mo')
+        # history() only returns trading days, so iloc[-1] = last close, iloc[-2] = prev trading day close
+        if len(hist) >= 2:
+            return float(hist['Close'].iloc[-1]), float(hist['Close'].iloc[-2])
+        elif len(hist) == 1:
+            current = float(hist['Close'].iloc[-1])
+            return current, current
+        return None, None
+    except Exception as e:
+        print(f"Error fetching quote for {ticker_symbol}: {e}")
+        return None, None
+
+
 def get_stock_price(ticker_symbol: str, period: str = '1d') -> Union[float, None]:
     """
     Fetches the latest closing stock price for a given ticker symbol.

@@ -6,6 +6,7 @@ export interface StockHolding {
   averageCostPerShare: number;
   totalCost: number;
   currentPrice: number;
+  previousClose: number;
   marketValue: number;
   assetType?: string;
   sector?: string;

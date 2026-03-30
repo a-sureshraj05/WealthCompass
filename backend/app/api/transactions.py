@@ -64,6 +64,7 @@ class Holding(BaseModel):
     averageCostPerShare: float
     totalCost: float
     currentPrice: float
+    previousClose: float = 0.0
     marketValue: float
     assetType: Optional[str] = None
 

@@ -181,9 +181,18 @@ const DashboardView: React.FC<Props> = ({
       </div>
 
       {holdings.length > 0 && (() => {
-        const withGain = holdings
-          .filter(h => h.averageCostPerShare > 0)
-          .map(h => ({ ...h, gainPct: ((h.currentPrice - h.averageCostPerShare) / h.averageCostPerShare) * 100 }));
+        // Aggregate by ticker across all brokerages, compute daily % change
+        const byTicker: Record<string, { ticker: string; currentPrice: number; previousClose: number }> = {};
+        for (const h of holdings) {
+          if (h.previousClose <= 0) continue;
+          if (!byTicker[h.ticker]) {
+            byTicker[h.ticker] = { ticker: h.ticker, currentPrice: h.currentPrice, previousClose: h.previousClose };
+          }
+        }
+        const withGain = Object.values(byTicker).map(t => ({
+          ...t,
+          gainPct: ((t.currentPrice - t.previousClose) / t.previousClose) * 100,
+        }));
         const topMovers = [...withGain].sort((a, b) => b.gainPct - a.gainPct).slice(0, 5);
         const worstMovers = [...withGain].sort((a, b) => a.gainPct - b.gainPct).slice(0, 5);
 
@@ -195,14 +204,14 @@ const DashboardView: React.FC<Props> = ({
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-800">{h.ticker}</p>
-                <p className="text-xs text-slate-400">{h.brokerage}</p>
+                <p className="text-xs text-slate-400">${h.currentPrice.toFixed(2)}</p>
               </div>
             </div>
             <div className="text-right">
               <p className={`text-sm font-bold ${h.gainPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {h.gainPct >= 0 ? '+' : ''}{h.gainPct.toFixed(2)}%
               </p>
-              <p className="text-xs text-slate-400">${h.currentPrice.toFixed(2)}</p>
+              <p className="text-xs text-slate-400">prev ${h.previousClose.toFixed(2)}</p>
             </div>
           </div>
         );
@@ -214,14 +223,14 @@ const DashboardView: React.FC<Props> = ({
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                 <h3 className="text-lg font-bold text-slate-900">Top Movers</h3>
               </div>
-              {topMovers.map(h => <MoverRow key={h.id} h={h} />)}
+              {topMovers.map(h => <MoverRow key={h.ticker} h={h} />)}
             </div>
             <div className="bg-white p-6 rounded-2xl border shadow-sm">
               <div className="flex items-center gap-2 mb-4">
                 <span className="w-2 h-2 rounded-full bg-rose-500"></span>
                 <h3 className="text-lg font-bold text-slate-900">Worst Movers</h3>
               </div>
-              {worstMovers.map(h => <MoverRow key={h.id} h={h} />)}
+              {worstMovers.map(h => <MoverRow key={h.ticker} h={h} />)}
             </div>
           </div>
         );
