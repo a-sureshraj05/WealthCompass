@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
 from backend.app.db.schema import Holding, UnrealizedGain
 
@@ -14,7 +14,7 @@ def delete(db: Session, brokerage_name: str = None):
         db.query(Holding).delete()
     db.commit()
 
-def load(db: Session, brokerage_name: str = None):
+def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, float] = None):
     print(f"[holding_loader] Starting load for brokerage: {brokerage_name}")
     delete(db, brokerage_name)
 
@@ -51,6 +51,7 @@ def load(db: Session, brokerage_name: str = None):
         current_price = agg["currentPrice"]
 
         m = _multiplier(agg.get("assetType"))
+        prev_close = (prev_close_cache or {}).get(agg["ticker"], current_price)
         holding = Holding(
             brokerage=agg["brokerage"],
             ticker=agg["ticker"],
@@ -58,6 +59,7 @@ def load(db: Session, brokerage_name: str = None):
             averageCostPerShare=total_cost / total_quantity if total_quantity > 0 else 0.0,
             totalCost=total_cost,
             currentPrice=current_price,
+            previousClose=prev_close,
             marketValue=total_quantity * m * current_price,
             assetType=agg.get("assetType"),
         )

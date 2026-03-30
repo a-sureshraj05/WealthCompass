@@ -31,7 +31,7 @@ const Navbar: React.FC<Props> = ({ stats, onLogout, sidebarCollapsed }) => {
           <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Daily Change</span>
           <span className={`text-lg font-bold ${stats.dayChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             {stats.dayChange >= 0 ? '+' : ''}${Math.abs(stats.dayChange).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            <span className="text-sm font-medium ml-1">({stats.dayChangePercentage}%)</span>
+            <span className="text-sm font-medium ml-1">({stats.dayChangePercentage.toFixed(2)}%)</span>
           </span>
         </div>
 

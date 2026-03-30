@@ -2,10 +2,12 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
 from backend.app.db.schema import LotAssignment, Transaction as DBTransaction
+from backend.app.core.transaction_actions import BUY_ACTIONS, SELL_ACTIONS
 
 router = APIRouter()
 
@@ -39,11 +41,11 @@ def get_lot_assignments(sell_transaction_id: int = None, db: Session = Depends(g
 def create_lot_assignment(payload: LotAssignmentCreate, db: Session = Depends(get_db)):
     """Assign a quantity from a specific buy lot to a sell transaction."""
     sell = db.query(DBTransaction).filter(DBTransaction.id == payload.sell_transaction_id).first()
-    if not sell or sell.action.upper() != "SELL":
+    if not sell or sell.action.upper() not in SELL_ACTIONS:
         raise HTTPException(status_code=400, detail="sell_transaction_id must refer to a SELL transaction")
 
     buy = db.query(DBTransaction).filter(DBTransaction.id == payload.buy_transaction_id).first()
-    if not buy or buy.action.upper() != "BUY":
+    if not buy or buy.action.upper() not in BUY_ACTIONS:
         raise HTTPException(status_code=400, detail="buy_transaction_id must refer to a BUY transaction")
 
     if buy.ticker != sell.ticker or buy.brokerage != sell.brokerage or buy.assetType != sell.assetType:
@@ -95,7 +97,7 @@ def get_open_buys(sell_transaction_id: int, db: Session = Depends(get_db)):
     with their remaining unassigned quantity.
     """
     sell = db.query(DBTransaction).filter(DBTransaction.id == sell_transaction_id).first()
-    if not sell or sell.action.upper() != "SELL":
+    if not sell or sell.action.upper() not in SELL_ACTIONS:
         raise HTTPException(status_code=400, detail="sell_transaction_id must refer to a SELL transaction")
 
     buys = (
@@ -104,7 +106,7 @@ def get_open_buys(sell_transaction_id: int, db: Session = Depends(get_db)):
             DBTransaction.ticker == sell.ticker,
             DBTransaction.brokerage == sell.brokerage,
             DBTransaction.assetType == sell.assetType,
-            DBTransaction.action.ilike("BUY"),
+            func.upper(DBTransaction.action).in_(list(BUY_ACTIONS)),
             DBTransaction.date < sell.date,
             DBTransaction.is_deleted == False,
         )

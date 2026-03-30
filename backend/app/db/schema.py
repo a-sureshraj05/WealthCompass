@@ -60,6 +60,7 @@ class Holding(Base):
     averageCostPerShare = Column(Float)
     totalCost = Column(Float)
     currentPrice = Column(Float)
+    previousClose = Column(Float, default=0.0)
     marketValue = Column(Float)
     assetType = Column(String)
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Rectangle } from 'recharts';
 import { RealizedGain, UnrealizedLot } from '../types';
 
 type GainSortKey = 'ticker' | 'assetType' | 'brokerage' | 'buyDate' | 'sellDate' | 'quantity' | 'buyPrice' | 'price' | 'gain';
@@ -27,11 +27,17 @@ interface Props {
 //   brokerage: string;
 // }
 
-const COLORS = ['#6366f1', '#a855f7', '#ec4899', '#f97316', '#10b981', '#0ea5e9', '#64748b'];
 
 const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, unrealizedGains: unrealizedGainsData, selectedBrokerages, setSelectedBrokerages, selectedTickers, setSelectedTickers }) => {
   const [activeSubTab, setActiveSubTab] = useState<'realized' | 'unrealized'>('realized');
   const [selectedYear, setSelectedYear] = useState<string>('Overall');
+  // Default to the latest tax year once data is available
+  useEffect(() => {
+    if (realizedGainsData.length === 0) return;
+    const years = [...new Set(realizedGainsData.map(g => new Date(g.sellDate).getFullYear()))];
+    const latest = Math.max(...years).toString();
+    setSelectedYear(latest);
+  }, [realizedGainsData]);
   
   // Tax Rate State
   const [stTaxRate, setStTaxRate] = useState<number>(30);
@@ -46,6 +52,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   // Sorting state
   const [sortKey, setSortKey] = useState<GainSortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [stExpanded, setStExpanded] = useState(false);
+  const [ltExpanded, setLtExpanded] = useState(false);
 
   const tickerMenuRef = useRef<HTMLDivElement>(null);
   const brokerageMenuRef = useRef<HTMLDivElement>(null);
@@ -83,16 +91,18 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     return Object.values(years).sort((a, b) => a.year.localeCompare(b.year));
   }, [realizedGainsData, activeSubTab]);
 
-  // Pie Chart Data for Unrealized (uses new unrealizedGainsData)
-  const unrealizedPieData = useMemo(() => {
+  // Bar Chart Data for Unrealized — net gain per ticker, ST/LT split for tooltip
+  const unrealizedBarData = useMemo(() => {
     if (activeSubTab !== 'unrealized') return [];
-    const tickers: Record<string, number> = {};
+    const tickers: Record<string, { ticker: string; shortTerm: number; longTerm: number; total: number }> = {};
     unrealizedGainsData.forEach(lot => {
-      tickers[lot.ticker] = (tickers[lot.ticker] || 0) + lot.quantity * lot.currentPrice;
+      if (!tickers[lot.ticker]) tickers[lot.ticker] = { ticker: lot.ticker, shortTerm: 0, longTerm: 0, total: 0 };
+      if (lot.isLongTerm) tickers[lot.ticker].longTerm += lot.gain;
+      else tickers[lot.ticker].shortTerm += lot.gain;
     });
-    return Object.entries(tickers)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
+    return Object.values(tickers)
+      .map(t => ({ ...t, total: t.shortTerm + t.longTerm }))
+      .sort((a, b) => b.total - a.total);
   }, [unrealizedGainsData, activeSubTab]);
 
   const uniqueTickers = useMemo(() => {
@@ -319,54 +329,148 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       </div>
 
       {/* Analytics Charts Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-10 gap-6">
         {activeSubTab === 'realized' ? (
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+          <div className="md:col-span-7 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Yearly Realized Profit Split</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={yoyData}>
+                <BarChart data={yoyData} margin={{ top: 20, right: 5, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => `$${val}`} />
-                  <Tooltip 
+                  <Tooltip
                     cursor={{ fill: '#f8fafc' }}
-                    formatter={(value: number) => `${value < 0 ? '-' : ''}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload;
+                      const fmt = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                      const total = d.shortTerm + d.longTerm;
+                      return (
+                        <div style={{ borderRadius: 12, background: '#fff', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '10px 14px', fontSize: 11 }}>
+                          <p style={{ fontWeight: 900, marginBottom: 6 }}>{d.year}</p>
+                          <p style={{ color: '#c084fc' }}>Short Term: {fmt(d.shortTerm)}</p>
+                          <p style={{ color: '#10b981' }}>Long Term: {fmt(d.longTerm)}</p>
+                          <p style={{ fontWeight: 700, marginTop: 4, borderTop: '1px solid #f1f5f9', paddingTop: 4 }}>Net: {fmt(total)}</p>
+                        </div>
+                      );
+                    }}
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '10px' }} />
-                  <Bar dataKey="shortTerm" name="Short Term" fill="#10b981" stackId="a" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="longTerm" name="Long Term" fill="#6366f1" stackId="a" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey={(d) => {
+                      if (d.longTerm === 0) return d.shortTerm;
+                      if (d.shortTerm === 0) return 0;
+                      const mixed = (d.shortTerm < 0) !== (d.longTerm < 0);
+                      if (!mixed) return d.shortTerm;
+                      return d.shortTerm < 0 ? 0 : d.shortTerm + d.longTerm;
+                    }} name="Short Term" fill="#c084fc" stackId="a" radius={[0, 0, 0, 0]}
+                    shape={(props: any) => {
+                      const d = yoyData[props.index];
+                      if (!d) return <Rectangle {...props} />;
+                      const isSole = d.longTerm === 0;
+                      if (!isSole) return <Rectangle {...props} radius={[0, 0, 0, 0]} />;
+                      return <Rectangle {...props} radius={[6, 6, 0, 0]} />;
+                    }}
+                    label={{ content: (props: any) => {
+                      const d = yoyData[props.index];
+                      if (!d) return null;
+                      const total = d.shortTerm + d.longTerm;
+                      if (total >= 0) return null;
+                      const abs = Math.abs(total);
+                      const label = abs >= 1000 ? `-$${(abs / 1000).toFixed(1)}k` : `-$${abs.toFixed(0)}`;
+                      const topY = Math.min(props.y, props.y + props.height);
+                      return <text x={props.x + props.width / 2} y={topY - 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="#f43f5e">{label}</text>;
+                    }}}
+                  />
+                  <Bar dataKey={(d) => {
+                      if (d.shortTerm === 0) return d.longTerm;
+                      if (d.longTerm === 0) return 0;
+                      const mixed = (d.shortTerm < 0) !== (d.longTerm < 0);
+                      if (!mixed) return d.longTerm;
+                      return d.longTerm < 0 ? 0 : d.shortTerm + d.longTerm;
+                    }} name="Long Term" fill="#10b981" stackId="a" radius={[6, 6, 0, 0]}
+                    label={{ content: (props: any) => {
+                      const d = yoyData[props.index];
+                      if (!d) return null;
+                      const total = d.shortTerm + d.longTerm;
+                      if (total < 0) return null;
+                      const abs = Math.abs(total);
+                      const label = abs >= 1000 ? `+$${(abs / 1000).toFixed(1)}k` : `+$${abs.toFixed(0)}`;
+                      return <text x={props.x + props.width / 2} y={props.y - 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="#1e293b">{label}</text>;
+                    }}}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
         ) : (
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Holdings Distribution by Market Value</h3>
+          <div className="md:col-span-7 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Unrealized Gain by Ticker</h3>
             <div className="h-64">
-              {unrealizedPieData.length > 0 ? (
+              {unrealizedBarData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={unrealizedPieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {unrealizedPieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value: number) => `${value < 0 ? '-' : ''}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  <BarChart data={unrealizedBarData} margin={{ top: 20, right: 5, left: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="ticker" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => `$${val}`} />
+                    <Tooltip
+                      cursor={{ fill: '#f8fafc' }}
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0].payload;
+                        const fmt = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                        return (
+                          <div style={{ borderRadius: 12, background: '#fff', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '10px 14px', fontSize: 11 }}>
+                            <p style={{ fontWeight: 900, marginBottom: 6 }}>{d.ticker}</p>
+                            <p style={{ color: '#c084fc' }}>Short Term: {fmt(d.shortTerm)}</p>
+                            <p style={{ color: '#10b981' }}>Long Term: {fmt(d.longTerm)}</p>
+                            <p style={{ fontWeight: 700, marginTop: 4, borderTop: '1px solid #f1f5f9', paddingTop: 4 }}>Net: {fmt(d.total)}</p>
+                          </div>
+                        );
+                      }}
                     />
-                    <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
-                  </PieChart>
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '10px' }} />
+                    <Bar dataKey={(d) => {
+                        if (d.longTerm === 0) return d.shortTerm;
+                        if (d.shortTerm === 0) return 0;
+                        const mixed = (d.shortTerm < 0) !== (d.longTerm < 0);
+                        if (!mixed) return d.shortTerm;
+                        return d.shortTerm < 0 ? 0 : d.shortTerm + d.longTerm;
+                      }} name="Short Term" fill="#c084fc" stackId="a" radius={[0, 0, 0, 0]}
+                      shape={(props: any) => {
+                        const d = unrealizedBarData[props.index];
+                        if (!d) return <Rectangle {...props} />;
+                        const isSole = d.longTerm === 0;
+                        if (!isSole) return <Rectangle {...props} radius={[0, 0, 0, 0]} />;
+                        return <Rectangle {...props} radius={[6, 6, 0, 0]} />;
+                      }}
+                      label={{ content: (props: any) => {
+                        const d = unrealizedBarData[props.index];
+                        if (!d) return null;
+                        if (d.total >= 0) return null;
+                        const abs = Math.abs(d.total);
+                        const label = abs >= 1000 ? `-$${(abs / 1000).toFixed(1)}k` : `-$${abs.toFixed(0)}`;
+                        const topY = Math.min(props.y, props.y + props.height);
+                        return <text x={props.x + props.width / 2} y={topY - 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="#f43f5e">{label}</text>;
+                      }}}
+                    />
+                    <Bar dataKey={(d) => {
+                        if (d.shortTerm === 0) return d.longTerm;
+                        if (d.longTerm === 0) return 0;
+                        const mixed = (d.shortTerm < 0) !== (d.longTerm < 0);
+                        if (!mixed) return d.longTerm;
+                        return d.longTerm < 0 ? 0 : d.shortTerm + d.longTerm;
+                      }} name="Long Term" fill="#10b981" stackId="a" radius={[6, 6, 0, 0]}
+                      label={{ content: (props: any) => {
+                        const d = unrealizedBarData[props.index];
+                        if (!d) return null;
+                        if (d.total < 0) return null;
+                        const abs = Math.abs(d.total);
+                        const label = abs >= 1000 ? `+$${(abs / 1000).toFixed(1)}k` : `+$${abs.toFixed(0)}`;
+                        return <text x={props.x + props.width / 2} y={props.y - 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="#1e293b">{label}</text>;
+                      }}}
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium italic">
@@ -377,35 +481,33 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           </div>
         )}
 
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-center">
-          <div className="space-y-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Estimated Tax Liability</div>
-                <div className="text-3xl font-black text-slate-900">
-                  ${((stats.stTotal * (stTaxRate / 100)) + (stats.ltTotal * (ltTaxRate / 100))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
+        <div className="md:col-span-3 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-center">
+          <div className="space-y-4">
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estimated Tax Liability</div>
+
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-[8px] font-black text-emerald-600 uppercase mb-1">ST Rate %</label>
+                <input
+                  type="number"
+                  value={stTaxRate}
+                  onChange={(e) => setStTaxRate(Number(e.target.value))}
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
               </div>
-              <div className="flex gap-2">
-                <div className="relative">
-                  <label className="block text-[8px] font-black text-emerald-600 uppercase mb-1">ST Rate %</label>
-                  <input 
-                    type="number" 
-                    value={stTaxRate} 
-                    onChange={(e) => setStTaxRate(Number(e.target.value))}
-                    className="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
-                <div className="relative">
-                  <label className="block text-[8px] font-black text-indigo-600 uppercase mb-1">LT Rate %</label>
-                  <input 
-                    type="number" 
-                    value={ltTaxRate} 
-                    onChange={(e) => setLtTaxRate(Number(e.target.value))}
-                    className="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                </div>
+              <div className="flex-1">
+                <label className="block text-[8px] font-black text-indigo-600 uppercase mb-1">LT Rate %</label>
+                <input
+                  type="number"
+                  value={ltTaxRate}
+                  onChange={(e) => setLtTaxRate(Number(e.target.value))}
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
               </div>
+            </div>
+
+            <div className="text-3xl font-black text-slate-900">
+              ${((stats.stTotal * (stTaxRate / 100)) + (stats.ltTotal * (ltTaxRate / 100))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             
             <div className="text-[10px] text-slate-500 italic">
@@ -430,9 +532,9 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
         {/* Filter Card */}
-        <div className="lg:col-span-3 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-wrap items-center gap-6 z-30">
+        <div className="lg:col-span-7 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4 z-30">
           <div className="flex items-center space-x-2">
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -440,7 +542,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             <span className="text-sm font-bold text-slate-700 whitespace-nowrap">Filter {activeSubTab === 'realized' ? 'Tax Data' : 'Holdings'}</span>
           </div>
 
-<div className="flex flex-wrap items-center gap-4 flex-1">
+          <div className="flex flex-wrap items-center gap-4">
             {activeSubTab === 'realized' && (
               <div className="relative group">
                 <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter">Tax Year</label>
@@ -553,7 +655,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         </div>
 
         {/* Total Summary Card */}
-        <div className="bg-indigo-600 p-5 rounded-3xl shadow-lg shadow-indigo-600/20 text-white flex items-center justify-between">
+        <div className="lg:col-span-3 bg-indigo-600 p-5 rounded-3xl shadow-lg shadow-indigo-600/20 text-white flex items-center justify-between">
           <div>
             <div className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-1">
               Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain
@@ -573,30 +675,46 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       <div className="grid grid-cols-1 gap-8">
         {/* Short Term Section */}
         <div className="space-y-4">
-          <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
-            <div>
-              <h4 className="text-[11px] font-black text-emerald-700 uppercase tracking-widest">Short-Term Summary</h4>
-              <p className="text-[10px] text-emerald-600 font-medium">{activeSubTab === 'realized' ? 'Closed positions' : 'Open lots'} held ≤ 1 year</p>
+          <button
+            onClick={() => setStExpanded(v => !v)}
+            className="w-full p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between hover:bg-emerald-100/60 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <svg className={`w-4 h-4 text-emerald-600 transition-transform ${stExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+              </svg>
+              <div className="text-left">
+                <h4 className="text-[11px] font-black text-emerald-700 uppercase tracking-widest">Short-Term Summary</h4>
+                <p className="text-[10px] text-emerald-600 font-medium">{activeSubTab === 'realized' ? 'Closed positions' : 'Open lots'} held ≤ 1 year · {shortTerm.length} lots</p>
+              </div>
             </div>
             <div className={`text-xl font-black ${stats.stTotal >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
               <span className="font-medium">{stats.stTotal >= 0 ? '+' : '-'}</span>${Math.abs(stats.stTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-          </div>
-          <GainTableSection title="Short-Term" data={shortTerm} />
+          </button>
+          {stExpanded && <GainTableSection title="Short-Term" data={shortTerm} />}
         </div>
 
         {/* Long Term Section */}
         <div className="space-y-4">
-          <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center justify-between">
-            <div>
-              <h4 className="text-[11px] font-black text-indigo-700 uppercase tracking-widest">Long-Term Summary</h4>
-              <p className="text-[10px] text-indigo-600 font-medium">{activeSubTab === 'realized' ? 'Closed positions' : 'Open lots'} held {'>'} 1 year</p>
+          <button
+            onClick={() => setLtExpanded(v => !v)}
+            className="w-full p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center justify-between hover:bg-indigo-100/60 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <svg className={`w-4 h-4 text-indigo-600 transition-transform ${ltExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+              </svg>
+              <div className="text-left">
+                <h4 className="text-[11px] font-black text-indigo-700 uppercase tracking-widest">Long-Term Summary</h4>
+                <p className="text-[10px] text-indigo-600 font-medium">{activeSubTab === 'realized' ? 'Closed positions' : 'Open lots'} held {'>'} 1 year · {longTerm.length} lots</p>
+              </div>
             </div>
             <div className={`text-xl font-black ${stats.ltTotal >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>
               <span className="font-medium">{stats.ltTotal >= 0 ? '+' : '-'}</span>${Math.abs(stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-          </div>
-          <GainTableSection title="Long-Term" data={longTerm} />
+          </button>
+          {ltExpanded && <GainTableSection title="Long-Term" data={longTerm} />}
         </div>
       </div>
     </div>

@@ -163,6 +163,7 @@ const HoldingsView: React.FC<Props> = ({
       const totalCost = tickerHoldings.reduce((s, h) => s + h.totalCost, 0);
       const marketValue = tickerHoldings.reduce((s, h) => s + h.marketValue, 0);
       const currentPrice = tickerHoldings[0].currentPrice;
+      const assetType = tickerHoldings[0].assetType || 'Equity';
       const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
       const unrealizedGain = marketValue - totalCost;
       const r = realizedByTicker[ticker];
@@ -204,10 +205,10 @@ const HoldingsView: React.FC<Props> = ({
             }
             return lotSortDir === 'asc' ? diff : -diff;
           });
-          return { brokerage, totalQty: bQty, avgCost: bQty > 0 ? bCost / bQty : 0, totalCost: bCost, currentPrice, marketValue: bMarket, unrealizedGain: bMarket - bCost, lots };
+          return { brokerage, totalQty: bQty, avgCost: bQty > 0 ? bCost / bQty : 0, totalCost: bCost, currentPrice, marketValue: bMarket, unrealizedGain: bMarket - bCost, lots, assetType };
         });
 
-      return { ticker, totalQty, totalCost, avgCost, currentPrice, marketValue, unrealizedGain, afterTaxRealized, totalGain, brokerageGroups, ids: tickerHoldings.map(h => h.id) };
+      return { ticker, totalQty, totalCost, avgCost, currentPrice, assetType, marketValue, unrealizedGain, afterTaxRealized, totalGain, brokerageGroups, ids: tickerHoldings.map(h => h.id) };
     });
 
     if (sortKey && sortDirection) {
@@ -401,6 +402,7 @@ const HoldingsView: React.FC<Props> = ({
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Realized</th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Total Gain</th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Analyst Target</th>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Gain to Sell</th>
               </tr>
             </thead>
             <tbody>
@@ -466,6 +468,21 @@ const HoldingsView: React.FC<Props> = ({
                           );
                         })() : <div className="text-xs text-slate-300">—</div>}
                       </td>
+                      <td className="px-4 py-4 text-right">
+                        {analystMedian[row.ticker] ? (() => {
+                          const target = analystMedian[row.ticker];
+                          const isOpts = (row.assetType || '').toLowerCase() === 'options';
+                          // Options: avgCost = 100×premium/contract; equity: avgCost = cost/share
+                          const g = isOpts
+                            ? row.totalQty * (target * 100 - row.avgCost)
+                            : row.totalQty * (target - row.avgCost);
+                          return (
+                            <div className={`text-sm font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {g >= 0 ? '+' : '-'}${Math.abs(g).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          );
+                        })() : <div className="text-xs text-slate-300">—</div>}
+                      </td>
                     </tr>
 
                     {/* Level 2 — Brokerage rows */}
@@ -503,7 +520,34 @@ const HoldingsView: React.FC<Props> = ({
                               <div>{bg.unrealizedGain >= 0 ? '+' : '-'}${Math.abs(bg.unrealizedGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                               {bg.totalCost > 0 && <div className="text-[10px] font-bold">{bg.unrealizedGain >= 0 ? '+' : ''}{(bg.unrealizedGain / bg.totalCost * 100).toFixed(1)}%</div>}
                             </td>
-                            <td></td><td></td><td></td>
+                            <td></td>
+                            <td></td>
+                            <td className="px-4 py-3 text-right">
+                              {analystMedian[row.ticker] ? (() => {
+                                const target = analystMedian[row.ticker];
+                                const pct = bg.currentPrice > 0 ? ((target - bg.currentPrice) / bg.currentPrice) * 100 : 0;
+                                return (
+                                  <div>
+                                    <div className="text-[11px] font-bold text-indigo-600">${target.toFixed(2)}</div>
+                                    <div className={`text-[10px] font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</div>
+                                  </div>
+                                );
+                              })() : <div className="text-[10px] text-slate-300">—</div>}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {analystMedian[row.ticker] ? (() => {
+                                const target = analystMedian[row.ticker];
+                                const isOpts = (row.assetType || '').toLowerCase() === 'options';
+                                const g = isOpts
+                                  ? bg.totalQty * (target * 100 - bg.avgCost)
+                                  : bg.totalQty * (target - bg.avgCost);
+                                return (
+                                  <div className={`text-[11px] font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {g >= 0 ? '+' : '-'}${Math.abs(g).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </div>
+                                );
+                              })() : <div className="text-[10px] text-slate-300">—</div>}
+                            </td>
                           </tr>
 
                           {/* Level 3 sub-header */}
@@ -530,7 +574,9 @@ const HoldingsView: React.FC<Props> = ({
                                 {th('marketValue', 'Market Value')}
                                 {th('gain', 'Unrealized')}
                                 <td className="px-4 py-1.5 text-[9px] font-black text-indigo-400 uppercase tracking-widest whitespace-nowrap text-right">Term</td>
-                                <td></td><td></td>
+                                <td></td>
+                                <td className="px-4 py-1.5 text-[9px] font-black text-indigo-400 uppercase tracking-widest whitespace-nowrap text-right">Target</td>
+                                <td className="px-4 py-1.5 text-[9px] font-black text-indigo-400 uppercase tracking-widest whitespace-nowrap text-right">Gain to Sell</td>
                               </tr>
                             );
                           })()}
@@ -561,7 +607,27 @@ const HoldingsView: React.FC<Props> = ({
                                     {lot.isLongTerm ? 'LT' : 'ST'}
                                   </span>
                                 </td>
-                                <td></td><td></td>
+                                <td></td>
+                                <td className="px-4 py-2 text-right">
+                                  {analystMedian[row.ticker] ? (
+                                    <div className="text-[11px] font-bold text-indigo-600">${analystMedian[row.ticker].toFixed(2)}</div>
+                                  ) : <div className="text-[10px] text-slate-300">—</div>}
+                                </td>
+                                <td className="px-4 py-2 text-right">
+                                  {analystMedian[row.ticker] ? (() => {
+                                    const target = analystMedian[row.ticker];
+                                    const isOpts = (lot.assetType || '').toLowerCase() === 'options';
+                                    // lot.buyPrice is always per-share; multiply by 100 for options contracts
+                                    const g = isOpts
+                                      ? lot.quantity * 100 * (target - lot.buyPrice)
+                                      : lot.quantity * (target - lot.buyPrice);
+                                    return (
+                                      <div className={`text-[11px] font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                        {g >= 0 ? '+' : '-'}${Math.abs(g).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </div>
+                                    );
+                                  })() : <div className="text-[10px] text-slate-300">—</div>}
+                                </td>
                               </tr>
                             );
                           })}
