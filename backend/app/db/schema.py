@@ -159,6 +159,19 @@ class SnaptradeIgnoredAccount(Base):
     account_id = Column(String, unique=True, nullable=False)
 
 
+class StockSplit(Base):
+    """Stock split events used to adjust historical buy lot quantities and prices."""
+    __tablename__ = "stock_splits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticker = Column(String, nullable=False, index=True)
+    split_date = Column(DateTime, nullable=False)
+    numerator = Column(Float, nullable=False)    # e.g. 20 for a 20:1 split
+    denominator = Column(Float, nullable=False)  # e.g.  1 for a 20:1 split
+
+    __table_args__ = (UniqueConstraint("ticker", "split_date", name="uq_stock_split"),)
+
+
 class LotAssignment(Base):
     """Explicit mapping of a sell transaction to a specific buy transaction lot."""
     __tablename__ = "lot_assignments"
