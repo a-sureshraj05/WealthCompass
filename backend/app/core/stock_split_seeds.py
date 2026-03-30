@@ -41,7 +41,9 @@ SEED_SPLITS = [
     # No splits yet
 
     # Netflix
-    {"ticker": "NFLX", "split_date": datetime(2015, 7, 15), "numerator": 7,  "denominator": 1},
+    {"ticker": "NFLX", "split_date": datetime(2025, 11, 17), "numerator": 10, "denominator": 1},
+    {"ticker": "NFLX", "split_date": datetime(2015, 7, 15),  "numerator": 7,  "denominator": 1},
+    {"ticker": "NFLX", "split_date": datetime(2004, 2, 12),  "numerator": 2,  "denominator": 1},
 
     # Shopify
     {"ticker": "SHOP", "split_date": datetime(2022, 6, 29), "numerator": 10, "denominator": 1},
