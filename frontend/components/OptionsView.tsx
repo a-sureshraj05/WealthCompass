@@ -43,7 +43,12 @@ interface TickerCalc {
   isCovered: boolean;
 }
 
-const OptionsView: React.FC = () => {
+interface OptionsViewProps {
+  selectedBrokerages?: string[];
+  selectedTickers?: string[];
+}
+
+const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [] }) => {
   const [positions, setPositions] = useState<OptionsPosition[]>([]);
   const [calculator, setCalculator] = useState<OptionsCalculator | null>(null);
   const [pendingRetain, setPendingRetain] = useState<Record<number, string>>({});
@@ -120,9 +125,20 @@ const OptionsView: React.FC = () => {
 
   const taxRate = Math.max(0, Math.min(100, parseFloat(taxRateInput) || 0)) / 100;
 
+  // Apply brokerage + ticker filters
+  const filteredPositions = positions.filter(p => {
+    const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(p.brokerage);
+    const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(p.ticker);
+    return matchesBrokerage && matchesTicker;
+  });
+
+  if (filteredPositions.length === 0) return (
+    <div className="p-8 text-center text-slate-400 text-sm">No options positions match the selected filters.</div>
+  );
+
   // Group positions by ticker
   const grouped: Record<string, OptionsPosition[]> = {};
-  positions.forEach(p => {
+  filteredPositions.forEach(p => {
     grouped[p.ticker] = grouped[p.ticker] || [];
     grouped[p.ticker].push(p);
   });

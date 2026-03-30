@@ -93,7 +93,7 @@ const DashboardView: React.FC<Props> = ({
         />
         <div className="space-y-2">
           <h3 className="text-lg font-bold text-slate-900">Options Calculator</h3>
-          <OptionsView />
+          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} />
         </div>
       </div>
     );

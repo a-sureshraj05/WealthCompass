@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from backend.app.db.schema import UnrealizedGain
 from backend.app.core.stock_fetcher import get_stock_price, get_stock_quote
 from backend.app.core.utils.ticker import underlying_ticker
+from backend.app.core.stock_split_utils import build_split_map, apply_splits_to_lot
 
 _OPTIONS_MULTIPLIER = 100  # 1 contract = 100 underlying shares
 
@@ -28,6 +29,11 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
     # prev_close_cache: underlying equity ticker → previous close price
     prev_close_cache: Dict[str, float] = {}
 
+    # Pre-fetch splits for all equity tickers in open lots
+    equity_tickers = list({tk for (_, tk), lots in open_lots_by_ticker.items()
+                           if lots and not lots[0].get("option_symbol")})
+    split_map = build_split_map(db, equity_tickers)
+
     for (brokerage, ticker), open_lots in open_lots_by_ticker.items():
         if not open_lots:
             continue
@@ -49,7 +55,14 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
         if not option_symbol and prev_close is not None:
             prev_close_cache[ticker] = prev_close
 
-        for lot in open_lots:
+        for raw_lot in open_lots:
+            # Apply stock splits that occurred after this buy date (equity only)
+            if not option_symbol and ticker in split_map:
+                splits_after = [s for s in split_map[ticker] if s.split_date > raw_lot["date"]]
+                lot = apply_splits_to_lot(raw_lot, splits_after)
+            else:
+                lot = raw_lot
+
             # Ensure lot quantity is positive before processing
             if lot["quantity"] <= 0:
                 continue
@@ -60,7 +73,8 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
 
             try:
                 diff_days = (today - buy_date_dt).days
-                is_long_term = diff_days > 365
+                is_options = (lot.get("assetType") or "").lower() == "options"
+                is_long_term = False if is_options else diff_days > 365
 
                 m = _multiplier(lot.get("assetType"))
                 # For equity, use cost_per_unit as the effective buy price so that

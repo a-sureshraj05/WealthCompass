@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from backend.app.db.schema import LotAssignment, RealizedGain, Transaction as DBTransaction
 from backend.app.core.utils.ticker import underlying_ticker
 from backend.app.core.transaction_actions import BUY_ACTIONS, SELL_ACTIONS, OPTION_EXPIRY_ACTIONS, OPTION_EXERCISE_ACTIONS
+from backend.app.core.stock_split_utils import build_split_map, apply_splits_to_lot
 
 
 def delete(db: Session, brokerage_name: str = None):
@@ -31,6 +32,10 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
 
     realized_gains_list = []
     open_lots_by_ticker: Dict[str, List[Dict[str, Any]]] = {}
+
+    # Pre-fetch split data for all equity tickers (options are not split-adjusted)
+    equity_tickers = list({t.ticker for t in transactions if not getattr(t, "option_symbol", None)})
+    split_map = build_split_map(db, equity_tickers)
 
     # Group by (brokerage, ticker, option_symbol) so equity and each unique option
     # contract are matched separately. Equity transactions have option_symbol = None/"".
@@ -90,12 +95,16 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
         # Each lot tracks its transaction_id so explicit assignments can find it
         buy_lots_queue: List[Dict[str, Any]] = []
 
-        def _record_gain(lot, sell_txn, qty):
-            is_long_term = (sell_txn.date - lot["date"]).days > 365
+        def _record_gain(lot, sell_txn, qty, adj_sell_cpu=None, adj_sell_price=None):
+            is_options = (lot.get("assetType") or "").lower() == "options"
+            is_long_term = False if is_options else (sell_txn.date - lot["date"]).days > 365
             # Use cost_per_unit derived from the source totalCost — this already reflects
             # the options multiplier (100 shares/contract) as reported by the brokerage.
             buy_cost_per_unit = lot["cost_per_unit"]
-            sell_cost_per_unit = sell_txn.totalCost / sell_txn.quantity if sell_txn.quantity else sell_txn.price
+            sell_cost_per_unit = adj_sell_cpu if adj_sell_cpu is not None else (
+                sell_txn.totalCost / sell_txn.quantity if sell_txn.quantity else sell_txn.price
+            )
+            display_sell_price = adj_sell_price if adj_sell_price is not None else sell_txn.price
             realized_gains_list.append(RealizedGain(
                 brokerage=sell_txn.brokerage,
                 ticker=underlying_ticker(ticker),
@@ -103,7 +112,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                 sellDate=sell_txn.date,
                 quantity=qty,
                 buyPrice=lot["price"],
-                sellPrice=sell_txn.price,
+                sellPrice=display_sell_price,
                 gain=qty * (sell_cost_per_unit - buy_cost_per_unit),
                 isLongTerm=is_long_term,
                 assetType=lot.get("assetType"),
@@ -119,7 +128,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                 if not option_symbol:
                     ex_key = (t.brokerage, t.ticker, t.date.date())
                     cost_per_unit += exercise_cost_adjustments.get(ex_key, 0.0)
-                buy_lots_queue.append({
+                lot = {
                     "transaction_id": t.id,
                     "date": t.date,
                     "quantity": t.quantity,
@@ -129,7 +138,12 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                     "ticker": t.ticker,
                     "assetType": t.assetType,
                     "option_symbol": getattr(t, "option_symbol", None),
-                })
+                }
+                # Apply stock splits that occurred after this buy date (equity only)
+                if not option_symbol and t.ticker in split_map:
+                    splits_after = [s for s in split_map[t.ticker] if s.split_date > t.date]
+                    lot = apply_splits_to_lot(lot, splits_after)
+                buy_lots_queue.append(lot)
 
             elif t.action.upper() in OPTION_EXPIRY_ACTIONS:
                 # Option expired worthless — close all open lots as a realized loss.
@@ -137,7 +151,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                 while buy_lots_queue:
                     lot = buy_lots_queue[0]
                     qty = lot["quantity"]
-                    is_long_term = (t.date - lot["date"]).days > 365
+                    is_long_term = False  # options never qualify as long-term
                     realized_gains_list.append(RealizedGain(
                         brokerage=lot["brokerage"],
                         ticker=underlying_ticker(ticker),
@@ -167,7 +181,22 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                         buy_lots_queue.pop(0)
 
             elif t.action.upper() in SELL_ACTIONS:
-                remaining = t.quantity
+                # For equity, normalize the sell transaction to post-split terms.
+                # Splits that occurred AFTER the sell date mean the sell was pre-split,
+                # so divide price by the cumulative ratio and multiply quantity by it.
+                sell_ratio = 1.0
+                if not option_symbol and ticker in split_map:
+                    for s in split_map[ticker]:
+                        if s.split_date > t.date:
+                            sell_ratio *= s.numerator / s.denominator
+
+                raw_sell_qty = t.quantity
+                adj_sell_qty = raw_sell_qty * sell_ratio
+                raw_sell_cpu = (t.totalCost / t.quantity) if t.quantity else t.price
+                adj_sell_cpu = raw_sell_cpu / sell_ratio if sell_ratio != 1.0 else None
+                adj_sell_price = t.price / sell_ratio if sell_ratio != 1.0 else None
+
+                remaining = adj_sell_qty
 
                 # Step 1: consume explicit lot assignments first
                 for assignment in all_assignments.get(t.id, []):
@@ -180,8 +209,10 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                     if not lot:
                         print(f"[realized_gain_loader] WARNING: lot assignment references missing/depleted buy {assignment.buy_transaction_id} for sell {t.id}")
                         continue
-                    qty = min(assignment.quantity, lot["quantity"], remaining)
-                    _record_gain(lot, t, qty)
+                    # assignment.quantity is in original (pre-split) terms — scale it
+                    adj_assignment_qty = assignment.quantity * sell_ratio
+                    qty = min(adj_assignment_qty, lot["quantity"], remaining)
+                    _record_gain(lot, t, qty, adj_sell_cpu=adj_sell_cpu, adj_sell_price=adj_sell_price)
                     lot["quantity"] -= qty
                     remaining -= qty
                     if lot["quantity"] <= 0:
@@ -191,7 +222,7 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                 while remaining > 0 and buy_lots_queue:
                     lot = buy_lots_queue[0]
                     qty = min(remaining, lot["quantity"])
-                    _record_gain(lot, t, qty)
+                    _record_gain(lot, t, qty, adj_sell_cpu=adj_sell_cpu, adj_sell_price=adj_sell_price)
                     lot["quantity"] -= qty
                     remaining -= qty
                     if lot["quantity"] <= 0:

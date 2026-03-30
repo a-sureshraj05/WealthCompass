@@ -11,7 +11,7 @@ from fastapi import FastAPI, Depends
 from backend.app.core.database import engine
 from backend.app.db.schema import Base
 
-from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options
+from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits
 from .api.auth import get_current_user
 
 app = FastAPI()
@@ -87,6 +87,20 @@ def startup_event():
                 conn.execute(text("ALTER TABLE snaptrade_transactions ADD COLUMN option_symbol TEXT"))
                 conn.commit()
 
+    # Seed stock_splits with well-known historical splits (safe to run every startup — skips duplicates)
+    from backend.app.core.stock_split_seeds import SEED_SPLITS
+    from backend.app.db.schema import StockSplit
+    from backend.app.core.database import SessionLocal
+    _seed_db = SessionLocal()
+    try:
+        for s in SEED_SPLITS:
+            exists = _seed_db.query(StockSplit).filter_by(ticker=s["ticker"], split_date=s["split_date"]).first()
+            if not exists:
+                _seed_db.add(StockSplit(**s))
+        _seed_db.commit()
+    finally:
+        _seed_db.close()
+
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(transactions.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
@@ -95,6 +109,7 @@ app.include_router(brokerage.router, prefix="/api/v1/brokerage", dependencies=[D
 app.include_router(analyst.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(lot_assignments.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(options.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(splits.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")
