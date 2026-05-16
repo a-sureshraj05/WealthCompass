@@ -33,10 +33,10 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab, collapsed, setColla
         className={`border-b border-[#D2D2D7] hover:bg-[#F5F5F7] transition-colors ${collapsed ? 'p-4 flex justify-center items-center h-16' : 'px-6 py-4'}`}
       >
         {collapsed ? (
-          <span className="text-[#1A3A6B] font-black text-lg">W</span>
+          <span className="text-[#0F52BA] font-black text-lg">W</span>
         ) : (
           <div className="text-left">
-            <span className="text-lg font-bold text-[#1A3A6B] block">WealthCompass</span>
+            <span className="text-lg font-bold text-[#0F52BA] block">WealthCompass</span>
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.1em]">Wealth Management</span>
           </div>
         )}
@@ -51,7 +51,7 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab, collapsed, setColla
             title={collapsed ? item.label : undefined}
             className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-all duration-150 ${collapsed ? 'justify-center' : 'space-x-3'} ${
               activeTab === item.id
-                ? 'border-l-4 border-[#1A3A6B] bg-[#1A3A6B]/5 text-[#1A3A6B] font-semibold rounded-l-none'
+                ? 'border-l-4 border-[#0F52BA] bg-[#0F52BA]/5 text-[#0F52BA] font-semibold rounded-l-none'
                 : 'text-slate-600 hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
             }`}
           >
@@ -68,7 +68,7 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab, collapsed, setColla
         <div className="px-4 pb-4">
           <button
             onClick={() => setActiveTab('importData')}
-            className="w-full py-2.5 bg-[#1A3A6B] text-white text-sm font-semibold rounded-lg hover:bg-[#122C52] transition-colors"
+            className="w-full py-2.5 bg-[#0F52BA] text-white text-sm font-semibold rounded-lg hover:bg-[#0A3E8F] transition-colors"
           >
             Connect More
           </button>

@@ -7,7 +7,7 @@ interface Props {
   holdings: StockHolding[];
 }
 
-const COLORS = ['#1A3A6B', '#2E6DB4', '#5AC8FA', '#34C759', '#FF9500', '#FF2D55', '#6E6E73'];
+const COLORS = ['#0F52BA', '#2E6DB4', '#5AC8FA', '#34C759', '#FF9500', '#FF2D55', '#6E6E73'];
 
 const SectorTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
@@ -18,7 +18,7 @@ const SectorTooltip = ({ active, payload }: any) => {
       <p className="text-slate-500 mb-2">${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
       <div className="flex flex-wrap gap-1">
         {tickers.map((t: string) => (
-          <span key={t} className="bg-[#E5EDF7] text-[#122C52] font-semibold px-1.5 py-0.5 rounded">{t}</span>
+          <span key={t} className="bg-[#E6EEFB] text-[#0A3E8F] font-semibold px-1.5 py-0.5 rounded">{t}</span>
         ))}
       </div>
     </div>

@@ -315,7 +315,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
   const SortIndicator = ({ column }: { column: SortKey }) => {
     if (sortKey !== column) return <svg className="w-3 h-3 ml-1 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
     return (
-      <span className="ml-1 text-[#1A3A6B]">
+      <span className="ml-1 text-[#0F52BA]">
         {sortDirection === 'asc' ? (
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
         ) : (
@@ -339,10 +339,10 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
           <div className="flex flex-wrap items-center gap-4 flex-1">
             {/* Brokerage Filter */}
             <div className="relative" ref={brokerageMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#1A3A6B] uppercase tracking-tighter z-10">Brokerage</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Brokerage</label>
               <button
                 onClick={() => setIsBrokerageMenuOpen(!isBrokerageMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#1A3A6B] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedBrokerages.length === 0 ? 'All Brokers' : 
@@ -359,7 +359,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Brokerages</span>
                     {selectedBrokerages.length > 0 && (
-                      <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#1A3A6B] hover:text-[#122C52] px-2">Clear</button>
+                      <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#0F52BA] hover:text-[#0A3E8F] px-2">Clear</button>
                     )}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
@@ -367,7 +367,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                       <label key={broker} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
                         <input
                           type="checkbox"
-                          className="w-4 h-4 rounded border-slate-300 text-[#1A3A6B] focus:ring-[#1A3A6B]"
+                          className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]"
                           checked={selectedBrokerages.includes(broker)}
                           onChange={() => toggleBrokerage(broker)}
                         />
@@ -381,10 +381,10 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
 
             {/* Asset Type Filter */}
             <div className="relative" ref={assetTypeMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#1A3A6B] uppercase tracking-tighter z-10">Asset Type</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Asset Type</label>
               <button
                 onClick={() => setIsAssetTypeMenuOpen(!isAssetTypeMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#1A3A6B] outline-none cursor-pointer min-w-[130px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[130px] text-left"
               >
                 <span className="truncate max-w-[90px]">
                   {selectedAssetTypes.length === 0 ? 'All Types' : 
@@ -401,7 +401,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Asset Types</span>
                     {selectedAssetTypes.length > 0 && (
-                      <button onClick={() => setSelectedAssetTypes([])} className="text-[10px] font-bold text-[#1A3A6B] hover:text-[#122C52] px-2">Clear</button>
+                      <button onClick={() => setSelectedAssetTypes([])} className="text-[10px] font-bold text-[#0F52BA] hover:text-[#0A3E8F] px-2">Clear</button>
                     )}
                   </div>
                   <div className="p-2 space-y-1">
@@ -409,7 +409,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                       <label key={type} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
                         <input
                           type="checkbox"
-                          className="w-4 h-4 rounded border-slate-300 text-[#1A3A6B] focus:ring-[#1A3A6B]"
+                          className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]"
                           checked={selectedAssetTypes.includes(type)}
                           onChange={() => toggleAssetType(type)}
                         />
@@ -423,10 +423,10 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
 
             {/* Ticker Filter */}
             <div className="relative" ref={tickerMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#1A3A6B] uppercase tracking-tighter z-10">Ticker</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Ticker</label>
               <button
                 onClick={() => setIsTickerMenuOpen(!isTickerMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#1A3A6B] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedTickers.length === 0 ? 'All Tickers' : 
@@ -443,7 +443,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Tickers</span>
                     {selectedTickers.length > 0 && (
-                      <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#1A3A6B] hover:text-[#122C52] px-2">Clear</button>
+                      <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#0F52BA] hover:text-[#0A3E8F] px-2">Clear</button>
                     )}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
@@ -451,7 +451,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                       <label key={ticker} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
                         <input
                           type="checkbox"
-                          className="w-4 h-4 rounded border-slate-300 text-[#1A3A6B] focus:ring-[#1A3A6B]"
+                          className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]"
                           checked={selectedTickers.includes(ticker)}
                           onChange={() => toggleTicker(ticker)}
                         />
@@ -465,11 +465,11 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
 
             <div className="flex items-center gap-2">
               <div className="relative group">
-                <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#1A3A6B] uppercase tracking-tighter">Timeframe</label>
+                <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter">Timeframe</label>
                 <select 
                   value={dateRangeType}
                   onChange={(e) => setDateRangeType(e.target.value as DateRangeType)}
-                  className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#1A3A6B] outline-none cursor-pointer min-w-[150px]"
+                  className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[150px]"
                 >
                   <option value="all">All Time</option>
                   <option value="30d">Last 30 Days</option>
@@ -488,14 +488,14 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-[#1A3A6B] outline-none"
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-[#0F52BA] outline-none"
                   />
                   <span className="text-slate-300 text-xs font-bold">to</span>
                   <input 
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-[#1A3A6B] outline-none"
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-[#0F52BA] outline-none"
                   />
                 </div>
               )}
@@ -504,7 +504,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
 
           {/* Visibility Filter */}
           <div className="relative">
-            <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#1A3A6B] uppercase tracking-tighter z-10">Show</label>
+            <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Show</label>
             <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
               {(['active', 'hidden', 'all'] as VisibilityFilter[]).map((v) => (
                 <button
@@ -512,8 +512,8 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   onClick={() => setVisibilityFilter(v)}
                   className={`px-3 py-2 text-xs font-bold capitalize transition-colors ${
                     visibilityFilter === v
-                      ? 'bg-[#1A3A6B] text-white'
-                      : 'text-slate-500 hover:text-[#1A3A6B]'
+                      ? 'bg-[#0F52BA] text-white'
+                      : 'text-slate-500 hover:text-[#0F52BA]'
                   }`}
                 >
                   {v}
@@ -524,7 +524,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
 
           <button
             onClick={resetFilters}
-            className="text-xs font-bold text-slate-400 hover:text-[#1A3A6B] transition-colors uppercase tracking-widest px-2"
+            className="text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2"
           >
             Reset
           </button>
@@ -542,7 +542,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
             </div>
             <h4 className="text-slate-900 font-bold">No results found</h4>
             <p className="text-sm text-slate-400">No transactions match these criteria.</p>
-            <button onClick={resetFilters} className="text-[#1A3A6B] text-sm font-bold hover:underline">Clear all filters</button>
+            <button onClick={resetFilters} className="text-[#0F52BA] text-sm font-bold hover:underline">Clear all filters</button>
           </div>
         </div>
       ) : (
@@ -556,7 +556,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </svg>
                 </th>
                 <th
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors group/header"
+                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
                   onClick={() => handleSort('date')}
                 >
                   <div className="flex items-center">
@@ -564,7 +564,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors group/header"
+                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
                   onClick={() => handleSort('brokerage')}
                 >
                   <div className="flex items-center">
@@ -572,7 +572,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors group/header"
+                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
                   onClick={() => handleSort('assetType')}
                 >
                   <div className="flex items-center">
@@ -580,7 +580,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors group/header"
+                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
                   onClick={() => handleSort('ticker')}
                 >
                   <div className="flex items-center">
@@ -588,7 +588,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors group/header"
+                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
                   onClick={() => handleSort('action')}
                 >
                   <div className="flex items-center">
@@ -596,7 +596,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors group/header text-right"
+                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right"
                   onClick={() => handleSort('quantity')}
                 >
                   <div className="flex items-center justify-end">
@@ -604,7 +604,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors group/header text-right"
+                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right"
                   onClick={() => handleSort('price')}
                 >
                   <div className="flex items-center justify-end">
@@ -612,7 +612,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors group/header text-right"
+                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right"
                   onClick={() => handleSort('amount')}
                 >
                   <div className="flex items-center justify-end">
@@ -625,7 +625,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
             <tbody className="divide-y divide-[#D2D2D7]">
               {filteredTransactions.map((t) => {
                 const isEditing = editingId === t.id;
-                const inputCls = "w-full px-2 py-1 text-xs border border-[#1A3A6B] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#1A3A6B]";
+                const inputCls = "w-full px-2 py-1 text-xs border border-[#0F52BA] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0F52BA]";
 
                 const startEdit = () => {
                   setEditingId(t.id);
@@ -652,7 +652,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                 };
 
                 return (
-                  <tr key={`${t.brokerage}-${t.id}`} className={`transition-colors group ${isEditing ? 'bg-[#1A3A6B]/5' : 'hover:bg-[#F5F5F7]'} ${t.is_deleted && !isEditing ? 'opacity-40' : ''}`}>
+                  <tr key={`${t.brokerage}-${t.id}`} className={`transition-colors group ${isEditing ? 'bg-[#0F52BA]/5' : 'hover:bg-[#F5F5F7]'} ${t.is_deleted && !isEditing ? 'opacity-40' : ''}`}>
                     {/* Hide checkbox */}
                     <td className="px-4 py-4 text-center">
                       {!isEditing && (
@@ -683,7 +683,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                           onChange={e => setEditDraft(d => ({ ...d, brokerage: e.target.value }))} />
                       ) : (
                         <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                          t.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#1A3A6B] text-white' :
+                          t.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
                           t.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
                           'bg-[#E5E5EA] text-[#6E6E73]'
                         }`}>{t.brokerage}</span>
@@ -762,7 +762,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     <td className="px-6 py-4 text-right">
                       {isEditing ? (
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={saveEdit} className="p-1.5 text-white bg-[#1A3A6B] hover:bg-[#122C52] rounded-lg transition-all" title="Save">
+                          <button onClick={saveEdit} className="p-1.5 text-white bg-[#0F52BA] hover:bg-[#0A3E8F] rounded-lg transition-all" title="Save">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                           </button>
                           <button onClick={cancelEdit} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg transition-all" title="Cancel">
@@ -791,7 +791,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                             className={`p-1.5 rounded-lg transition-all ${
                               t.is_override
                                 ? 'text-amber-500 bg-amber-50 hover:bg-amber-100'
-                                : 'text-slate-200 hover:text-[#1A3A6B] hover:bg-[#F5F5F7]'
+                                : 'text-slate-200 hover:text-[#0F52BA] hover:bg-[#F5F5F7]'
                             }`}
                             title={t.is_override ? 'Edited — click to edit again' : 'Edit transaction'}
                           >

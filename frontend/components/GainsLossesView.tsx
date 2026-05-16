@@ -211,7 +211,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   const SortIndicator = ({ column }: { column: GainSortKey }) => {
     if (sortKey !== column) return <svg className="w-3 h-3 ml-1 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
     return (
-      <span className="ml-1 text-[#1A3A6B]">
+      <span className="ml-1 text-[#0F52BA]">
         {sortDirection === 'asc' ? (
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
         ) : (
@@ -236,33 +236,33 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           <table className="w-full text-left min-w-[900px]">
             <thead>
               <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors" onClick={() => handleSort('ticker')}>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors" onClick={() => handleSort('ticker')}>
                   <div className="flex items-center">Ticker <SortIndicator column="ticker" /></div>
                 </th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors" onClick={() => handleSort('assetType')}>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors" onClick={() => handleSort('assetType')}>
                   <div className="flex items-center">Asset Type <SortIndicator column="assetType" /></div>
                 </th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors" onClick={() => handleSort('brokerage')}>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors" onClick={() => handleSort('brokerage')}>
                   <div className="flex items-center">Brokerage <SortIndicator column="brokerage" /></div>
                 </th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors" onClick={() => handleSort('buyDate')}>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors" onClick={() => handleSort('buyDate')}>
                   <div className="flex items-center">Bought <SortIndicator column="buyDate" /></div>
                 </th>
                 {activeSubTab === 'realized' && (
-                  <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors" onClick={() => handleSort('sellDate')}>
+                  <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors" onClick={() => handleSort('sellDate')}>
                     <div className="flex items-center">Sold <SortIndicator column="sellDate" /></div>
                   </th>
                 )}
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors text-right" onClick={() => handleSort('quantity')}>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors text-right" onClick={() => handleSort('quantity')}>
                   <div className="flex items-center justify-end">Qty <SortIndicator column="quantity" /></div>
                 </th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors text-right" onClick={() => handleSort('buyPrice')}>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors text-right" onClick={() => handleSort('buyPrice')}>
                   <div className="flex items-center justify-end">Cost/Sh <SortIndicator column="buyPrice" /></div>
                 </th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors text-right" onClick={() => handleSort('price')}>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors text-right" onClick={() => handleSort('price')}>
                   <div className="flex items-center justify-end">{activeSubTab === 'realized' ? 'Sold/Sh' : 'Mkt/Sh'} <SortIndicator column="price" /></div>
                 </th>
-                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#1A3A6B] transition-colors text-right" onClick={() => handleSort('gain')}>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors text-right" onClick={() => handleSort('gain')}>
                   <div className="flex items-center justify-end">Total Gain <SortIndicator column="gain" /></div>
                 </th>
               </tr>
@@ -284,7 +284,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                      g.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#1A3A6B] text-white' :
+                      g.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
                       g.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
                       'bg-[#E5E5EA] text-[#6E6E73]'
                     }`}>{g.brokerage}</span>
@@ -313,7 +313,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         <button
           onClick={() => setActiveSubTab('realized')}
           className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
-            activeSubTab === 'realized' ? 'bg-white text-[#1A3A6B] shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            activeSubTab === 'realized' ? 'bg-white text-[#0F52BA] shadow-sm' : 'text-slate-500 hover:text-slate-700'
           }`}
         >
           Realized
@@ -321,7 +321,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         <button
           onClick={() => setActiveSubTab('unrealized')}
           className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
-            activeSubTab === 'unrealized' ? 'bg-white text-[#1A3A6B] shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            activeSubTab === 'unrealized' ? 'bg-white text-[#0F52BA] shadow-sm' : 'text-slate-500 hover:text-slate-700'
           }`}
         >
           Unrealized
@@ -496,12 +496,12 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-[8px] font-black text-[#1A3A6B] uppercase mb-1">LT Rate %</label>
+                <label className="block text-[8px] font-black text-[#0F52BA] uppercase mb-1">LT Rate %</label>
                 <input
                   type="number"
                   value={ltTaxRate}
                   onChange={(e) => setLtTaxRate(Number(e.target.value))}
-                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-[#1A3A6B] outline-none"
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none"
                 />
               </div>
             </div>
@@ -517,7 +517,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
                 <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Efficiency</div>
-                <div className="text-lg font-black text-[#1A3A6B]">
+                <div className="text-lg font-black text-[#0F52BA]">
                   {stats.stTotal + stats.ltTotal !== 0 ? ((stats.ltTotal / (stats.stTotal + stats.ltTotal)) * 100).toFixed(2) : '0.00'}%
                 </div>
                 <div className="text-[9px] text-slate-500 font-bold uppercase mt-1">Long Term Share</div>
@@ -545,11 +545,11 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           <div className="flex flex-wrap items-center gap-4">
             {activeSubTab === 'realized' && (
               <div className="relative group">
-                <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#1A3A6B] uppercase tracking-tighter">Tax Year</label>
+                <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter">Tax Year</label>
                 <select 
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
-                  className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#1A3A6B] outline-none cursor-pointer min-w-[120px]"
+                  className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[120px]"
                 >
                   {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
@@ -560,10 +560,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             )}
 
             <div className="relative" ref={brokerageMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#1A3A6B] uppercase tracking-tighter z-10">Brokerage</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Brokerage</label>
               <button
                 onClick={() => setIsBrokerageMenuOpen(!isBrokerageMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#1A3A6B] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedBrokerages.length === 0 ? 'All Brokers' : selectedBrokerages.length === 1 ? selectedBrokerages[0] : `${selectedBrokerages.length} Brokers`}
@@ -576,12 +576,12 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Brokerages</span>
-                    {selectedBrokerages.length > 0 && <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#1A3A6B] px-2">Clear</button>}
+                    {selectedBrokerages.length > 0 && <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {uniqueBrokerages.map(broker => (
                       <label key={broker} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#1A3A6B] focus:ring-[#1A3A6B]" checked={selectedBrokerages.includes(broker)} onChange={() => toggleBrokerage(broker)} />
+                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedBrokerages.includes(broker)} onChange={() => toggleBrokerage(broker)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{broker}</span>
                       </label>
                     ))}
@@ -591,10 +591,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             </div>
 
             <div className="relative" ref={assetTypeMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#1A3A6B] uppercase tracking-tighter z-10">Asset Type</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Asset Type</label>
               <button
                 onClick={() => setIsAssetTypeMenuOpen(!isAssetTypeMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#1A3A6B] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedAssetTypes.length === 0 ? 'All Types' : selectedAssetTypes.length === 1 ? selectedAssetTypes[0] : `${selectedAssetTypes.length} Types`}
@@ -607,12 +607,12 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Asset Types</span>
-                    {selectedAssetTypes.length > 0 && <button onClick={() => setSelectedAssetTypes([])} className="text-[10px] font-bold text-[#1A3A6B] px-2">Clear</button>}
+                    {selectedAssetTypes.length > 0 && <button onClick={() => setSelectedAssetTypes([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {uniqueAssetTypes.map(type => (
                       <label key={type} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#1A3A6B] focus:ring-[#1A3A6B]" checked={selectedAssetTypes.includes(type)} onChange={() => toggleAssetType(type)} />
+                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedAssetTypes.includes(type)} onChange={() => toggleAssetType(type)} />
                         <span className="ml-3 text-sm font-bold text-slate-700 capitalize">{type}</span>
                       </label>
                     ))}
@@ -622,10 +622,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             </div>
 
             <div className="relative" ref={tickerMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#1A3A6B] uppercase tracking-tighter z-10">Ticker</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Ticker</label>
               <button
                 onClick={() => setIsTickerMenuOpen(!isTickerMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#1A3A6B] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedTickers.length === 0 ? 'All Tickers' : selectedTickers.length === 1 ? selectedTickers[0] : `${selectedTickers.length} Tickers`}
@@ -638,12 +638,12 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Assets</span>
-                    {selectedTickers.length > 0 && <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#1A3A6B] px-2">Clear</button>}
+                    {selectedTickers.length > 0 && <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {uniqueTickers.map(ticker => (
                       <label key={ticker} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#1A3A6B] focus:ring-[#1A3A6B]" checked={selectedTickers.includes(ticker)} onChange={() => toggleTicker(ticker)} />
+                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedTickers.includes(ticker)} onChange={() => toggleTicker(ticker)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{ticker}</span>
                       </label>
                     ))}
@@ -655,16 +655,16 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         </div>
 
         {/* Total Summary Card */}
-        <div className="lg:col-span-3 bg-[#1A3A6B] p-5 rounded-lg text-white flex items-center justify-between">
+        <div className="lg:col-span-3 bg-[#0F52BA] p-5 rounded-lg text-white flex items-center justify-between">
           <div>
-            <div className="text-[10px] font-black text-[#C8D8EF] uppercase tracking-widest mb-1">
+            <div className="text-[10px] font-black text-[#C5D8F8] uppercase tracking-widest mb-1">
               Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain
             </div>
             <div className="text-2xl font-black">
               {(stats.stTotal + stats.ltTotal) < 0 ? '-' : ''}${Math.abs(stats.stTotal + stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
-          <div className="w-10 h-10 bg-[#122C52] rounded-lg flex items-center justify-center">
+          <div className="w-10 h-10 bg-[#0A3E8F] rounded-lg flex items-center justify-center">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
@@ -699,18 +699,18 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         <div className="space-y-4">
           <button
             onClick={() => setLtExpanded(v => !v)}
-            className="w-full p-4 bg-[#E5EDF7]/20 rounded-lg border border-[#D2D2D7] flex items-center justify-between hover:bg-[#E5EDF7]/40 transition-colors"
+            className="w-full p-4 bg-[#E6EEFB]/20 rounded-lg border border-[#D2D2D7] flex items-center justify-between hover:bg-[#E6EEFB]/40 transition-colors"
           >
             <div className="flex items-center gap-3">
-              <svg className={`w-4 h-4 text-[#1A3A6B] transition-transform ${ltExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-4 h-4 text-[#0F52BA] transition-transform ${ltExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
               </svg>
               <div className="text-left">
-                <h4 className="text-[11px] font-black text-[#122C52] uppercase tracking-widest">Long-Term Summary</h4>
-                <p className="text-[10px] text-[#1A3A6B] font-medium">{activeSubTab === 'realized' ? 'Closed positions' : 'Open lots'} held {'>'} 1 year · {longTerm.length} lots</p>
+                <h4 className="text-[11px] font-black text-[#0A3E8F] uppercase tracking-widest">Long-Term Summary</h4>
+                <p className="text-[10px] text-[#0F52BA] font-medium">{activeSubTab === 'realized' ? 'Closed positions' : 'Open lots'} held {'>'} 1 year · {longTerm.length} lots</p>
               </div>
             </div>
-            <div className={`text-xl font-black ${stats.ltTotal >= 0 ? 'text-[#122C52]' : 'text-[#FF3B30]'}`}>
+            <div className={`text-xl font-black ${stats.ltTotal >= 0 ? 'text-[#0A3E8F]' : 'text-[#FF3B30]'}`}>
               <span className="font-medium">{stats.ltTotal >= 0 ? '+' : '-'}</span>${Math.abs(stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </button>
