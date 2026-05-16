@@ -276,7 +276,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        <TickerLogo ticker={tc.ticker} size={24} />
+                        <TickerLogo ticker={tc.ticker} size={32} />
                         <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{tc.ticker}</span>
                       </div>
                     </td>
