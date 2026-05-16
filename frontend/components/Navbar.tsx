@@ -13,14 +13,14 @@ const Navbar: React.FC<Props> = ({ stats, onLogout, sidebarCollapsed }) => {
     <nav className="h-16 border-b border-[#D2D2D7] bg-white flex items-center justify-between px-8 shrink-0">
       <div className="flex items-center">
         {sidebarCollapsed && (
-          <span className="text-lg font-bold text-[#AF52DE]">WealthCompass</span>
+          <span className="text-lg font-bold text-[#1A3A6B]">WealthCompass</span>
         )}
       </div>
 
       <div className="flex items-center gap-6">
         <span className="text-sm font-semibold text-[#1D1D1F]">
           Portfolio:{' '}
-          <span className="text-[#AF52DE]">
+          <span className="text-[#1A3A6B]">
             ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </span>
@@ -49,7 +49,7 @@ const Navbar: React.FC<Props> = ({ stats, onLogout, sidebarCollapsed }) => {
           <button
             onClick={onLogout}
             title="Sign out"
-            className="w-9 h-9 rounded-full bg-[#AF52DE] flex items-center justify-center text-white font-bold text-xs hover:bg-[#9440C2] transition-colors"
+            className="w-9 h-9 rounded-full bg-[#1A3A6B] flex items-center justify-center text-white font-bold text-xs hover:bg-[#122C52] transition-colors"
           >
             SA
           </button>

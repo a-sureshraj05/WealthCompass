@@ -35,12 +35,12 @@ const AIInsights: React.FC<Props> = ({ holdings }) => {
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-[#AF52DE]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-[#1A3A6B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
           </svg>
           <h3 className="text-sm font-semibold text-[#1D1D1F]">AI Wealth Intelligence</h3>
         </div>
-        <svg className="w-4 h-4 text-[#AF52DE]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-[#1A3A6B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
         </svg>
       </div>
@@ -70,7 +70,7 @@ const AIInsights: React.FC<Props> = ({ holdings }) => {
         </div>
       )}
 
-      <button className="mt-4 pt-4 border-t border-[#D2D2D7] text-[11px] font-semibold text-[#AF52DE] uppercase tracking-[0.05em] text-right hover:text-[#9440C2] transition-colors w-full text-right">
+      <button className="mt-4 pt-4 border-t border-[#D2D2D7] text-[11px] font-semibold text-[#1A3A6B] uppercase tracking-[0.05em] text-right hover:text-[#122C52] transition-colors w-full text-right">
         View Detailed Insights
       </button>
     </div>
