@@ -236,7 +236,7 @@ const HoldingsView: React.FC<Props> = ({
 
   if (holdings.length === 0) {
     return (
-      <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded-lg">
+      <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
         <div className="max-w-xs mx-auto space-y-4">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,7 +254,7 @@ const HoldingsView: React.FC<Props> = ({
     <div className="space-y-4">
 
       {/* Filter Bar */}
-      <div className="bg-white p-5 rounded-lg border border-[#D2D2D7] relative z-30">
+      <div className="bg-white p-5 rounded border border-[#D2D2D7] relative z-30">
         <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center space-x-2">
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -269,7 +269,7 @@ const HoldingsView: React.FC<Props> = ({
               <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Brokerage</label>
               <button
                 onClick={() => setIsBrokerageMenuOpen(!isBrokerageMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedBrokerages.length === 0 ? 'All Brokers' : selectedBrokerages.length === 1 ? selectedBrokerages[0] : `${selectedBrokerages.length} Brokers`}
@@ -277,14 +277,14 @@ const HoldingsView: React.FC<Props> = ({
                 <svg className={`w-4 h-4 text-slate-400 transition-transform ${isBrokerageMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
               {isBrokerageMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50">
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Brokerages</span>
                     {selectedBrokerages.length > 0 && <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {allBrokerages.map(b => (
-                      <label key={b} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                      <label key={b} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
                         <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedBrokerages.includes(b)} onChange={() => toggleBrokerage(b)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{b}</span>
                       </label>
@@ -299,7 +299,7 @@ const HoldingsView: React.FC<Props> = ({
               <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Ticker</label>
               <button
                 onClick={() => setIsTickerMenuOpen(!isTickerMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedTickers.length === 0 ? 'All Tickers' : selectedTickers.length === 1 ? selectedTickers[0] : `${selectedTickers.length} Tickers`}
@@ -307,14 +307,14 @@ const HoldingsView: React.FC<Props> = ({
                 <svg className={`w-4 h-4 text-slate-400 transition-transform ${isTickerMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
               {isTickerMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50">
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Tickers</span>
                     {selectedTickers.length > 0 && <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {allTickers.map(t => (
-                      <label key={t} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                      <label key={t} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
                         <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedTickers.includes(t)} onChange={() => toggleTickerFilter(t)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{t}</span>
                       </label>
@@ -335,12 +335,12 @@ const HoldingsView: React.FC<Props> = ({
                 <svg className="w-3 h-3 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <div className="absolute left-0 bottom-5 w-56 bg-slate-900 text-white text-[11px] font-normal normal-case tracking-normal rounded-xl px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed">
+                <div className="absolute left-0 bottom-5 w-56 bg-slate-900 text-white text-[11px] font-normal normal-case tracking-normal rounded-md px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed">
                   Applied to <span className="text-emerald-400 font-bold">profits only</span>. Losses are always counted at <span className="text-rose-400 font-bold">100%</span>.
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+            <div className="flex items-center gap-2 pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md">
               <input type="range" min={0} max={100} step={5} value={keepPct} onChange={e => setKeepPct(Number(e.target.value))} className="w-28 accent-[#0F52BA]00 cursor-pointer" />
               <span className="text-sm font-bold text-[#0F52BA] w-8 text-right">{keepPct}%</span>
             </div>
@@ -354,7 +354,7 @@ const HoldingsView: React.FC<Props> = ({
 
       {/* Table */}
       {tickerRows.length === 0 ? (
-        <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded-lg">
+        <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
           <div className="max-w-xs mx-auto space-y-4">
             <h4 className="text-slate-900 font-bold">No results found</h4>
             <p className="text-sm text-slate-400">No holdings match these criteria.</p>
@@ -362,14 +362,14 @@ const HoldingsView: React.FC<Props> = ({
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-[#D2D2D7] bg-white overflow-hidden">
+        <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white overflow-hidden">
           <table className="w-full text-left">
             <thead>
               <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
                 <th className="px-4 py-4 w-8">
                   <button
                     onClick={() => { if (expandedTickers.size > 0) { setExpandedTickers(new Set()); setExpandedBrokerages(new Set()); } else setExpandedTickers(new Set(tickerRows.map(r => r.ticker))); }}
-                    className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
+                    className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
                     title={expandedTickers.size > 0 ? 'Collapse all' : 'Expand all'}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -417,7 +417,7 @@ const HoldingsView: React.FC<Props> = ({
                         {row.brokerageGroups.length > 0 && (
                           <button
                             onClick={() => toggleTicker(row.ticker)}
-                            className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
+                            className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
                           >
                             <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -505,7 +505,7 @@ const HoldingsView: React.FC<Props> = ({
                               </button>
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                              <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
                                 bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
                                 bg.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
                                 'bg-[#E5E5EA] text-[#6E6E73]'

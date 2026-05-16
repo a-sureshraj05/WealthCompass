@@ -49,10 +49,10 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab, collapsed, setColla
             key={item.id}
             onClick={() => handleClick(item.id)}
             title={collapsed ? item.label : undefined}
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-all duration-150 ${collapsed ? 'justify-center' : 'space-x-3'} ${
+            className={`w-full flex items-center px-3 py-2.5 transition-all duration-150 ${collapsed ? 'justify-center rounded' : 'space-x-3'} ${
               activeTab === item.id
-                ? 'border-l-4 border-[#0F52BA] bg-[#0F52BA]/5 text-[#0F52BA] font-semibold rounded-l-none'
-                : 'text-slate-600 hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
+                ? 'border-r-4 border-[#0F52BA] bg-[#0F52BA]/5 text-[#0F52BA] font-semibold'
+                : 'rounded text-slate-600 hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
             }`}
           >
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,7 +68,7 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab, collapsed, setColla
         <div className="px-4 pb-4">
           <button
             onClick={() => setActiveTab('importData')}
-            className="w-full py-2.5 bg-[#0F52BA] text-white text-sm font-semibold rounded-lg hover:bg-[#0A3E8F] transition-colors"
+            className="w-full py-2.5 bg-[#0F52BA] text-white text-sm font-semibold rounded hover:bg-[#0A3E8F] transition-colors"
           >
             Connect More
           </button>

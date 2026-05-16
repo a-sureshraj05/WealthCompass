@@ -13,7 +13,7 @@ const SectorTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
   const { name, value, tickers } = payload[0].payload;
   return (
-    <div className="bg-white border border-[#D2D2D7] rounded-lg p-3 text-xs" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
+    <div className="bg-white border border-[#D2D2D7] rounded p-3 text-xs" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
       <p className="font-bold text-[#1D1D1F] mb-1">{name}</p>
       <p className="text-slate-500 mb-2">${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
       <div className="flex flex-wrap gap-1">
@@ -55,7 +55,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
   if (holdings.length === 0) {
     return (
       <div
-        className="bg-white border border-[#D2D2D7] rounded-lg p-12 flex flex-col items-center justify-center text-slate-400"
+        className="bg-white border border-[#D2D2D7] rounded p-12 flex flex-col items-center justify-center text-slate-400"
         style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}
       >
         <svg className="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,7 +71,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
       {/* Sector Allocation */}
-      <div className="bg-white border border-[#D2D2D7] rounded-lg p-6 flex flex-col" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
+      <div className="bg-white border border-[#D2D2D7] rounded p-6 flex flex-col" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-[#1D1D1F]">Sector Allocation</h3>
           <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -122,7 +122,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
       </div>
 
       {/* Brokerage Distribution */}
-      <div className="bg-white border border-[#D2D2D7] rounded-lg p-6 flex flex-col" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
+      <div className="bg-white border border-[#D2D2D7] rounded p-6 flex flex-col" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-[#1D1D1F]">Brokerage Distribution</h3>
           <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

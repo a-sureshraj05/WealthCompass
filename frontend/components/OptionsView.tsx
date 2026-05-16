@@ -114,7 +114,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   );
 
   if (error) return (
-    <div className="p-6 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-sm font-medium">
+    <div className="p-6 bg-rose-50 border border-rose-100 rounded text-rose-600 text-sm font-medium">
       {error}
     </div>
   );
@@ -207,7 +207,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     <div className="space-y-4">
 
       {/* Toolbar */}
-      <div className="bg-white p-5 rounded-lg border border-[#D2D2D7] shadow-sm flex items-center justify-between">
+      <div className="bg-white p-5 rounded border border-[#D2D2D7] shadow-sm flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-sm font-bold text-slate-700">Tax Rate</span>
           <div className="flex items-center gap-1">
@@ -215,7 +215,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
               type="number" min={0} max={100} step={1}
               value={taxRateInput}
               onChange={e => setTaxRateInput(e.target.value)}
-              className="w-16 px-2 py-1 text-right border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0F52BA] font-semibold text-[#0A3E8F] bg-[#E6EEFB]/20"
+              className="w-16 px-2 py-1 text-right border border-[#D2D2D7] rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#0F52BA] font-semibold text-[#0A3E8F] bg-[#E6EEFB]/20"
             />
             <span className="text-slate-500 text-sm font-bold">%</span>
           </div>
@@ -224,14 +224,14 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-[#D2D2D7] bg-white shadow-sm overflow-hidden">
+      <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white shadow-sm overflow-hidden">
         <table className="w-full text-left">
           <thead>
             <tr className="bg-slate-50/50 border-b border-slate-200">
               <th className="px-4 py-4 w-8">
                 <button
                   onClick={() => { if (expandedTickers.size > 0) { setExpandedTickers(new Set()); setExpandedBrokerages(new Set()); } else setExpandedTickers(new Set(tickerCalcs.map(t => t.ticker))); }}
-                  className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
+                  className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
                   title={expandedTickers.size > 0 ? 'Collapse all' : 'Expand all'}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -266,7 +266,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                     <td className="px-4 py-4">
                       <button
                         onClick={() => toggleTicker(tc.ticker)}
-                        className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
+                        className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
                       >
                         <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -274,7 +274,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                       </button>
                     </td>
                     <td className="px-4 py-4">
-                      <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-tight">
+                      <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-tight">
                         {tc.ticker}
                       </span>
                     </td>
@@ -333,7 +333,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                             </button>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                            <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
                               bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
                               bg.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
                               'bg-[#E5E5EA] text-[#6E6E73]'
@@ -415,7 +415,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                                     onChange={e => handleRetainChange(pos.id, e.target.value)}
                                     onBlur={() => handleRetainSave(pos)}
                                     onKeyDown={e => e.key === 'Enter' && handleRetainSave(pos)}
-                                    className="w-20 px-2 py-0.5 text-right border border-[#D2D2D7] rounded-lg text-[11px] focus:outline-none focus:ring-2 focus:ring-[#0F52BA] bg-[#E6EEFB]/20 font-semibold text-[#0A3E8F] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="w-20 px-2 py-0.5 text-right border border-[#D2D2D7] rounded text-[11px] focus:outline-none focus:ring-2 focus:ring-[#0F52BA] bg-[#E6EEFB]/20 font-semibold text-[#0A3E8F] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                   />
                                 </div>
                               </td>

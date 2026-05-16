@@ -228,11 +228,11 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         <span className="text-xs font-bold text-slate-500">{data.length} lots</span>
       </div>
       {data.length === 0 ? (
-        <div className="py-8 text-center bg-[#F5F5F7] border border-dashed border-[#D2D2D7] rounded-lg text-slate-400 text-xs">
+        <div className="py-8 text-center bg-[#F5F5F7] border border-dashed border-[#D2D2D7] rounded text-slate-400 text-xs">
           No entries in this category for the current filter.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-[#D2D2D7] bg-white overflow-x-auto">
+        <div className="overflow-hidden rounded border border-[#D2D2D7] bg-white overflow-x-auto">
           <table className="w-full text-left min-w-[900px]">
             <thead>
               <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
@@ -271,19 +271,19 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               {data.map((g: RealizedGain | UnrealizedLot) => (
                 <tr key={g.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-tight">
+                    <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-tight">
                       {g.ticker}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
                       (g.assetType || '').toLowerCase() === 'options' ? 'bg-purple-100 text-purple-700' :
                       (g.assetType || '').toLowerCase() === 'equity' ? 'bg-blue-100 text-blue-700' :
                       'bg-slate-100 text-slate-600'
                     }`}>{g.assetType || '—'}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
                       g.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
                       g.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
                       'bg-[#E5E5EA] text-[#6E6E73]'
@@ -309,10 +309,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   return (
     <div className="space-y-6">
       {/* Sub-Tabs Selector */}
-      <div className="flex items-center p-1 bg-slate-100 rounded-2xl w-fit">
+      <div className="flex items-center p-1 bg-slate-100 rounded w-fit">
         <button
           onClick={() => setActiveSubTab('realized')}
-          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
+          className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${
             activeSubTab === 'realized' ? 'bg-white text-[#0F52BA] shadow-sm' : 'text-slate-500 hover:text-slate-700'
           }`}
         >
@@ -320,7 +320,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         </button>
         <button
           onClick={() => setActiveSubTab('unrealized')}
-          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
+          className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${
             activeSubTab === 'unrealized' ? 'bg-white text-[#0F52BA] shadow-sm' : 'text-slate-500 hover:text-slate-700'
           }`}
         >
@@ -331,7 +331,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       {/* Analytics Charts Section */}
       <div className="grid grid-cols-1 md:grid-cols-10 gap-6">
         {activeSubTab === 'realized' ? (
-          <div className="md:col-span-7 bg-white p-6 rounded-lg border border-[#D2D2D7]">
+          <div className="md:col-span-7 bg-white p-6 rounded border border-[#D2D2D7]">
             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Yearly Realized Profit Split</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -404,7 +404,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             </div>
           </div>
         ) : (
-          <div className="md:col-span-7 bg-white p-6 rounded-lg border border-[#D2D2D7]">
+          <div className="md:col-span-7 bg-white p-6 rounded border border-[#D2D2D7]">
             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Unrealized Gain by Ticker</h3>
             <div className="h-64">
               {unrealizedBarData.length > 0 ? (
@@ -481,7 +481,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           </div>
         )}
 
-        <div className="md:col-span-3 bg-white p-6 rounded-lg border border-[#D2D2D7] flex flex-col justify-center">
+        <div className="md:col-span-3 bg-white p-6 rounded border border-[#D2D2D7] flex flex-col justify-center">
           <div className="space-y-4">
             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estimated Tax Liability</div>
 
@@ -492,7 +492,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                   type="number"
                   value={stTaxRate}
                   onChange={(e) => setStTaxRate(Number(e.target.value))}
-                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
               </div>
               <div className="flex-1">
@@ -501,7 +501,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                   type="number"
                   value={ltTaxRate}
                   onChange={(e) => setLtTaxRate(Number(e.target.value))}
-                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none"
                 />
               </div>
             </div>
@@ -515,14 +515,14 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+              <div className="p-4 rounded bg-slate-50 border border-slate-100">
                 <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Efficiency</div>
                 <div className="text-lg font-black text-[#0F52BA]">
                   {stats.stTotal + stats.ltTotal !== 0 ? ((stats.ltTotal / (stats.stTotal + stats.ltTotal)) * 100).toFixed(2) : '0.00'}%
                 </div>
                 <div className="text-[9px] text-slate-500 font-bold uppercase mt-1">Long Term Share</div>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+              <div className="p-4 rounded bg-slate-50 border border-slate-100">
                 <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lot Count</div>
                 <div className="text-lg font-black text-slate-900">{filteredData.length}</div>
                 <div className="text-[9px] text-slate-500 font-bold uppercase mt-1">Processed Trades</div>
@@ -534,7 +534,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
 
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
         {/* Filter Card */}
-        <div className="lg:col-span-7 bg-white p-5 rounded-lg border border-[#D2D2D7] flex flex-col gap-4 z-30">
+        <div className="lg:col-span-7 bg-white p-5 rounded border border-[#D2D2D7] flex flex-col gap-4 z-30">
           <div className="flex items-center space-x-2">
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -549,7 +549,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 <select 
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
-                  className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[120px]"
+                  className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[120px]"
                 >
                   {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
@@ -563,7 +563,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Brokerage</label>
               <button
                 onClick={() => setIsBrokerageMenuOpen(!isBrokerageMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedBrokerages.length === 0 ? 'All Brokers' : selectedBrokerages.length === 1 ? selectedBrokerages[0] : `${selectedBrokerages.length} Brokers`}
@@ -573,14 +573,14 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 </svg>
               </button>
               {isBrokerageMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Brokerages</span>
                     {selectedBrokerages.length > 0 && <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {uniqueBrokerages.map(broker => (
-                      <label key={broker} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                      <label key={broker} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer">
                         <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedBrokerages.includes(broker)} onChange={() => toggleBrokerage(broker)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{broker}</span>
                       </label>
@@ -594,7 +594,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Asset Type</label>
               <button
                 onClick={() => setIsAssetTypeMenuOpen(!isAssetTypeMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedAssetTypes.length === 0 ? 'All Types' : selectedAssetTypes.length === 1 ? selectedAssetTypes[0] : `${selectedAssetTypes.length} Types`}
@@ -604,14 +604,14 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 </svg>
               </button>
               {isAssetTypeMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Asset Types</span>
                     {selectedAssetTypes.length > 0 && <button onClick={() => setSelectedAssetTypes([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {uniqueAssetTypes.map(type => (
-                      <label key={type} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                      <label key={type} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer">
                         <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedAssetTypes.includes(type)} onChange={() => toggleAssetType(type)} />
                         <span className="ml-3 text-sm font-bold text-slate-700 capitalize">{type}</span>
                       </label>
@@ -625,7 +625,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Ticker</label>
               <button
                 onClick={() => setIsTickerMenuOpen(!isTickerMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedTickers.length === 0 ? 'All Tickers' : selectedTickers.length === 1 ? selectedTickers[0] : `${selectedTickers.length} Tickers`}
@@ -635,14 +635,14 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 </svg>
               </button>
               {isTickerMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Assets</span>
                     {selectedTickers.length > 0 && <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {uniqueTickers.map(ticker => (
-                      <label key={ticker} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                      <label key={ticker} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer">
                         <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedTickers.includes(ticker)} onChange={() => toggleTicker(ticker)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{ticker}</span>
                       </label>
@@ -655,7 +655,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         </div>
 
         {/* Total Summary Card */}
-        <div className="lg:col-span-3 bg-[#0F52BA] p-5 rounded-lg text-white flex items-center justify-between">
+        <div className="lg:col-span-3 bg-[#0F52BA] p-5 rounded text-white flex items-center justify-between">
           <div>
             <div className="text-[10px] font-black text-[#C5D8F8] uppercase tracking-widest mb-1">
               Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain
@@ -664,7 +664,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               {(stats.stTotal + stats.ltTotal) < 0 ? '-' : ''}${Math.abs(stats.stTotal + stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
-          <div className="w-10 h-10 bg-[#0A3E8F] rounded-lg flex items-center justify-center">
+          <div className="w-10 h-10 bg-[#0A3E8F] rounded flex items-center justify-center">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
@@ -677,7 +677,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         <div className="space-y-4">
           <button
             onClick={() => setStExpanded(v => !v)}
-            className="w-full p-4 bg-emerald-50 rounded-lg border border-emerald-100 flex items-center justify-between hover:bg-emerald-100/60 transition-colors"
+            className="w-full p-4 bg-emerald-50 rounded border border-emerald-100 flex items-center justify-between hover:bg-emerald-100/60 transition-colors"
           >
             <div className="flex items-center gap-3">
               <svg className={`w-4 h-4 text-emerald-600 transition-transform ${stExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -699,7 +699,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         <div className="space-y-4">
           <button
             onClick={() => setLtExpanded(v => !v)}
-            className="w-full p-4 bg-[#E6EEFB]/20 rounded-lg border border-[#D2D2D7] flex items-center justify-between hover:bg-[#E6EEFB]/40 transition-colors"
+            className="w-full p-4 bg-[#E6EEFB]/20 rounded border border-[#D2D2D7] flex items-center justify-between hover:bg-[#E6EEFB]/40 transition-colors"
           >
             <div className="flex items-center gap-3">
               <svg className={`w-4 h-4 text-[#0F52BA] transition-transform ${ltExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">

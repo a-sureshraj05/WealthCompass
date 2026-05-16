@@ -30,7 +30,7 @@ const AIInsights: React.FC<Props> = ({ holdings }) => {
 
   return (
     <div
-      className="bg-white border border-[#D2D2D7] rounded-lg p-6 flex flex-col"
+      className="bg-white border border-[#D2D2D7] rounded p-6 flex flex-col"
       style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}
     >
       <div className="flex items-center justify-between mb-4">

@@ -57,7 +57,7 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
       <div className="w-full max-w-md">
         {/* Logo / App name */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-[#0F52BA] rounded-2xl mb-4 shadow-lg shadow-[#0F52BA]/20">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-[#0F52BA] rounded mb-4 shadow-lg shadow-[#0F52BA]/20">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
@@ -67,7 +67,7 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl border shadow-sm p-8">
+        <div className="bg-white rounded border shadow-sm p-8">
           <h2 className="text-lg font-bold text-slate-900 mb-6">
             {isRegistering ? 'Create your account' : 'Sign in to your account'}
           </h2>
@@ -81,7 +81,7 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
                 onChange={e => setEmail(e.target.value)}
                 required
                 placeholder="you@example.com"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0F52BA] focus:border-transparent"
+                className="w-full px-4 py-2.5 rounded-md border border-slate-200 text-sm text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0F52BA] focus:border-transparent"
               />
             </div>
 
@@ -93,18 +93,18 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
                 onChange={e => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0F52BA] focus:border-transparent"
+                className="w-full px-4 py-2.5 rounded-md border border-slate-200 text-sm text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0F52BA] focus:border-transparent"
               />
             </div>
 
             {error && (
-              <p className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-2 rounded-lg">{error}</p>
+              <p className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-2 rounded">{error}</p>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-[#0F52BA] text-white text-sm font-bold rounded-xl hover:bg-[#0A3E8F] transition-colors disabled:opacity-60"
+              className="w-full py-2.5 bg-[#0F52BA] text-white text-sm font-bold rounded-md hover:bg-[#0A3E8F] transition-colors disabled:opacity-60"
             >
               {loading ? 'Please wait…' : isRegistering ? 'Create Account' : 'Sign In'}
             </button>

@@ -41,7 +41,7 @@ const SummaryCards: React.FC<Props> = ({ stats }) => {
       {cards.map((card, idx) => (
         <div
           key={idx}
-          className="bg-white border border-[#D2D2D7] rounded-lg p-6"
+          className="bg-white border border-[#D2D2D7] rounded p-6"
           style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}
         >
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.05em] mb-3">{card.label}</p>
