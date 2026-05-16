@@ -29,15 +29,17 @@ const ETFIcon: React.FC<{ size: number }> = ({ size }) => {
   );
 };
 
+type LoadState = 'parqet' | 'fmp' | 'failed';
+
 const TickerLogo: React.FC<Props> = ({ ticker, size = 28, assetType }) => {
-  const [failed, setFailed] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>('parqet');
   const isETF = (assetType || '').toUpperCase() === 'ETF';
 
   if (isETF) {
     return <ETFIcon size={size} />;
   }
 
-  if (failed) {
+  if (loadState === 'failed') {
     return (
       <span
         className="inline-flex items-center justify-center bg-[#1D1D1F] text-white font-bold rounded shrink-0"
@@ -48,15 +50,23 @@ const TickerLogo: React.FC<Props> = ({ ticker, size = 28, assetType }) => {
     );
   }
 
+  const src = loadState === 'parqet'
+    ? `https://assets.parqet.com/logos/symbol/${ticker}?format=png`
+    : `https://financialmodelingprep.com/image-stock/${ticker}.png`;
+
+  const handleError = () =>
+    setLoadState(prev => prev === 'parqet' ? 'fmp' : 'failed');
+
   return (
     <img
-      src={`https://financialmodelingprep.com/image-stock/${ticker}.png`}
+      key={src}
+      src={src}
       alt={ticker}
       width={size}
       height={size}
       className="rounded object-contain shrink-0 bg-white"
       style={{ width: size, height: size }}
-      onError={() => setFailed(true)}
+      onError={handleError}
     />
   );
 };
