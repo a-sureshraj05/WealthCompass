@@ -177,6 +177,7 @@ const DashboardView: React.FC<Props> = ({
         // Aggregate by ticker across all brokerages, compute daily % change
         const byTicker: Record<string, { ticker: string; currentPrice: number; previousClose: number; assetType: string }> = {};
         for (const h of holdings) {
+          if ((h.assetType || '').toLowerCase() === 'options') continue;
           if (h.previousClose <= 0) continue;
           if (!byTicker[h.ticker]) {
             byTicker[h.ticker] = { ticker: h.ticker, currentPrice: h.currentPrice, previousClose: h.previousClose, assetType: h.assetType || 'Equity' };
