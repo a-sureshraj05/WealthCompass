@@ -51,7 +51,7 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab, collapsed, setColla
             title={collapsed ? item.label : undefined}
             className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-all duration-150 ${collapsed ? 'justify-center' : 'space-x-3'} ${
               activeTab === item.id
-                ? 'bg-[#0052FF] text-white'
+                ? 'border-l-4 border-[#0052FF] bg-[#0052FF]/5 text-[#0052FF] font-semibold rounded-l-none'
                 : 'text-slate-600 hover:bg-[#F5F5F7] hover:text-[#1A1C1D]'
             }`}
           >

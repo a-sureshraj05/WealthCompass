@@ -40,14 +40,20 @@ const Navbar: React.FC<Props> = ({ stats, onLogout, sidebarCollapsed }) => {
           </svg>
         </button>
 
-        {/* Avatar */}
-        <button
-          onClick={onLogout}
-          title="Sign out"
-          className="w-8 h-8 rounded-full bg-[#0052FF] flex items-center justify-center text-white font-bold text-xs hover:bg-[#003EC7] transition-colors"
-        >
-          SA
-        </button>
+        {/* User + Avatar */}
+        <div className="flex items-center gap-3 border-l border-[#E5E5E5] pl-6">
+          <div className="text-right hidden lg:block">
+            <span className="block text-xs font-bold text-[#1A1C1D]">Account Holder</span>
+            <span className="block text-[10px] text-slate-400 uppercase tracking-widest">Premium Member</span>
+          </div>
+          <button
+            onClick={onLogout}
+            title="Sign out"
+            className="w-9 h-9 rounded-full bg-[#0052FF] flex items-center justify-center text-white font-bold text-xs hover:bg-[#003EC7] transition-colors"
+          >
+            SA
+          </button>
+        </div>
       </div>
     </nav>
   );
