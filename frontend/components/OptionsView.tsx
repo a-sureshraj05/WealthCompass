@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import TickerLogo from './TickerLogo';
 import {
   OptionsPosition,
   OptionsCalculator,
@@ -274,9 +275,10 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                       </button>
                     </td>
                     <td className="px-4 py-4">
-                      <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-tight">
-                        {tc.ticker}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <TickerLogo ticker={tc.ticker} size={24} />
+                        <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{tc.ticker}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-4 text-right font-bold text-slate-800 text-sm">{fmt(tc.totalQty, 0)}</td>
                     <td className="px-4 py-4 text-right text-sm text-slate-500 font-medium">{fmtCurrency(tc.avgBuyPrice)}</td>

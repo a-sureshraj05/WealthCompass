@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { StockHolding, UnrealizedLot, RealizedGain } from '../types';
 import { fetchAnalystData } from '../services/apiService';
+import TickerLogo from './TickerLogo';
 
 type SortKey = 'ticker' | 'quantity' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain';
 type SortDirection = 'asc' | 'desc' | null;
@@ -426,9 +427,10 @@ const HoldingsView: React.FC<Props> = ({
                         )}
                       </td>
                       <td className="px-4 py-4">
-                        <span className="inline-flex items-center px-2 py-1 bg-[#1D1D1F] text-white rounded text-[10px] font-bold uppercase tracking-tight">
-                          {row.ticker}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <TickerLogo ticker={row.ticker} size={24} />
+                          <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{row.ticker}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-right font-bold text-slate-800 text-sm">{row.totalQty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-4 py-4 text-right text-sm text-slate-500 font-medium">${row.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>

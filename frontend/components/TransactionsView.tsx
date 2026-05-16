@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Transaction } from '../types';
+import TickerLogo from './TickerLogo';
 import {
   fetchOpenBuys, fetchLotAssignments, createLotAssignment, deleteLotAssignment,
   OpenBuyLot, LotAssignment,
@@ -710,7 +711,10 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                         <input className={inputCls} value={editDraft.ticker || ''}
                           onChange={e => setEditDraft(d => ({ ...d, ticker: e.target.value.toUpperCase() }))} />
                       ) : (
-                        <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-tight">{t.ticker}</span>
+                        <div className="flex items-center gap-1.5">
+                          <TickerLogo ticker={t.ticker} size={22} />
+                          <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{t.ticker}</span>
+                        </div>
                       )}
                     </td>
 

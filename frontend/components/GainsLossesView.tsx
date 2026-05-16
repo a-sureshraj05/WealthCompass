@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Rectangle } from 'recharts';
 import { RealizedGain, UnrealizedLot } from '../types';
+import TickerLogo from './TickerLogo';
 
 type GainSortKey = 'ticker' | 'assetType' | 'brokerage' | 'buyDate' | 'sellDate' | 'quantity' | 'buyPrice' | 'price' | 'gain';
 type SortDirection = 'asc' | 'desc' | null;
@@ -271,9 +272,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               {data.map((g: RealizedGain | UnrealizedLot) => (
                 <tr key={g.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-tight">
-                      {g.ticker}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <TickerLogo ticker={g.ticker} size={22} />
+                      <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{g.ticker}</span>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
