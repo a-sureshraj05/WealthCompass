@@ -192,7 +192,7 @@ const DashboardView: React.FC<Props> = ({
         const MoverRow = ({ h }: { h: typeof withGain[0] }) => (
           <div className="flex items-center justify-between py-3 border-b last:border-0 border-[#D2D2D7]">
             <div className="flex items-center gap-3">
-              <TickerLogo ticker={h.ticker} size={32} />
+              <TickerLogo ticker={h.ticker} size={24} />
               <div>
                 <p className="text-sm font-semibold text-[#1D1D1F]">{h.ticker}</p>
                 <p className="text-xs text-slate-400">${h.currentPrice.toFixed(2)}</p>

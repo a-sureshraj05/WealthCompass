@@ -273,7 +273,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 <tr key={g.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
-                      <TickerLogo ticker={g.ticker} size={22} />
+                      <TickerLogo ticker={g.ticker} size={24} />
                       <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{g.ticker}</span>
                     </div>
                   </td>
