@@ -9,11 +9,38 @@ interface Props {
 }
 
 const BROKERAGES = [
-  { name: 'Robinhood', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
-  { name: 'Schwab', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m4 0h1m-7 4h1m4 0h1m-7 4h1m4 0h1' },
-  { name: 'Fidelity', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-  { name: 'Other', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }
+  { name: 'Robinhood', domain: 'robinhood.com' },
+  { name: 'Schwab', domain: 'schwab.com' },
+  { name: 'Fidelity', domain: 'fidelity.com' },
+  { name: 'Other', domain: null },
 ];
+
+const BrokerageLogo: React.FC<{ name: string; domain: string | null; size?: number }> = ({ name, domain, size = 40 }) => {
+  const [failed, setFailed] = useState(false);
+
+  if (!domain || failed) {
+    return (
+      <div
+        className="rounded bg-[#EFEFF4] flex items-center justify-center shrink-0"
+        style={{ width: size, height: size }}
+      >
+        <svg className="w-5 h-5 text-[#6E6E73]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={`https://logo.clearbit.com/${domain}`}
+      alt={name}
+      className="rounded object-contain bg-white shrink-0"
+      style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
+    />
+  );
+};
 
 const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initialTab = 'manual' }) => {
   const [activeTab, setActiveTab] = useState<'manual' | 'connect'>(initialTab);
@@ -200,10 +227,8 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                           : 'border-[#D2D2D7] hover:border-[#D2D2D7] text-[#6E6E73]'
                       }`}
                     >
-                      <svg className="w-8 h-8 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={broker.icon} />
-                      </svg>
-                      <span className="font-bold text-sm">{broker.name}</span>
+                      <BrokerageLogo name={broker.name} domain={broker.domain} size={40} />
+                      <span className="font-bold text-sm mt-3">{broker.name}</span>
                     </button>
                   ))}
                 </div>
@@ -293,10 +318,8 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                           : 'border-[#D2D2D7] hover:border-[#D2D2D7] text-[#6E6E73]'
                       }`}
                     >
-                      <svg className="w-8 h-8 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={broker.icon} />
-                      </svg>
-                      <span className="font-bold text-sm">{broker.name}</span>
+                      <BrokerageLogo name={broker.name} domain={broker.domain} size={40} />
+                      <span className="font-bold text-sm mt-3">{broker.name}</span>
                     </button>
                   ))}
                 </div>
