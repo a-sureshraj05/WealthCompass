@@ -3,10 +3,36 @@ import React, { useState } from 'react';
 interface Props {
   ticker: string;
   size?: number;
+  assetType?: string;
 }
 
-const TickerLogo: React.FC<Props> = ({ ticker, size = 28 }) => {
+const ETFIcon: React.FC<{ size: number }> = ({ size }) => (
+  <span
+    className="inline-flex items-center justify-center bg-[#E6EEFB] rounded shrink-0"
+    style={{ width: size, height: size }}
+  >
+    <svg
+      width={Math.round(size * 0.55)}
+      height={Math.round(size * 0.55)}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#0F52BA"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  </span>
+);
+
+const TickerLogo: React.FC<Props> = ({ ticker, size = 28, assetType }) => {
   const [failed, setFailed] = useState(false);
+  const isETF = (assetType || '').toUpperCase() === 'ETF';
+
+  if (isETF) {
+    return <ETFIcon size={size} />;
+  }
 
   if (failed) {
     return (

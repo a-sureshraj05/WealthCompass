@@ -428,7 +428,7 @@ const HoldingsView: React.FC<Props> = ({
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
-                          <TickerLogo ticker={row.ticker} size={32} />
+                          <TickerLogo ticker={row.ticker} size={32} assetType={row.assetType} />
                           <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{row.ticker}</span>
                         </div>
                       </td>
