@@ -7,18 +7,18 @@ interface Props {
   holdings: StockHolding[];
 }
 
-const COLORS = ['#0052FF', '#003EC7', '#434656', '#737688', '#B7C4FF', '#DDE1FF', '#C3C5D9'];
+const COLORS = ['#007AFF', '#34C759', '#FF9500', '#5856D6', '#FF2D55', '#5AC8FA', '#FFCC00'];
 
 const SectorTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
   const { name, value, tickers } = payload[0].payload;
   return (
-    <div className="bg-white border border-[#E5E5E5] rounded-lg p-3 text-xs" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
-      <p className="font-bold text-[#1A1C1D] mb-1">{name}</p>
+    <div className="bg-white border border-[#D2D2D7] rounded-lg p-3 text-xs" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
+      <p className="font-bold text-[#1D1D1F] mb-1">{name}</p>
       <p className="text-slate-500 mb-2">${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
       <div className="flex flex-wrap gap-1">
         {tickers.map((t: string) => (
-          <span key={t} className="bg-[#DDE1FF] text-[#0038B6] font-semibold px-1.5 py-0.5 rounded">{t}</span>
+          <span key={t} className="bg-[#E8F2FF] text-[#0062CC] font-semibold px-1.5 py-0.5 rounded">{t}</span>
         ))}
       </div>
     </div>
@@ -55,7 +55,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
   if (holdings.length === 0) {
     return (
       <div
-        className="bg-white border border-[#E5E5E5] rounded-lg p-12 flex flex-col items-center justify-center text-slate-400"
+        className="bg-white border border-[#D2D2D7] rounded-lg p-12 flex flex-col items-center justify-center text-slate-400"
         style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}
       >
         <svg className="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,9 +71,9 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
       {/* Sector Allocation */}
-      <div className="bg-white border border-[#E5E5E5] rounded-lg p-6 flex flex-col" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
+      <div className="bg-white border border-[#D2D2D7] rounded-lg p-6 flex flex-col" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-[#1A1C1D]">Sector Allocation</h3>
+          <h3 className="text-sm font-semibold text-[#1D1D1F]">Sector Allocation</h3>
           <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
           </svg>
@@ -103,7 +103,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
           {/* Center label */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.05em]">Total</span>
-            <span className="text-lg font-bold text-[#1A1C1D]">100%</span>
+            <span className="text-lg font-bold text-[#1D1D1F]">100%</span>
           </div>
         </div>
 
@@ -115,16 +115,16 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
                 <span className="text-xs text-slate-600 truncate max-w-[140px]">{d.name}</span>
               </div>
-              <span className="text-xs font-semibold text-[#1A1C1D]">{d.pct.toFixed(0)}%</span>
+              <span className="text-xs font-semibold text-[#1D1D1F]">{d.pct.toFixed(0)}%</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* Brokerage Distribution */}
-      <div className="bg-white border border-[#E5E5E5] rounded-lg p-6 flex flex-col" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
+      <div className="bg-white border border-[#D2D2D7] rounded-lg p-6 flex flex-col" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-[#1A1C1D]">Brokerage Distribution</h3>
+          <h3 className="text-sm font-semibold text-[#1D1D1F]">Brokerage Distribution</h3>
           <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
           </svg>
@@ -134,12 +134,12 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
           {brokerageData.map((b, i) => (
             <div key={b.name}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-sm font-medium text-[#1A1C1D]">{b.name}</span>
-                <span className="text-sm font-semibold text-[#1A1C1D]">
+                <span className="text-sm font-medium text-[#1D1D1F]">{b.name}</span>
+                <span className="text-sm font-semibold text-[#1D1D1F]">
                   ${b.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </span>
               </div>
-              <div className="h-1.5 bg-[#F3F3F5] rounded-full overflow-hidden">
+              <div className="h-1.5 bg-[#F5F5F7] rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{ width: `${b.pct}%`, backgroundColor: COLORS[i % COLORS.length] }}
@@ -150,7 +150,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
         </div>
 
         {brokerageData.length > 0 && (
-          <p className="text-[11px] text-slate-400 mt-4 pt-4 border-t border-[#E5E5E5]">
+          <p className="text-[11px] text-slate-400 mt-4 pt-4 border-t border-[#D2D2D7]">
             Last synced: just now
           </p>
         )}

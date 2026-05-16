@@ -74,10 +74,10 @@ const DashboardView: React.FC<Props> = ({
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-[#1A1C1D]">Portfolio Holdings</h2>
+          <h2 className="text-2xl font-bold text-[#1D1D1F]">Portfolio Holdings</h2>
           <button
             onClick={onProcessGains}
-            className="px-4 py-2 text-sm font-medium text-[#0052FF] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#E5E5E5]"
+            className="px-4 py-2 text-sm font-medium text-[#007AFF] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#D2D2D7]"
           >
             Refresh Data
           </button>
@@ -103,23 +103,23 @@ const DashboardView: React.FC<Props> = ({
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-[#1A1C1D]">Transaction History</h2>
+          <h2 className="text-2xl font-bold text-[#1D1D1F]">Transaction History</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={async () => { setSyncMessage(''); const msg = await onSyncTransactions(); setSyncMessage(msg); }}
-              className="px-4 py-2 text-sm font-medium text-[#0052FF] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#E5E5E5]"
+              className="px-4 py-2 text-sm font-medium text-[#007AFF] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#D2D2D7]"
             >
               Sync Transactions
             </button>
             <button
               onClick={() => { if (window.confirm('Clear all processed data? Raw tables (uploaded statements, SnapTrade) will be preserved.')) onClearData(); }}
-              className="px-4 py-2 text-sm font-medium text-[#BA1A1A] hover:bg-[#FFDAD6] rounded-lg transition-colors border border-[#E5E5E5]"
+              className="px-4 py-2 text-sm font-medium text-[#FF3B30] hover:bg-[#FFDAD6] rounded-lg transition-colors border border-[#D2D2D7]"
             >
               Clear Processed Data
             </button>
             <button
               onClick={() => onResetData()}
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#E5E5E5]"
+              className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#D2D2D7]"
             >
               Reset Data
             </button>
@@ -127,7 +127,7 @@ const DashboardView: React.FC<Props> = ({
         </div>
 
         {syncMessage && (
-          <p className={`text-sm font-medium px-4 py-2 rounded-lg border ${syncMessage.startsWith('Failed') ? 'bg-[#FFDAD6] text-[#BA1A1A] border-[#E5E5E5]' : 'bg-emerald-50 text-emerald-700 border-[#E5E5E5]'}`}>
+          <p className={`text-sm font-medium px-4 py-2 rounded-lg border ${syncMessage.startsWith('Failed') ? 'bg-[#FFDAD6] text-[#FF3B30] border-[#D2D2D7]' : 'bg-emerald-50 text-emerald-700 border-[#D2D2D7]'}`}>
             {syncMessage}
           </p>
         )}
@@ -140,10 +140,10 @@ const DashboardView: React.FC<Props> = ({
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-[#1A1C1D]">Realized Gains & Losses</h2>
+          <h2 className="text-2xl font-bold text-[#1D1D1F]">Realized Gains & Losses</h2>
           <button
             onClick={onProcessGains}
-            className="px-4 py-2 text-sm font-medium text-[#0052FF] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#E5E5E5]"
+            className="px-4 py-2 text-sm font-medium text-[#007AFF] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#D2D2D7]"
           >
             Refresh Data
           </button>
@@ -156,8 +156,8 @@ const DashboardView: React.FC<Props> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#1A1C1D]">Dashboard</h1>
-        <div className="mt-1 w-8 h-0.5 bg-[#0052FF]" />
+        <h1 className="text-2xl font-bold text-[#1D1D1F]">Dashboard</h1>
+        <div className="mt-1 w-8 h-0.5 bg-[#007AFF]" />
       </div>
 
       <SummaryCards stats={stats} />
@@ -189,18 +189,18 @@ const DashboardView: React.FC<Props> = ({
         const worstMovers = [...withGain].sort((a, b) => a.gainPct - b.gainPct).slice(0, 5);
 
         const MoverRow = ({ h }: { h: typeof withGain[0] }) => (
-          <div className="flex items-center justify-between py-3 border-b last:border-0 border-[#E5E5E5]">
+          <div className="flex items-center justify-between py-3 border-b last:border-0 border-[#D2D2D7]">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded bg-[#F3F3F5] flex items-center justify-center">
-                <span className="text-[10px] font-bold text-[#434656]">{h.ticker.slice(0, 3)}</span>
+              <div className="w-8 h-8 rounded bg-[#F5F5F7] flex items-center justify-center">
+                <span className="text-[10px] font-bold text-[#6E6E73]">{h.ticker.slice(0, 3)}</span>
               </div>
               <div>
-                <p className="text-sm font-semibold text-[#1A1C1D]">{h.ticker}</p>
+                <p className="text-sm font-semibold text-[#1D1D1F]">{h.ticker}</p>
                 <p className="text-xs text-slate-400">${h.currentPrice.toFixed(2)}</p>
               </div>
             </div>
             <div className="text-right">
-              <p className={`text-sm font-bold ${h.gainPct >= 0 ? 'text-emerald-600' : 'text-[#BA1A1A]'}`}>
+              <p className={`text-sm font-bold ${h.gainPct >= 0 ? 'text-emerald-600' : 'text-[#FF3B30]'}`}>
                 {h.gainPct >= 0 ? '+' : ''}{h.gainPct.toFixed(2)}%
               </p>
               <p className="text-xs text-slate-400">prev ${h.previousClose.toFixed(2)}</p>
@@ -210,17 +210,17 @@ const DashboardView: React.FC<Props> = ({
 
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-lg border border-[#E5E5E5]" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
+            <div className="bg-white p-6 rounded-lg border border-[#D2D2D7]" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <h3 className="text-sm font-semibold text-[#1A1C1D]">Top Movers</h3>
+                <h3 className="text-sm font-semibold text-[#1D1D1F]">Top Movers</h3>
               </div>
               {topMovers.map(h => <MoverRow key={h.ticker} h={h} />)}
             </div>
-            <div className="bg-white p-6 rounded-lg border border-[#E5E5E5]" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
+            <div className="bg-white p-6 rounded-lg border border-[#D2D2D7]" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
               <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-[#BA1A1A]"></span>
-                <h3 className="text-sm font-semibold text-[#1A1C1D]">Worst Movers</h3>
+                <span className="w-2 h-2 rounded-full bg-[#FF3B30]"></span>
+                <h3 className="text-sm font-semibold text-[#1D1D1F]">Worst Movers</h3>
               </div>
               {worstMovers.map(h => <MoverRow key={h.ticker} h={h} />)}
             </div>
