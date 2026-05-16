@@ -33,9 +33,9 @@ const BrokerageLogo: React.FC<{ name: string; domain: string | null; size?: numb
 
   return (
     <img
-      src={`https://logo.clearbit.com/${domain}`}
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
       alt={name}
-      className="rounded object-contain bg-white shrink-0"
+      className="rounded object-contain shrink-0"
       style={{ width: size, height: size }}
       onError={() => setFailed(true)}
     />
