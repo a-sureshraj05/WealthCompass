@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import TickerLogo from './TickerLogo';
+import { StockHolding } from '../types';
 import {
   OptionsPosition,
   OptionsCalculator,
@@ -47,9 +48,10 @@ interface TickerCalc {
 interface OptionsViewProps {
   selectedBrokerages?: string[];
   selectedTickers?: string[];
+  holdings?: StockHolding[];
 }
 
-const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [] }) => {
+const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [], holdings = [] }) => {
   const [positions, setPositions] = useState<OptionsPosition[]>([]);
   const [calculator, setCalculator] = useState<OptionsCalculator | null>(null);
   const [pendingRetain, setPendingRetain] = useState<Record<number, string>>({});
@@ -136,6 +138,9 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   if (filteredPositions.length === 0) return (
     <div className="p-8 text-center text-slate-400 text-sm">No options positions match the selected filters.</div>
   );
+
+  const assetTypeByTicker: Record<string, string> = {};
+  holdings.forEach(h => { assetTypeByTicker[h.ticker] = h.assetType || 'Equity'; });
 
   // Group positions by ticker
   const grouped: Record<string, OptionsPosition[]> = {};
@@ -276,7 +281,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        <TickerLogo ticker={tc.ticker} size={32} />
+                        <TickerLogo ticker={tc.ticker} size={32} assetType={assetTypeByTicker[tc.ticker]} />
                         <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{tc.ticker}</span>
                       </div>
                     </td>

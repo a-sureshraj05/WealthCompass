@@ -94,7 +94,7 @@ const DashboardView: React.FC<Props> = ({
         />
         <div className="space-y-2">
           <h3 className="font-display text-lg font-semibold text-[#1D1D1F]">Options Calculator</h3>
-          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} />
+          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} holdings={holdings} />
         </div>
       </div>
     );
@@ -175,11 +175,11 @@ const DashboardView: React.FC<Props> = ({
 
       {holdings.length > 0 && (() => {
         // Aggregate by ticker across all brokerages, compute daily % change
-        const byTicker: Record<string, { ticker: string; currentPrice: number; previousClose: number }> = {};
+        const byTicker: Record<string, { ticker: string; currentPrice: number; previousClose: number; assetType: string }> = {};
         for (const h of holdings) {
           if (h.previousClose <= 0) continue;
           if (!byTicker[h.ticker]) {
-            byTicker[h.ticker] = { ticker: h.ticker, currentPrice: h.currentPrice, previousClose: h.previousClose };
+            byTicker[h.ticker] = { ticker: h.ticker, currentPrice: h.currentPrice, previousClose: h.previousClose, assetType: h.assetType || 'Equity' };
           }
         }
         const withGain = Object.values(byTicker).map(t => ({
@@ -192,7 +192,7 @@ const DashboardView: React.FC<Props> = ({
         const MoverRow = ({ h }: { h: typeof withGain[0] }) => (
           <div className="flex items-center justify-between py-3 border-b last:border-0 border-[#D2D2D7]">
             <div className="flex items-center gap-3">
-              <TickerLogo ticker={h.ticker} size={32} />
+              <TickerLogo ticker={h.ticker} size={32} assetType={h.assetType} />
               <div>
                 <p className="text-sm font-semibold text-[#1D1D1F]">{h.ticker}</p>
                 <p className="text-xs text-slate-400">${h.currentPrice.toFixed(2)}</p>
