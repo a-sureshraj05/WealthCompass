@@ -7,3 +7,4 @@ yfinance
 bcrypt
 python-jose[cryptography]
 python-multipart
+anthropic

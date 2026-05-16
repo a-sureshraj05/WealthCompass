@@ -157,28 +157,29 @@ const DashboardView: React.FC<Props> = ({
     <div className="space-y-6">
       <SummaryCards stats={stats} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-full">
-          <PortfolioVisuals holdings={holdings} />
-        </div>
-
-        <div className="space-y-6">
+      {/* Row 2 — AI Wealth Intelligence (85%) + Connect More (15%) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-10 h-full">
           <AIInsights holdings={holdings} />
-
-          <div className="bg-gradient-to-br from-slate-900 to-indigo-900 p-6 rounded-2xl text-white shadow-xl">
+        </div>
+        <div className="lg:col-span-2 bg-gradient-to-br from-slate-900 to-indigo-900 p-6 rounded-2xl text-white shadow-xl flex flex-col justify-between">
+          <div>
             <h3 className="text-lg font-bold mb-2">Connect More</h3>
             <p className="text-slate-300 text-sm mb-6 leading-relaxed">
               Consolidate your Robinhood, Schwab, and Fidelity accounts for a 360° view of your net worth.
             </p>
-            <button
-              className="w-full py-3 bg-white text-indigo-900 font-bold rounded-xl shadow-lg hover:bg-indigo-50 transition-colors"
-              onClick={() => setActiveTab('importData')}
-            >
-              Get Started
-            </button>
           </div>
+          <button
+            className="w-full py-3 bg-white text-indigo-900 font-bold rounded-xl shadow-lg hover:bg-indigo-50 transition-colors"
+            onClick={() => setActiveTab('importData')}
+          >
+            Get Started
+          </button>
         </div>
       </div>
+
+      {/* Row 3 — Portfolio Visuals */}
+      <PortfolioVisuals holdings={holdings} />
 
       {holdings.length > 0 && (() => {
         // Aggregate by ticker across all brokerages, compute daily % change

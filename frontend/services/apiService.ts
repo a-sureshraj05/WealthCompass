@@ -7,7 +7,7 @@ const authHeaders = (extra: Record<string, string> = {}): Record<string, string>
   return token ? { Authorization: `Bearer ${token}`, ...extra } : extra;
 };
 
-const apiFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+export const apiFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
   const res = await fetch(url, {
     ...options,
     headers: { ...authHeaders(), ...(options.headers as Record<string, string> || {}) },
@@ -145,11 +145,21 @@ export const fetchUnrealizedGains = async (): Promise<UnrealizedLot[]> => {
   return data.map((item: any) => ({ ...item, id: String(item.id), gain: item.unrealizedGain }));
 };
 
-export const getPortfolioInsights = async (holdings: StockHolding[]): Promise<string> => {
-  if (holdings.length === 0) return "Add holdings to get AI insights.";
+export interface InsightItem {
+  category: string;
+  type: 'warning' | 'positive' | 'info' | 'negative';
+  title: string;
+  message: string;
+}
 
-  // This will be implemented in the backend in the next step.
-  return "Insights are not yet implemented in the new architecture.";
+export const getPortfolioInsights = async (): Promise<InsightItem[]> => {
+  const res = await apiFetch("/api/v1/insights");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch insights");
+  }
+  const data = await res.json();
+  return data.insights;
 };
 
 export const createPlaidLinkToken = async (): Promise<string> => {

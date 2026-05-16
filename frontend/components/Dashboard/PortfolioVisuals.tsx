@@ -59,11 +59,11 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
-      <div className="bg-white p-6 rounded-2xl border shadow-sm flex flex-col">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="bg-white p-6 rounded-2xl border shadow-sm">
         <h3 className="text-lg font-bold text-slate-900 mb-6">Sector Allocation</h3>
-        <div className="flex-1 min-h-0">
-          <ResponsiveContainer width="100%" height="100%">
+        <div>
+          <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
                 data={allocationData}
@@ -91,10 +91,10 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl border shadow-sm flex flex-col">
+      <div className="bg-white p-6 rounded-2xl border shadow-sm">
         <h3 className="text-lg font-bold text-slate-900 mb-6">Brokerage Distribution</h3>
-        <div className="flex-1 min-h-0">
-          <ResponsiveContainer width="100%" height="100%">
+        <div>
+          <ResponsiveContainer width="100%" height={280}>
             <BarChart data={brokerageData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />

@@ -11,7 +11,7 @@ from fastapi import FastAPI, Depends
 from backend.app.core.database import engine
 from backend.app.db.schema import Base
 
-from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits
+from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, chat
 from .api.auth import get_current_user
 
 app = FastAPI()
@@ -110,6 +110,7 @@ app.include_router(analyst.router, prefix="/api/v1", dependencies=[Depends(get_c
 app.include_router(lot_assignments.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(options.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(splits.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(chat.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")

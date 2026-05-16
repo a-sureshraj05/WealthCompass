@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { StockHolding, PortfolioStats, Transaction, DateRangeType, RealizedGain, UnrealizedLot } from './types';
 import DashboardView from './components/Dashboard/DashboardView';
+import ChatWidget from './components/ChatWidget';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LoginPage from './components/LoginPage';
@@ -302,6 +303,8 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           />
         </main>
       </div>
+
+      <ChatWidget />
 
       {loading && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50">
