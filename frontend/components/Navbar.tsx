@@ -13,7 +13,7 @@ const Navbar: React.FC<Props> = ({ stats, onLogout, sidebarCollapsed }) => {
     <nav className="h-16 border-b border-[#D2D2D7] bg-white flex items-center justify-between px-8 shrink-0">
       <div className="flex items-center">
         {sidebarCollapsed && (
-          <span className="text-lg font-bold text-[#0F52BA]">WealthCompass</span>
+          <span className="font-display text-lg font-bold text-[#0F52BA]">WealthCompass</span>
         )}
       </div>
 

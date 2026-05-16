@@ -62,7 +62,7 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
-          <h1 className="text-2xl font-black text-slate-900">WealthCompass</h1>
+          <h1 className="font-display text-2xl font-bold text-[#1D1D1F]">WealthCompass</h1>
           <p className="text-sm text-slate-500 mt-1">Your personal portfolio tracker</p>
         </div>
 

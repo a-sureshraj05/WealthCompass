@@ -74,7 +74,7 @@ const DashboardView: React.FC<Props> = ({
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-[#1D1D1F]">Portfolio Holdings</h2>
+          <h2 className="font-display text-2xl font-bold text-[#1D1D1F]">Portfolio Holdings</h2>
           <button
             onClick={onProcessGains}
             className="px-4 py-2 text-sm font-medium text-[#0F52BA] hover:bg-[#F5F5F7] rounded transition-colors border border-[#D2D2D7]"
@@ -92,7 +92,7 @@ const DashboardView: React.FC<Props> = ({
           selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers}
         />
         <div className="space-y-2">
-          <h3 className="text-lg font-bold text-slate-900">Options Calculator</h3>
+          <h3 className="font-display text-lg font-semibold text-[#1D1D1F]">Options Calculator</h3>
           <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} />
         </div>
       </div>
@@ -103,7 +103,7 @@ const DashboardView: React.FC<Props> = ({
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-[#1D1D1F]">Transaction History</h2>
+          <h2 className="font-display text-2xl font-bold text-[#1D1D1F]">Transaction History</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={async () => { setSyncMessage(''); const msg = await onSyncTransactions(); setSyncMessage(msg); }}
@@ -140,7 +140,7 @@ const DashboardView: React.FC<Props> = ({
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-[#1D1D1F]">Realized Gains & Losses</h2>
+          <h2 className="font-display text-2xl font-bold text-[#1D1D1F]">Realized Gains & Losses</h2>
           <button
             onClick={onProcessGains}
             className="px-4 py-2 text-sm font-medium text-[#0F52BA] hover:bg-[#F5F5F7] rounded transition-colors border border-[#D2D2D7]"
@@ -156,7 +156,7 @@ const DashboardView: React.FC<Props> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#1D1D1F]">Dashboard</h1>
+        <h1 className="font-display text-2xl font-bold text-[#1D1D1F]">Dashboard</h1>
         <div className="mt-1 w-8 h-0.5 bg-[#0F52BA]" />
       </div>
 

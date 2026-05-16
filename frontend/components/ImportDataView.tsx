@@ -161,7 +161,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4">
       <div className="space-y-1">
-        <h2 className="text-2xl font-bold text-[#1D1D1F]">Import Your Portfolio</h2>
+        <h2 className="font-display text-2xl font-bold text-[#1D1D1F]">Import Your Portfolio</h2>
         <p className="text-[#6E6E73] text-sm">Connect your brokerage or upload a statement manually.</p>
       </div>
 
@@ -541,7 +541,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
             <svg className="w-16 h-16 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <h3 className="text-xl font-bold text-slate-900">Upload Successful!</h3>
+            <h3 className="font-display text-xl font-bold text-[#1D1D1F]">Upload Successful!</h3>
             <p className="text-slate-600">Your statement has been successfully parsed and processed.</p>
             <button
               onClick={() => setShowSuccessPrompt(false)}

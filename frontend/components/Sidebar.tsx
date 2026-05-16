@@ -36,7 +36,7 @@ const Sidebar: React.FC<Props> = ({ activeTab, setActiveTab, collapsed, setColla
           <span className="text-[#0F52BA] font-black text-lg">W</span>
         ) : (
           <div className="text-left">
-            <span className="text-lg font-bold text-[#0F52BA] block">WealthCompass</span>
+            <span className="font-display text-lg font-bold text-[#0F52BA] block">WealthCompass</span>
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.1em]">Wealth Management</span>
           </div>
         )}
