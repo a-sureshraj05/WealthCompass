@@ -124,7 +124,7 @@ const HoldingsView: React.FC<Props> = ({
   };
 
   const LotSortIndicator = ({ col }: { col: typeof lotSortKey }) => (
-    <svg className={`w-2.5 h-2.5 ml-0.5 ${lotSortKey === col ? 'text-[#007AFF]' : 'opacity-20'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className={`w-2.5 h-2.5 ml-0.5 ${lotSortKey === col ? 'text-[#AF52DE]' : 'opacity-20'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       {lotSortKey !== col || lotSortDir === 'asc'
         ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
         : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
@@ -135,7 +135,7 @@ const HoldingsView: React.FC<Props> = ({
   const SortIndicator = ({ column }: { column: SortKey }) => {
     if (sortKey !== column) return <svg className="w-3 h-3 ml-1 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
     return (
-      <span className="ml-1 text-[#007AFF]">
+      <span className="ml-1 text-[#AF52DE]">
         {sortDirection === 'asc'
           ? <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
           : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
@@ -266,10 +266,10 @@ const HoldingsView: React.FC<Props> = ({
           <div className="flex flex-wrap items-center gap-4 flex-1">
             {/* Brokerage Filter */}
             <div className="relative" ref={brokerageMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#007AFF] uppercase tracking-tighter z-10">Brokerage</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#AF52DE] uppercase tracking-tighter z-10">Brokerage</label>
               <button
                 onClick={() => setIsBrokerageMenuOpen(!isBrokerageMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#007AFF] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#AF52DE] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedBrokerages.length === 0 ? 'All Brokers' : selectedBrokerages.length === 1 ? selectedBrokerages[0] : `${selectedBrokerages.length} Brokers`}
@@ -280,12 +280,12 @@ const HoldingsView: React.FC<Props> = ({
                 <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Brokerages</span>
-                    {selectedBrokerages.length > 0 && <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#007AFF] px-2">Clear</button>}
+                    {selectedBrokerages.length > 0 && <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#AF52DE] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {allBrokerages.map(b => (
                       <label key={b} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
-                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#007AFF] focus:ring-[#007AFF]" checked={selectedBrokerages.includes(b)} onChange={() => toggleBrokerage(b)} />
+                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#AF52DE] focus:ring-[#AF52DE]" checked={selectedBrokerages.includes(b)} onChange={() => toggleBrokerage(b)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{b}</span>
                       </label>
                     ))}
@@ -296,10 +296,10 @@ const HoldingsView: React.FC<Props> = ({
 
             {/* Ticker Filter */}
             <div className="relative" ref={tickerMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#007AFF] uppercase tracking-tighter z-10">Ticker</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#AF52DE] uppercase tracking-tighter z-10">Ticker</label>
               <button
                 onClick={() => setIsTickerMenuOpen(!isTickerMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#007AFF] outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#AF52DE] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedTickers.length === 0 ? 'All Tickers' : selectedTickers.length === 1 ? selectedTickers[0] : `${selectedTickers.length} Tickers`}
@@ -310,12 +310,12 @@ const HoldingsView: React.FC<Props> = ({
                 <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Tickers</span>
-                    {selectedTickers.length > 0 && <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#007AFF] px-2">Clear</button>}
+                    {selectedTickers.length > 0 && <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#AF52DE] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {allTickers.map(t => (
                       <label key={t} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
-                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#007AFF] focus:ring-[#007AFF]" checked={selectedTickers.includes(t)} onChange={() => toggleTickerFilter(t)} />
+                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#AF52DE] focus:ring-[#AF52DE]" checked={selectedTickers.includes(t)} onChange={() => toggleTickerFilter(t)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{t}</span>
                       </label>
                     ))}
@@ -330,7 +330,7 @@ const HoldingsView: React.FC<Props> = ({
           {/* After-Tax Keep slider */}
           <div className="relative shrink-0">
             <div className="absolute -top-2 left-2 bg-white px-1 z-10 flex items-center gap-1">
-              <span className="text-[9px] font-black text-[#007AFF] uppercase tracking-tighter">After-Tax Keep</span>
+              <span className="text-[9px] font-black text-[#AF52DE] uppercase tracking-tighter">After-Tax Keep</span>
               <div className="relative group">
                 <svg className="w-3 h-3 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -341,12 +341,12 @@ const HoldingsView: React.FC<Props> = ({
               </div>
             </div>
             <div className="flex items-center gap-2 pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
-              <input type="range" min={0} max={100} step={5} value={keepPct} onChange={e => setKeepPct(Number(e.target.value))} className="w-28 accent-[#007AFF]00 cursor-pointer" />
-              <span className="text-sm font-bold text-[#007AFF] w-8 text-right">{keepPct}%</span>
+              <input type="range" min={0} max={100} step={5} value={keepPct} onChange={e => setKeepPct(Number(e.target.value))} className="w-28 accent-[#AF52DE]00 cursor-pointer" />
+              <span className="text-sm font-bold text-[#AF52DE] w-8 text-right">{keepPct}%</span>
             </div>
           </div>
 
-          <button onClick={resetFilters} className="text-xs font-bold text-slate-400 hover:text-[#007AFF] transition-colors uppercase tracking-widest px-2 shrink-0">
+          <button onClick={resetFilters} className="text-xs font-bold text-slate-400 hover:text-[#AF52DE] transition-colors uppercase tracking-widest px-2 shrink-0">
             Reset
           </button>
         </div>
@@ -358,7 +358,7 @@ const HoldingsView: React.FC<Props> = ({
           <div className="max-w-xs mx-auto space-y-4">
             <h4 className="text-slate-900 font-bold">No results found</h4>
             <p className="text-sm text-slate-400">No holdings match these criteria.</p>
-            <button onClick={resetFilters} className="text-[#007AFF] text-sm font-bold hover:underline">Clear all filters</button>
+            <button onClick={resetFilters} className="text-[#AF52DE] text-sm font-bold hover:underline">Clear all filters</button>
           </div>
         </div>
       ) : (
@@ -369,7 +369,7 @@ const HoldingsView: React.FC<Props> = ({
                 <th className="px-4 py-4 w-8">
                   <button
                     onClick={() => { if (expandedTickers.size > 0) { setExpandedTickers(new Set()); setExpandedBrokerages(new Set()); } else setExpandedTickers(new Set(tickerRows.map(r => r.ticker))); }}
-                    className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#007AFF] hover:bg-[#F5F5F7] transition-all"
+                    className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#AF52DE] hover:bg-[#F5F5F7] transition-all"
                     title={expandedTickers.size > 0 ? 'Collapse all' : 'Expand all'}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -380,23 +380,23 @@ const HoldingsView: React.FC<Props> = ({
                     </svg>
                   </button>
                 </th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#007AFF]" onClick={() => handleSort('ticker')}>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#AF52DE]" onClick={() => handleSort('ticker')}>
                   <div className="flex items-center">Ticker <SortIndicator column="ticker" /></div>
                 </th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#007AFF] text-right" onClick={() => handleSort('quantity')}>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#AF52DE] text-right" onClick={() => handleSort('quantity')}>
                   <div className="flex items-center justify-end">Quantity <SortIndicator column="quantity" /></div>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Avg Cost</th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#007AFF] text-right" onClick={() => handleSort('totalCost')}>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#AF52DE] text-right" onClick={() => handleSort('totalCost')}>
                   <div className="flex items-center justify-end">Total Cost <SortIndicator column="totalCost" /></div>
                 </th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#007AFF] text-right" onClick={() => handleSort('currentPrice')}>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#AF52DE] text-right" onClick={() => handleSort('currentPrice')}>
                   <div className="flex items-center justify-end">Current Price <SortIndicator column="currentPrice" /></div>
                 </th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#007AFF] text-right" onClick={() => handleSort('marketValue')}>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#AF52DE] text-right" onClick={() => handleSort('marketValue')}>
                   <div className="flex items-center justify-end">Market Value <SortIndicator column="marketValue" /></div>
                 </th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#007AFF] text-right" onClick={() => handleSort('gain')}>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#AF52DE] text-right" onClick={() => handleSort('gain')}>
                   <div className="flex items-center justify-end">Unrealized <SortIndicator column="gain" /></div>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Realized</th>
@@ -417,7 +417,7 @@ const HoldingsView: React.FC<Props> = ({
                         {row.brokerageGroups.length > 0 && (
                           <button
                             onClick={() => toggleTicker(row.ticker)}
-                            className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#007AFF] hover:bg-[#F5F5F7] transition-all"
+                            className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#AF52DE] hover:bg-[#F5F5F7] transition-all"
                           >
                             <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -462,7 +462,7 @@ const HoldingsView: React.FC<Props> = ({
                           const pct = ((analystMedian[row.ticker] - row.currentPrice) / row.currentPrice) * 100;
                           return (
                             <div>
-                              <div className="text-sm font-bold text-[#007AFF]">${analystMedian[row.ticker].toFixed(2)}</div>
+                              <div className="text-sm font-bold text-[#AF52DE]">${analystMedian[row.ticker].toFixed(2)}</div>
                               <div className={`text-xs font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</div>
                             </div>
                           );
@@ -493,11 +493,11 @@ const HoldingsView: React.FC<Props> = ({
                         <React.Fragment key={brokerageKey}>
 
                           {/* Level 2 row — brokerage aggregated */}
-                          <tr className={`border-t border-[#D2D2D7] ${isBrokerageExpanded ? 'bg-[#007AFF]/5' : 'bg-[#F5F5F7]'} hover:bg-[#007AFF]/5 transition-colors`}>
+                          <tr className={`border-t border-[#D2D2D7] ${isBrokerageExpanded ? 'bg-[#AF52DE]/5' : 'bg-[#F5F5F7]'} hover:bg-[#AF52DE]/5 transition-colors`}>
                             <td className="pl-8 pr-4 py-3">
                               <button
                                 onClick={() => toggleBrokerageRow(brokerageKey)}
-                                className="w-5 h-5 flex items-center justify-center rounded-md text-[#D2D2D7] hover:text-[#007AFF] hover:bg-[#E8F2FF] transition-all"
+                                className="w-5 h-5 flex items-center justify-center rounded-md text-[#D2D2D7] hover:text-[#AF52DE] hover:bg-[#F5EAFF] transition-all"
                               >
                                 <svg className={`w-3 h-3 transition-transform ${isBrokerageExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -506,7 +506,7 @@ const HoldingsView: React.FC<Props> = ({
                             </td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                                bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#007AFF] text-white' :
+                                bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#AF52DE] text-white' :
                                 bg.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
                                 'bg-[#E5E5EA] text-[#6E6E73]'
                               }`}>{bg.brokerage}</span>
@@ -528,7 +528,7 @@ const HoldingsView: React.FC<Props> = ({
                                 const pct = bg.currentPrice > 0 ? ((target - bg.currentPrice) / bg.currentPrice) * 100 : 0;
                                 return (
                                   <div>
-                                    <div className="text-[11px] font-bold text-[#007AFF]">${target.toFixed(2)}</div>
+                                    <div className="text-[11px] font-bold text-[#AF52DE]">${target.toFixed(2)}</div>
                                     <div className={`text-[10px] font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</div>
                                   </div>
                                 );
@@ -553,17 +553,17 @@ const HoldingsView: React.FC<Props> = ({
                           {/* Level 3 sub-header */}
                           {isBrokerageExpanded && (() => {
                             const th = (col: typeof lotSortKey, label: string) => (
-                              <td className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap text-right cursor-pointer select-none hover:text-[#007AFF] transition-colors"
-                                  style={{ color: lotSortKey === col ? '#007AFF' : undefined }}
+                              <td className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap text-right cursor-pointer select-none hover:text-[#AF52DE] transition-colors"
+                                  style={{ color: lotSortKey === col ? '#AF52DE' : undefined }}
                                   onClick={() => handleLotSort(col)}>
                                 <div className="flex items-center justify-end gap-0.5">{label}<LotSortIndicator col={col} /></div>
                               </td>
                             );
                             return (
-                              <tr className="bg-[#E8F2FF]/30 border-t border-[#D2D2D7]/60">
+                              <tr className="bg-[#F5EAFF]/30 border-t border-[#D2D2D7]/60">
                                 <td></td>
-                                <td className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap cursor-pointer select-none hover:text-[#007AFF] transition-colors"
-                                    style={{ color: lotSortKey === 'buyDate' ? '#007AFF' : undefined }}
+                                <td className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap cursor-pointer select-none hover:text-[#AF52DE] transition-colors"
+                                    style={{ color: lotSortKey === 'buyDate' ? '#AF52DE' : undefined }}
                                     onClick={() => handleLotSort('buyDate')}>
                                   <div className="flex items-center gap-0.5">Buy Date<LotSortIndicator col="buyDate" /></div>
                                 </td>
@@ -603,14 +603,14 @@ const HoldingsView: React.FC<Props> = ({
                                   {lot.buyPrice > 0 && <div className="text-[10px] font-bold">{lot.gain >= 0 ? '+' : ''}{((lot.currentPrice - lot.buyPrice) / lot.buyPrice * 100).toFixed(1)}%</div>}
                                 </td>
                                 <td className="px-4 py-2 text-right">
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${lot.isLongTerm ? 'bg-[#E8F2FF] text-[#0062CC]' : 'bg-[#E5E5EA] text-[#6E6E73]'}`}>
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${lot.isLongTerm ? 'bg-[#F5EAFF] text-[#9440C2]' : 'bg-[#E5E5EA] text-[#6E6E73]'}`}>
                                     {lot.isLongTerm ? 'LT' : 'ST'}
                                   </span>
                                 </td>
                                 <td></td>
                                 <td className="px-4 py-2 text-right">
                                   {analystMedian[row.ticker] ? (
-                                    <div className="text-[11px] font-bold text-[#007AFF]">${analystMedian[row.ticker].toFixed(2)}</div>
+                                    <div className="text-[11px] font-bold text-[#AF52DE]">${analystMedian[row.ticker].toFixed(2)}</div>
                                   ) : <div className="text-[10px] text-slate-300">—</div>}
                                 </td>
                                 <td className="px-4 py-2 text-right">

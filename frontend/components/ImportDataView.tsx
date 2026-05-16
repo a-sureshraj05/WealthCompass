@@ -169,13 +169,13 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
       <div className="flex items-center p-1 bg-[#EFEFF4] rounded-lg w-fit">
         <button
           onClick={() => setActiveTab('manual')}
-          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'manual' ? 'bg-white text-[#007AFF] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'manual' ? 'bg-white text-[#AF52DE] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
           Manual Upload
         </button>
         <button
           onClick={() => setActiveTab('connect')}
-          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'connect' ? 'bg-white text-[#007AFF] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'connect' ? 'bg-white text-[#AF52DE] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
           Connect Brokerage
         </button>
@@ -196,7 +196,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       onClick={() => setSelectedBroker(broker.name)}
                       className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 transition-all duration-200 ${
                         selectedBroker === broker.name
-                          ? 'border-[#007AFF] bg-[#E8F2FF]/20 text-[#0062CC]'
+                          ? 'border-[#AF52DE] bg-[#F5EAFF]/20 text-[#9440C2]'
                           : 'border-[#D2D2D7] hover:border-[#D2D2D7] text-[#6E6E73]'
                       }`}
                     >
@@ -212,8 +212,8 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
               <div className="space-y-6">
                 <label className="block text-sm font-bold text-slate-700">2. Upload Statement or Paste Content</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="border-2 border-dashed border-[#D2D2D7] rounded-lg p-8 flex flex-col items-center justify-center text-center space-y-4 hover:border-[#007AFF] transition-colors bg-[#F5F5F7]">
-                    <div className="w-16 h-16 rounded-full bg-white shadow-sm flex items-center justify-center text-[#007AFF]">
+                  <div className="border-2 border-dashed border-[#D2D2D7] rounded-lg p-8 flex flex-col items-center justify-center text-center space-y-4 hover:border-[#AF52DE] transition-colors bg-[#F5F5F7]">
+                    <div className="w-16 h-16 rounded-full bg-white shadow-sm flex items-center justify-center text-[#AF52DE]">
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
@@ -223,13 +223,13 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       <p className="text-sm text-slate-500 mt-1">Export your data from your broker</p>
                     </div>
                     <input type="file" id="file-upload" className="hidden" onChange={handleFileUpload} accept=".csv,.txt" />
-                    <label htmlFor="file-upload" className="px-6 py-2 bg-[#007AFF] text-white font-bold rounded-lg cursor-pointer hover:bg-[#0062CC] transition-colors shadow-sm">
+                    <label htmlFor="file-upload" className="px-6 py-2 bg-[#AF52DE] text-white font-bold rounded-lg cursor-pointer hover:bg-[#9440C2] transition-colors shadow-sm">
                       Select File
                     </label>
                   </div>
                   <div className="space-y-4">
                     <textarea
-                      className="w-full h-44 p-4 rounded-lg border border-[#D2D2D7] focus:ring-2 focus:ring-[#007AFF] focus:border-[#007AFF] transition-all text-sm font-medium outline-none resize-none"
+                      className="w-full h-44 p-4 rounded-lg border border-[#D2D2D7] focus:ring-2 focus:ring-[#AF52DE] focus:border-[#AF52DE] transition-all text-sm font-medium outline-none resize-none"
                       placeholder="Or paste your CSV/text statement here..."
                       value={manualText}
                       onChange={(e) => setManualText(e.target.value)}
@@ -289,7 +289,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       onClick={() => setConnectBroker(broker.name)}
                       className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 transition-all duration-200 ${
                         connectBroker === broker.name
-                          ? 'border-[#007AFF] bg-[#E8F2FF]/20 text-[#0062CC]'
+                          ? 'border-[#AF52DE] bg-[#F5EAFF]/20 text-[#9440C2]'
                           : 'border-[#D2D2D7] hover:border-[#D2D2D7] text-[#6E6E73]'
                       }`}
                     >
@@ -308,7 +308,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                 <button
                   onClick={handleConnect}
                   disabled={!connectBroker}
-                  className="w-full py-3 bg-[#007AFF] text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0062CC] transition-colors shadow-sm"
+                  className="w-full py-3 bg-[#AF52DE] text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#9440C2] transition-colors shadow-sm"
                 >
                   Connect Brokerage
                 </button>
@@ -326,7 +326,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       <select
                         value={syncBrokerage}
                         onChange={e => { setSyncBrokerage(e.target.value); setSyncAccountIds([]); }}
-                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm text-[#1D1D1F] bg-white focus:outline-none focus:ring-2 focus:ring-[#007AFF]"
+                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm text-[#1D1D1F] bg-white focus:outline-none focus:ring-2 focus:ring-[#AF52DE]"
                       >
                         <option value="">All Brokerages</option>
                         {connections.map(c => (
@@ -342,15 +342,15 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                           <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Accounts</label>
                           <div className="flex flex-col gap-2">
                             {filteredAccounts.map(a => (
-                              <div key={a.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-sm transition-colors ${syncAccountIds.includes(a.id) ? 'bg-[#E8F2FF]/20 border-[#007AFF]/30' : 'bg-[#F5F5F7] border-[#D2D2D7]'}`}>
+                              <div key={a.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-sm transition-colors ${syncAccountIds.includes(a.id) ? 'bg-[#F5EAFF]/20 border-[#AF52DE]/30' : 'bg-[#F5F5F7] border-[#D2D2D7]'}`}>
                                 <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
                                   <input
                                     type="checkbox"
-                                    className="w-4 h-4 accent-[#007AFF] shrink-0"
+                                    className="w-4 h-4 accent-[#AF52DE] shrink-0"
                                     checked={syncAccountIds.includes(a.id)}
                                     onChange={() => setSyncAccountIds(prev => prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id])}
                                   />
-                                  <p className={`font-semibold ${syncAccountIds.includes(a.id) ? 'text-[#0062CC]' : 'text-[#1D1D1F]'}`}>
+                                  <p className={`font-semibold ${syncAccountIds.includes(a.id) ? 'text-[#9440C2]' : 'text-[#1D1D1F]'}`}>
                                     {a.name || 'Brokerage Account'}
                                   </p>
                                 </label>
@@ -385,7 +385,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       type="date"
                       value={syncStartDate}
                       onChange={e => setSyncStartDate(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#007AFF]"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#AF52DE]"
                     />
                   </div>
                   <div className="space-y-1">
@@ -394,7 +394,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       type="date"
                       value={syncEndDate}
                       onChange={e => setSyncEndDate(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#007AFF]"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#AF52DE]"
                     />
                   </div>
                 </div>
@@ -414,7 +414,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                         }
                       }}
                       placeholder="e.g. AAPL"
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#007AFF]"
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#AF52DE]"
                     />
                     <button
                       onClick={() => {
@@ -423,7 +423,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                         setSyncTickerInput('');
                       }}
                       disabled={!syncTickerInput.trim()}
-                      className="px-3 py-2 bg-[#E8F2FF] text-[#0062CC] font-bold rounded-lg text-sm disabled:opacity-40 hover:bg-[#D2D2D7] transition-colors"
+                      className="px-3 py-2 bg-[#F5EAFF] text-[#9440C2] font-bold rounded-lg text-sm disabled:opacity-40 hover:bg-[#D2D2D7] transition-colors"
                     >
                       Add
                     </button>
@@ -431,7 +431,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                   {syncTickers.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {syncTickers.map(t => (
-                        <span key={t} className="flex items-center gap-1 px-2.5 py-1 bg-[#E8F2FF]/30 text-[#0062CC] border border-[#D2D2D7] rounded text-xs font-bold">
+                        <span key={t} className="flex items-center gap-1 px-2.5 py-1 bg-[#F5EAFF]/30 text-[#9440C2] border border-[#D2D2D7] rounded text-xs font-bold">
                           {t}
                           <button onClick={() => setSyncTickers(prev => prev.filter(x => x !== t))} className="text-[#AEAEB2] hover:text-[#FF3B30] transition-colors">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -545,7 +545,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
             <p className="text-slate-600">Your statement has been successfully parsed and processed.</p>
             <button
               onClick={() => setShowSuccessPrompt(false)}
-              className="px-6 py-3 bg-[#007AFF] text-white font-bold rounded-lg hover:bg-[#0062CC] transition-colors shadow-sm"
+              className="px-6 py-3 bg-[#AF52DE] text-white font-bold rounded-lg hover:bg-[#9440C2] transition-colors shadow-sm"
             >
               OK
             </button>

@@ -77,7 +77,7 @@ const DashboardView: React.FC<Props> = ({
           <h2 className="text-2xl font-bold text-[#1D1D1F]">Portfolio Holdings</h2>
           <button
             onClick={onProcessGains}
-            className="px-4 py-2 text-sm font-medium text-[#007AFF] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#D2D2D7]"
+            className="px-4 py-2 text-sm font-medium text-[#AF52DE] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#D2D2D7]"
           >
             Refresh Data
           </button>
@@ -107,7 +107,7 @@ const DashboardView: React.FC<Props> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={async () => { setSyncMessage(''); const msg = await onSyncTransactions(); setSyncMessage(msg); }}
-              className="px-4 py-2 text-sm font-medium text-[#007AFF] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#D2D2D7]"
+              className="px-4 py-2 text-sm font-medium text-[#AF52DE] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#D2D2D7]"
             >
               Sync Transactions
             </button>
@@ -143,7 +143,7 @@ const DashboardView: React.FC<Props> = ({
           <h2 className="text-2xl font-bold text-[#1D1D1F]">Realized Gains & Losses</h2>
           <button
             onClick={onProcessGains}
-            className="px-4 py-2 text-sm font-medium text-[#007AFF] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#D2D2D7]"
+            className="px-4 py-2 text-sm font-medium text-[#AF52DE] hover:bg-[#F5F5F7] rounded-lg transition-colors border border-[#D2D2D7]"
           >
             Refresh Data
           </button>
@@ -157,7 +157,7 @@ const DashboardView: React.FC<Props> = ({
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-[#1D1D1F]">Dashboard</h1>
-        <div className="mt-1 w-8 h-0.5 bg-[#007AFF]" />
+        <div className="mt-1 w-8 h-0.5 bg-[#AF52DE]" />
       </div>
 
       <SummaryCards stats={stats} />
