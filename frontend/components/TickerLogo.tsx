@@ -6,25 +6,28 @@ interface Props {
   assetType?: string;
 }
 
-const ETFIcon: React.FC<{ size: number }> = ({ size }) => (
-  <span
-    className="inline-flex items-center justify-center bg-[#E6EEFB] rounded shrink-0"
-    style={{ width: size, height: size }}
-  >
-    <svg
-      width={Math.round(size * 0.55)}
-      height={Math.round(size * 0.55)}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#0F52BA"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+const ETFIcon: React.FC<{ size: number }> = ({ size }) => {
+  const pad = Math.round(size * 0.22);
+  const inner = size - pad * 2;
+  return (
+    <span
+      className="inline-flex items-center justify-center bg-[#0F52BA] rounded shrink-0"
+      style={{ width: size, height: size }}
     >
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-    </svg>
-  </span>
-);
+      <svg
+        width={inner}
+        height={inner}
+        viewBox="0 0 20 20"
+        fill="white"
+      >
+        {/* 3 bars: short, tall, medium */}
+        <rect x="1" y="10" width="5" height="9" rx="1" />
+        <rect x="7.5" y="4" width="5" height="15" rx="1" />
+        <rect x="14" y="7" width="5" height="12" rx="1" />
+      </svg>
+    </span>
+  );
+};
 
 const TickerLogo: React.FC<Props> = ({ ticker, size = 28, assetType }) => {
   const [failed, setFailed] = useState(false);
