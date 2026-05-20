@@ -24,9 +24,12 @@ interface Props {
   setSelectedAssetTypes: (v: string[]) => void;
   selectedTickers: string[];
   setSelectedTickers: (v: string[]) => void;
+  focusTicker?: string | null;
+  focusDate?: string | null;
+  onClearFocus?: () => void;
 }
 
-const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert, selectedBrokerages, setSelectedBrokerages, selectedAssetTypes, setSelectedAssetTypes, selectedTickers, setSelectedTickers }) => {
+const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert, selectedBrokerages, setSelectedBrokerages, selectedAssetTypes, setSelectedAssetTypes, selectedTickers, setSelectedTickers, focusTicker, focusDate, onClearFocus }) => {
   const [dateRangeType, setDateRangeType] = useState<DateRangeType>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -225,8 +228,11 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
         (visibilityFilter === 'hidden' && t.is_deleted);
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.map(b => b.toLowerCase().trim()).includes((t.brokerage || '').toLowerCase().trim());
       const matchesAssetType = selectedAssetTypes.length === 0 || selectedAssetTypes.map(at => at.toLowerCase()).includes((t.assetType || '').toLowerCase());
-      const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(t.ticker);
-      
+      const matchesTicker = focusTicker
+        ? t.ticker === focusTicker
+        : selectedTickers.length === 0 || selectedTickers.includes(t.ticker);
+      const matchesFocusDate = !focusDate || t.date.substring(0, 10) === focusDate.substring(0, 10);
+
       const transactionDate = new Date(t.date).getTime();
 
       let matchesDate = true;
@@ -239,7 +245,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
         matchesDate = matchesStart && matchesEnd;
       }
 
-      return matchesVisibility && matchesBrokerage && matchesAssetType && matchesTicker && matchesDate;
+      return matchesVisibility && matchesBrokerage && matchesAssetType && matchesTicker && matchesDate && matchesFocusDate;
     });
 
     // Apply Sorting
@@ -299,7 +305,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
     }
 
     return result;
-  }, [transactions, visibilityFilter, selectedBrokerages, selectedAssetTypes, selectedTickers, dateRangeType, startDate, endDate, sortKey, sortDirection]);
+  }, [transactions, visibilityFilter, selectedBrokerages, selectedAssetTypes, selectedTickers, focusTicker, focusDate, dateRangeType, startDate, endDate, sortKey, sortDirection]);
 
   const resetFilters = () => {
     setSelectedBrokerages([]);
@@ -328,6 +334,24 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
 
   return (
     <div className="space-y-4">
+      {focusTicker && (
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-[#E6EEFB] border border-[#0F52BA]/20 rounded">
+          <TickerLogo ticker={focusTicker} size={20} />
+          <span className="text-sm font-semibold text-[#0F52BA]">
+            <span className="font-black">{focusTicker}</span>
+            {focusDate && <span className="font-normal"> · {focusDate.substring(0, 10)}</span>}
+          </span>
+          <button
+            onClick={onClearFocus}
+            className="ml-auto flex items-center gap-1 text-xs font-bold text-[#0F52BA] hover:text-[#0A3E8F] transition-colors"
+          >
+            Show all
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
       <div className="bg-white p-5 rounded border border-[#D2D2D7] relative z-30">
         <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center space-x-2">
@@ -642,7 +666,9 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                 };
 
                 const saveEdit = () => {
-                  onUpdate(t.id, editDraft);
+                  const qty = editDraft.quantity ?? t.quantity;
+                  const price = editDraft.price ?? t.price;
+                  onUpdate(t.id, { ...editDraft, totalCost: qty * price });
                   setEditingId(null);
                   setEditDraft({});
                 };

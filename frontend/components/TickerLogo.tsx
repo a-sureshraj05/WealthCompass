@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTickerType } from '../contexts/TickerTypeContext';
 
 interface Props {
   ticker: string;
@@ -33,7 +34,8 @@ type LoadState = 'parqet' | 'fmp' | 'failed';
 
 const TickerLogo: React.FC<Props> = ({ ticker, size = 28, assetType }) => {
   const [loadState, setLoadState] = useState<LoadState>('parqet');
-  const isETF = (assetType || '').toUpperCase() === 'ETF';
+  const resolvedType = useTickerType(ticker, assetType);
+  const isETF = resolvedType.toUpperCase() === 'ETF';
 
   if (isETF) {
     return <ETFIcon size={size} />;

@@ -64,8 +64,12 @@ const DashboardView: React.FC<Props> = ({
   setSelectedTickers,
 }) => {
   const [syncMessage, setSyncMessage] = useState('');
+  const [focusTicker, setFocusTicker] = useState<string | null>(null);
+  const [focusDate, setFocusDate] = useState<string | null>(null);
+  const [autoExpand, setAutoExpand] = useState<{ ticker: string; brokerage: string } | null>(null);
 
   useEffect(() => { setSyncMessage(''); }, [activeTab]);
+  useEffect(() => { if (activeTab !== 'transactions') { setFocusTicker(null); setFocusDate(null); } }, [activeTab]);
 
   if (activeTab === 'importData') {
     return <ImportDataView onAddTransactions={onAddTransactions} setLoading={setLoading} initialTab="connect" />;
@@ -88,6 +92,13 @@ const DashboardView: React.FC<Props> = ({
           unrealizedGains={unrealizedGains.filter(u => (u.assetType || '').toLowerCase() !== 'options')}
           realizedGains={realizedGains.filter(r => (r.assetType || '').toLowerCase() !== 'options')}
           onRemove={onRemoveHolding}
+          autoExpand={autoExpand}
+          onNavigateToTransactions={(ticker, brokerage, buyDate) => {
+            setAutoExpand({ ticker, brokerage });
+            setFocusTicker(ticker);
+            setFocusDate(buyDate);
+            setActiveTab('transactions');
+          }}
           selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages}
           selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes}
           selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers}
@@ -132,7 +143,7 @@ const DashboardView: React.FC<Props> = ({
             {syncMessage}
           </p>
         )}
-        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} />
+        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} focusTicker={focusTicker} focusDate={focusDate} onClearFocus={() => { setFocusTicker(null); setFocusDate(null); }} />
       </div>
     );
   }

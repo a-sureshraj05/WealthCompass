@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
 from backend.app.db.schema import Holding, UnrealizedGain
+from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 
 _OPTIONS_MULTIPLIER = 100  # 1 contract = 100 underlying shares
 
@@ -61,7 +62,7 @@ def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, fl
             currentPrice=current_price,
             previousClose=prev_close,
             marketValue=total_quantity * m * current_price,
-            assetType=agg.get("assetType"),
+            assetType=normalize_asset_type(agg.get("assetType") or "", ticker=agg["ticker"]),
         )
         holdings_list.append(holding)
 

@@ -11,6 +11,8 @@ interface Props {
   unrealizedGains: UnrealizedLot[];
   realizedGains: RealizedGain[];
   onRemove: (id: string) => void;
+  onNavigateToTransactions?: (ticker: string, brokerage: string, buyDate: string) => void;
+  autoExpand?: { ticker: string; brokerage: string } | null;
   selectedBrokerages: string[];
   setSelectedBrokerages: (v: string[]) => void;
   selectedAssetTypes: string[];
@@ -20,13 +22,17 @@ interface Props {
 }
 
 const HoldingsView: React.FC<Props> = ({
-  holdings, unrealizedGains, realizedGains, onRemove,
+  holdings, unrealizedGains, realizedGains, onRemove, onNavigateToTransactions, autoExpand,
   selectedBrokerages, setSelectedBrokerages,
   selectedAssetTypes, setSelectedAssetTypes,
   selectedTickers, setSelectedTickers,
 }) => {
-  const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
-  const [expandedBrokerages, setExpandedBrokerages] = useState<Set<string>>(new Set());
+  const [expandedTickers, setExpandedTickers] = useState<Set<string>>(
+    autoExpand ? new Set([autoExpand.ticker]) : new Set()
+  );
+  const [expandedBrokerages, setExpandedBrokerages] = useState<Set<string>>(
+    autoExpand ? new Set([`${autoExpand.ticker}::${autoExpand.brokerage}`]) : new Set()
+  );
   const [lotSortKey, setLotSortKey] = useState<'buyDate' | 'quantity' | 'buyPrice' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain'>('buyDate');
   const [lotSortDir, setLotSortDir] = useState<'asc' | 'desc'>('asc');
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
@@ -588,13 +594,26 @@ const HoldingsView: React.FC<Props> = ({
                             const lotCost = lot.quantity * lot.buyPrice;
                             const lotMarket = lot.quantity * lot.currentPrice;
                             return (
-                              <tr key={`${brokerageKey}-lot-${idx}`} className="bg-white border-t border-[#D2D2D7]/40">
+                              <tr
+                                key={`${brokerageKey}-lot-${idx}`}
+                                className={`bg-white border-t border-[#D2D2D7]/40 ${onNavigateToTransactions ? 'cursor-pointer hover:bg-[#E6EEFB]/40 group/lot' : ''}`}
+                                onClick={() => onNavigateToTransactions?.(row.ticker, bg.brokerage, lot.buyDate)}
+                              >
                                 <td className="px-4 py-2">
                                   <div className="flex justify-center pl-4">
                                     <div className="w-px h-full min-h-[16px] bg-[#D2D2D7]"></div>
                                   </div>
                                 </td>
-                                <td className="px-4 py-2 text-[11px] text-slate-500 font-bold whitespace-nowrap">{new Date(lot.buyDate).toLocaleDateString('en-CA')}</td>
+                                <td className="px-4 py-2 text-[11px] text-slate-500 font-bold whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5">
+                                    {new Date(lot.buyDate).toLocaleDateString('en-CA')}
+                                    {onNavigateToTransactions && (
+                                      <svg className="w-3 h-3 text-[#0F52BA] opacity-0 group-hover/lot:opacity-100 transition-opacity shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="px-4 py-2 text-right text-[11px] text-slate-600 font-medium">{lot.quantity.toFixed(2)}</td>
                                 <td className="px-4 py-2 text-right text-[11px] text-slate-500">${lot.buyPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                 <td className="px-4 py-2 text-right text-[11px] text-slate-500">${lotCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
