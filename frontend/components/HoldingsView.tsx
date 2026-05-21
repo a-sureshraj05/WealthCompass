@@ -2,6 +2,9 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { StockHolding, UnrealizedLot, RealizedGain } from '../types';
 import { fetchAnalystData } from '../services/apiService';
 import TickerLogo from './TickerLogo';
+import SortIndicator from './SortIndicator';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { optionsMultiplier } from '../utils/finance';
 
 type SortKey = 'ticker' | 'quantity' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain';
 type SortDirection = 'asc' | 'desc' | null;
@@ -56,14 +59,10 @@ const HoldingsView: React.FC<Props> = ({
       .catch(console.error);
   }, [holdings]);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (brokerageMenuRef.current && !brokerageMenuRef.current.contains(e.target as Node)) setIsBrokerageMenuOpen(false);
-      if (tickerMenuRef.current && !tickerMenuRef.current.contains(e.target as Node)) setIsTickerMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(
+    [brokerageMenuRef, tickerMenuRef],
+    [setIsBrokerageMenuOpen, setIsTickerMenuOpen],
+  );
 
   // Realized gains summed by ticker
   const realizedByTicker = useMemo(() => {
@@ -139,17 +138,9 @@ const HoldingsView: React.FC<Props> = ({
     </svg>
   );
 
-  const SortIndicator = ({ column }: { column: SortKey }) => {
-    if (sortKey !== column) return <svg className="w-3 h-3 ml-1 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
-    return (
-      <span className="ml-1 text-[#0F52BA]">
-        {sortDirection === 'asc'
-          ? <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
-          : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-        }
-      </span>
-    );
-  };
+  const SI = ({ column }: { column: SortKey }) => (
+    <SortIndicator column={column} sortKey={sortKey} sortDirection={sortDirection} />
+  );
 
   // Aggregate holdings by ticker
   const tickerRows = useMemo(() => {
@@ -388,23 +379,23 @@ const HoldingsView: React.FC<Props> = ({
                   </button>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA]" onClick={() => handleSort('ticker')}>
-                  <div className="flex items-center">Ticker <SortIndicator column="ticker" /></div>
+                  <div className="flex items-center">Ticker <SI column="ticker" /></div>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('quantity')}>
-                  <div className="flex items-center justify-end">Quantity <SortIndicator column="quantity" /></div>
+                  <div className="flex items-center justify-end">Quantity <SI column="quantity" /></div>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Avg Cost</th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('totalCost')}>
-                  <div className="flex items-center justify-end">Total Cost <SortIndicator column="totalCost" /></div>
+                  <div className="flex items-center justify-end">Total Cost <SI column="totalCost" /></div>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('currentPrice')}>
-                  <div className="flex items-center justify-end">Current Price <SortIndicator column="currentPrice" /></div>
+                  <div className="flex items-center justify-end">Current Price <SI column="currentPrice" /></div>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('marketValue')}>
-                  <div className="flex items-center justify-end">Market Value <SortIndicator column="marketValue" /></div>
+                  <div className="flex items-center justify-end">Market Value <SI column="marketValue" /></div>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('gain')}>
-                  <div className="flex items-center justify-end">Unrealized <SortIndicator column="gain" /></div>
+                  <div className="flex items-center justify-end">Unrealized <SI column="gain" /></div>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Realized</th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Total Gain</th>
@@ -479,11 +470,8 @@ const HoldingsView: React.FC<Props> = ({
                       <td className="px-4 py-4 text-right">
                         {analystMedian[row.ticker] ? (() => {
                           const target = analystMedian[row.ticker];
-                          const isOpts = (row.assetType || '').toLowerCase() === 'options';
-                          // Options: avgCost = 100×premium/contract; equity: avgCost = cost/share
-                          const g = isOpts
-                            ? row.totalQty * (target * 100 - row.avgCost)
-                            : row.totalQty * (target - row.avgCost);
+                          const m = optionsMultiplier(row.assetType);
+                          const g = row.totalQty * (target * m - row.avgCost);
                           return (
                             <div className={`text-sm font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                               {g >= 0 ? '+' : '-'}${Math.abs(g).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -545,10 +533,8 @@ const HoldingsView: React.FC<Props> = ({
                             <td className="px-4 py-3 text-right">
                               {analystMedian[row.ticker] ? (() => {
                                 const target = analystMedian[row.ticker];
-                                const isOpts = (row.assetType || '').toLowerCase() === 'options';
-                                const g = isOpts
-                                  ? bg.totalQty * (target * 100 - bg.avgCost)
-                                  : bg.totalQty * (target - bg.avgCost);
+                                const m = optionsMultiplier(row.assetType);
+                                const g = bg.totalQty * (target * m - bg.avgCost);
                                 return (
                                   <div className={`text-[11px] font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                     {g >= 0 ? '+' : '-'}${Math.abs(g).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -637,11 +623,8 @@ const HoldingsView: React.FC<Props> = ({
                                 <td className="px-4 py-2 text-right">
                                   {analystMedian[row.ticker] ? (() => {
                                     const target = analystMedian[row.ticker];
-                                    const isOpts = (lot.assetType || '').toLowerCase() === 'options';
-                                    // lot.buyPrice is always per-share; multiply by 100 for options contracts
-                                    const g = isOpts
-                                      ? lot.quantity * 100 * (target - lot.buyPrice)
-                                      : lot.quantity * (target - lot.buyPrice);
+                                    const m = optionsMultiplier(lot.assetType);
+                                    const g = lot.quantity * m * (target - lot.buyPrice);
                                     return (
                                       <div className={`text-[11px] font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                         {g >= 0 ? '+' : '-'}${Math.abs(g).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

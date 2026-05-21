@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Transaction } from '../types';
 import TickerLogo from './TickerLogo';
+import SortIndicator from './SortIndicator';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { brokerageColor } from '../utils/finance';
 import {
   fetchOpenBuys, fetchLotAssignments, createLotAssignment, deleteLotAssignment,
   OpenBuyLot, LotAssignment,
@@ -144,21 +147,10 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
   const assetTypeMenuRef = useRef<HTMLDivElement>(null);
   const tickerMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (brokerageMenuRef.current && !brokerageMenuRef.current.contains(event.target as Node)) {
-        setIsBrokerageMenuOpen(false);
-      }
-      if (assetTypeMenuRef.current && !assetTypeMenuRef.current.contains(event.target as Node)) {
-        setIsAssetTypeMenuOpen(false);
-      }
-      if (tickerMenuRef.current && !tickerMenuRef.current.contains(event.target as Node)) {
-        setIsTickerMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(
+    [brokerageMenuRef, assetTypeMenuRef, tickerMenuRef],
+    [setIsBrokerageMenuOpen, setIsAssetTypeMenuOpen, setIsTickerMenuOpen],
+  );
 
   const formatAssetType = (type: string) => {
     if (!type) return '';
@@ -319,18 +311,9 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
     setVisibilityFilter('active');
   };
 
-  const SortIndicator = ({ column }: { column: SortKey }) => {
-    if (sortKey !== column) return <svg className="w-3 h-3 ml-1 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
-    return (
-      <span className="ml-1 text-[#0F52BA]">
-        {sortDirection === 'asc' ? (
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
-        ) : (
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-        )}
-      </span>
-    );
-  };
+  const SI = ({ column }: { column: SortKey }) => (
+    <SortIndicator column={column} sortKey={sortKey} sortDirection={sortDirection} />
+  );
 
   return (
     <div className="space-y-4">
@@ -585,7 +568,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   onClick={() => handleSort('date')}
                 >
                   <div className="flex items-center">
-                    Date <SortIndicator column="date" />
+                    Date <SI column="date" />
                   </div>
                 </th>
                 <th 
@@ -593,7 +576,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   onClick={() => handleSort('brokerage')}
                 >
                   <div className="flex items-center">
-                    Brokerage <SortIndicator column="brokerage" />
+                    Brokerage <SI column="brokerage" />
                   </div>
                 </th>
                 <th 
@@ -601,7 +584,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   onClick={() => handleSort('assetType')}
                 >
                   <div className="flex items-center">
-                    Asset Type <SortIndicator column="assetType" />
+                    Asset Type <SI column="assetType" />
                   </div>
                 </th>
                 <th 
@@ -609,7 +592,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   onClick={() => handleSort('ticker')}
                 >
                   <div className="flex items-center">
-                    Ticker <SortIndicator column="ticker" />
+                    Ticker <SI column="ticker" />
                   </div>
                 </th>
                 <th 
@@ -617,7 +600,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   onClick={() => handleSort('action')}
                 >
                   <div className="flex items-center">
-                    Action <SortIndicator column="action" />
+                    Action <SI column="action" />
                   </div>
                 </th>
                 <th 
@@ -625,7 +608,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   onClick={() => handleSort('quantity')}
                 >
                   <div className="flex items-center justify-end">
-                    Quantity <SortIndicator column="quantity" />
+                    Quantity <SI column="quantity" />
                   </div>
                 </th>
                 <th 
@@ -633,7 +616,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   onClick={() => handleSort('price')}
                 >
                   <div className="flex items-center justify-end">
-                    Price <SortIndicator column="price" />
+                    Price <SI column="price" />
                   </div>
                 </th>
                 <th 
@@ -641,7 +624,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   onClick={() => handleSort('amount')}
                 >
                   <div className="flex items-center justify-end">
-                    Total Amount ($) <SortIndicator column="amount" />
+                    Total Amount ($) <SI column="amount" />
                   </div>
                 </th>
                 <th className="px-6 py-4"></th>
@@ -709,11 +692,10 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                         <input className={inputCls} value={editDraft.brokerage || ''}
                           onChange={e => setEditDraft(d => ({ ...d, brokerage: e.target.value }))} />
                       ) : (
-                        <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
-                          t.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
-                          t.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
-                          'bg-[#E5E5EA] text-[#6E6E73]'
-                        }`}>{t.brokerage}</span>
+                        <span
+                          className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight"
+                          style={{ backgroundColor: brokerageColor(t.brokerage) + '22', color: brokerageColor(t.brokerage) }}
+                        >{t.brokerage}</span>
                       )}
                     </td>
 

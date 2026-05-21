@@ -1,22 +1,28 @@
-from typing import Any, Dict, Optional, Tuple
+import logging
+from typing import Any, Dict, Tuple
 from sqlalchemy.orm import Session
 from backend.app.db.schema import Holding, UnrealizedGain
 from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 
+logger = logging.getLogger(__name__)
+
 _OPTIONS_MULTIPLIER = 100  # 1 contract = 100 underlying shares
+
 
 def _multiplier(asset_type: str) -> int:
     return _OPTIONS_MULTIPLIER if (asset_type or "").lower() == "options" else 1
 
-def delete(db: Session, brokerage_name: str = None):
+
+def delete(db: Session, brokerage_name: str = None) -> None:
     if brokerage_name:
         db.query(Holding).filter(Holding.brokerage == brokerage_name).delete()
     else:
         db.query(Holding).delete()
     db.commit()
 
-def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, float] = None):
-    print(f"[holding_loader] Starting load for brokerage: {brokerage_name}")
+
+def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, float] = None) -> None:
+    logger.info("Starting load for brokerage: %s", brokerage_name)
     delete(db, brokerage_name)
 
     query = db.query(UnrealizedGain)
@@ -50,28 +56,29 @@ def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, fl
         total_quantity = agg["quantity"]
         total_cost = agg["totalCost"]
         current_price = agg["currentPrice"]
+        ticker = agg["ticker"]
 
         m = _multiplier(agg.get("assetType"))
-        prev_close = (prev_close_cache or {}).get(agg["ticker"], current_price)
+        prev_close = (prev_close_cache or {}).get(ticker, current_price)
         holding = Holding(
             brokerage=agg["brokerage"],
-            ticker=agg["ticker"],
+            ticker=ticker,
             quantity=total_quantity,
             averageCostPerShare=total_cost / total_quantity if total_quantity > 0 else 0.0,
             totalCost=total_cost,
             currentPrice=current_price,
             previousClose=prev_close,
             marketValue=total_quantity * m * current_price,
-            assetType=normalize_asset_type(agg.get("assetType") or "", ticker=agg["ticker"]),
+            assetType=normalize_asset_type(agg.get("assetType") or "", ticker=ticker),
         )
         holdings_list.append(holding)
 
     try:
-        print(f"[holding_loader] Adding {len(holdings_list)} aggregated holdings to DB.")
+        logger.info("Adding %d aggregated holdings to DB.", len(holdings_list))
         db.add_all(holdings_list)
         db.commit()
-        print(f"[holding_loader] Successfully committed aggregated holdings.")
+        logger.info("Successfully committed aggregated holdings.")
     except Exception as e:
         db.rollback()
-        print(f"[holding_loader] ERROR committing aggregated holdings: {e}")
+        logger.error("ERROR committing aggregated holdings: %s", e)
         raise

@@ -180,7 +180,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const handleUpdateTransaction = async (id: string, updates: Partial<Transaction>) => {
     try {
-      await updateTransaction(id, updates as any);
+      await updateTransaction(id, updates);
       setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates, is_override: true } : t));
       transactionsDirty.current = true;
     } catch (error) {

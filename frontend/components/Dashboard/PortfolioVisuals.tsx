@@ -2,12 +2,13 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { StockHolding } from '../types';
+import { brokerageColor } from '../../utils/finance';
 
 interface Props {
   holdings: StockHolding[];
 }
 
-const COLORS = ['#0F52BA', '#2E6DB4', '#5AC8FA', '#34C759', '#FF9500', '#FF2D55', '#6E6E73'];
+const COLORS = ['#0F52BA', '#34C759', '#FF9500', '#FF2D55', '#AF52DE', '#5AC8FA', '#6E6E73'];
 
 const SectorTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
@@ -134,7 +135,10 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
           {brokerageData.map((b, i) => (
             <div key={b.name}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-sm font-medium text-[#1D1D1F]">{b.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: brokerageColor(b.name, i) }} />
+                  <span className="text-sm font-medium text-[#1D1D1F]">{b.name}</span>
+                </div>
                 <span className="text-sm font-semibold text-[#1D1D1F]">
                   ${b.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </span>
@@ -142,7 +146,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
               <div className="h-1.5 bg-[#F5F5F7] rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${b.pct}%`, backgroundColor: COLORS[i % COLORS.length] }}
+                  style={{ width: `${b.pct}%`, backgroundColor: brokerageColor(b.name, i) }}
                 />
               </div>
             </div>

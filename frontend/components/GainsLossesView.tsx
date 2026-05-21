@@ -2,6 +2,9 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import { RealizedGain, UnrealizedLot } from '../types';
 import TickerLogo from './TickerLogo';
+import SortIndicator from './SortIndicator';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { formatCurrency, formatDate } from '../utils/finance';
 
 type GainSortKey = 'ticker' | 'assetType' | 'brokerage' | 'buyDate' | 'sellDate' | 'quantity' | 'buyPrice' | 'price' | 'gain' | 'proceeds' | 'costBasis';
 type SortDirection = 'asc' | 'desc' | null;
@@ -15,8 +18,8 @@ interface Props {
   setSelectedTickers: (v: string[]) => void;
 }
 
-const fmt = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const fmt = formatCurrency;
+const fmtDate = formatDate;
 
 const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, unrealizedGains: unrealizedGainsData, selectedBrokerages, setSelectedBrokerages, selectedTickers, setSelectedTickers }) => {
   const [activeSubTab, setActiveSubTab] = useState<'realized' | 'unrealized'>('realized');
@@ -46,15 +49,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   const brokerageMenuRef = useRef<HTMLDivElement>(null);
   const assetTypeMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (tickerMenuRef.current && !tickerMenuRef.current.contains(event.target as Node)) setIsTickerMenuOpen(false);
-      if (brokerageMenuRef.current && !brokerageMenuRef.current.contains(event.target as Node)) setIsBrokerageMenuOpen(false);
-      if (assetTypeMenuRef.current && !assetTypeMenuRef.current.contains(event.target as Node)) setIsAssetTypeMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(
+    [tickerMenuRef, brokerageMenuRef, assetTypeMenuRef],
+    [setIsTickerMenuOpen, setIsBrokerageMenuOpen, setIsAssetTypeMenuOpen],
+  );
 
   const yoyData = useMemo(() => {
     if (activeSubTab !== 'realized') return [];
@@ -180,10 +178,9 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     } else { setSortKey(key); setSortDirection('asc'); }
   };
 
-  const SortIndicator = ({ column }: { column: GainSortKey }) => {
-    if (sortKey !== column) return <svg className="w-3 h-3 ml-1 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
-    return <span className="ml-1 text-[#0F52BA]">{sortDirection === 'asc' ? <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg> : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>}</span>;
-  };
+  const SI = ({ column }: { column: GainSortKey }) => (
+    <SortIndicator column={column} sortKey={sortKey} sortDirection={sortDirection} />
+  );
 
 
   const GainTableSection = ({ title, data, isLT }: { title: string; data: (RealizedGain | UnrealizedLot)[]; isLT: boolean }) => (
@@ -202,7 +199,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               { key: 'gain', label: 'Realized G/L', align: 'right' },
             ].map(({ key, label, align }) => (
               <th key={key} className={`px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors ${align === 'right' ? 'text-right' : ''}`} onClick={() => handleSort(key as GainSortKey)}>
-                <div className={`flex items-center ${align === 'right' ? 'justify-end' : ''}`}>{label}<SortIndicator column={key as GainSortKey} /></div>
+                <div className={`flex items-center ${align === 'right' ? 'justify-end' : ''}`}>{label}<SI column={key as GainSortKey} /></div>
               </th>
             ))}
           </tr>
