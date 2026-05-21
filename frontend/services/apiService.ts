@@ -101,12 +101,9 @@ export const updateTransaction = async (id: string, updates: {
 };
 
 export const revertTransaction = async (id: string): Promise<void> => {
-  console.log('[revertTransaction] POST', `/api/v1/transactions/${id}/revert`);
   const response = await apiFetch(`/api/v1/transactions/${id}/revert`, { method: "POST" });
-  console.log('[revertTransaction] status:', response.status);
   if (!response.ok) throw new Error(`Failed to revert transaction: ${response.status}`);
-  const data = await response.json();
-  console.log('[revertTransaction] response:', data);
+  await response.json();
 };
 
 export const softDeleteTransaction = async (id: string, isDeleted: boolean): Promise<void> => {

@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import TickerLogo from './TickerLogo';
+import { StockHolding } from '../types';
 import {
   OptionsPosition,
   OptionsCalculator,
@@ -46,9 +48,10 @@ interface TickerCalc {
 interface OptionsViewProps {
   selectedBrokerages?: string[];
   selectedTickers?: string[];
+  holdings?: StockHolding[];
 }
 
-const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [] }) => {
+const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [], holdings = [] }) => {
   const [positions, setPositions] = useState<OptionsPosition[]>([]);
   const [calculator, setCalculator] = useState<OptionsCalculator | null>(null);
   const [pendingRetain, setPendingRetain] = useState<Record<number, string>>({});
@@ -114,7 +117,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   );
 
   if (error) return (
-    <div className="p-6 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-sm font-medium">
+    <div className="p-6 bg-rose-50 border border-rose-100 rounded text-rose-600 text-sm font-medium">
       {error}
     </div>
   );
@@ -135,6 +138,9 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   if (filteredPositions.length === 0) return (
     <div className="p-8 text-center text-slate-400 text-sm">No options positions match the selected filters.</div>
   );
+
+  const assetTypeByTicker: Record<string, string> = {};
+  holdings.forEach(h => { assetTypeByTicker[h.ticker] = h.assetType || 'Equity'; });
 
   // Group positions by ticker
   const grouped: Record<string, OptionsPosition[]> = {};
@@ -207,7 +213,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     <div className="space-y-4">
 
       {/* Toolbar */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+      <div className="bg-white p-5 rounded border border-[#D2D2D7] shadow-sm flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-sm font-bold text-slate-700">Tax Rate</span>
           <div className="flex items-center gap-1">
@@ -215,7 +221,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
               type="number" min={0} max={100} step={1}
               value={taxRateInput}
               onChange={e => setTaxRateInput(e.target.value)}
-              className="w-16 px-2 py-1 text-right border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 font-semibold text-indigo-700 bg-indigo-50"
+              className="w-16 px-2 py-1 text-right border border-[#D2D2D7] rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#0F52BA] font-semibold text-[#0A3E8F] bg-[#E6EEFB]/20"
             />
             <span className="text-slate-500 text-sm font-bold">%</span>
           </div>
@@ -224,14 +230,14 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white shadow-sm overflow-hidden">
         <table className="w-full text-left">
           <thead>
             <tr className="bg-slate-50/50 border-b border-slate-200">
               <th className="px-4 py-4 w-8">
                 <button
                   onClick={() => { if (expandedTickers.size > 0) { setExpandedTickers(new Set()); setExpandedBrokerages(new Set()); } else setExpandedTickers(new Set(tickerCalcs.map(t => t.ticker))); }}
-                  className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                  className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
                   title={expandedTickers.size > 0 ? 'Collapse all' : 'Expand all'}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -266,7 +272,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                     <td className="px-4 py-4">
                       <button
                         onClick={() => toggleTicker(tc.ticker)}
-                        className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                        className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
                       >
                         <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -274,9 +280,10 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                       </button>
                     </td>
                     <td className="px-4 py-4">
-                      <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-tight">
-                        {tc.ticker}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <TickerLogo ticker={tc.ticker} size={32} assetType={assetTypeByTicker[tc.ticker]} />
+                        <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{tc.ticker}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-4 text-right font-bold text-slate-800 text-sm">{fmt(tc.totalQty, 0)}</td>
                     <td className="px-4 py-4 text-right text-sm text-slate-500 font-medium">{fmtCurrency(tc.avgBuyPrice)}</td>
@@ -306,7 +313,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                     </td>
                     <td className="px-4 py-4 text-right">
                       {tc.targetPrice !== null && !tc.isCovered ? (
-                        <span className="font-bold text-indigo-700 text-sm">{fmtCurrency(tc.targetPrice)}</span>
+                        <span className="font-bold text-[#0A3E8F] text-sm">{fmtCurrency(tc.targetPrice)}</span>
                       ) : (
                         <span className="text-xs text-slate-300">—</span>
                       )}
@@ -321,11 +328,11 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                       <React.Fragment key={brokerageKey}>
 
                         {/* Level 2 row — brokerage aggregated */}
-                        <tr className={`border-t border-indigo-100 ${isBrokerageExpanded ? 'bg-indigo-50/60' : 'bg-indigo-50/30'} hover:bg-indigo-50/70 transition-colors`}>
+                        <tr className={`border-t border-[#D2D2D7] ${isBrokerageExpanded ? 'bg-[#0F52BA]/5' : 'bg-[#F5F5F7]'} hover:bg-[#0F52BA]/5 transition-colors`}>
                           <td className="pl-8 pr-4 py-3">
                             <button
                               onClick={() => toggleBrokerageRow(brokerageKey)}
-                              className="w-5 h-5 flex items-center justify-center rounded-md text-indigo-300 hover:text-indigo-600 hover:bg-indigo-100 transition-all"
+                              className="w-5 h-5 flex items-center justify-center rounded-md text-[#D2D2D7] hover:text-[#0F52BA] hover:bg-[#E6EEFB] transition-all"
                             >
                               <svg className={`w-3 h-3 transition-transform ${isBrokerageExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -333,10 +340,10 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                             </button>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                              bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-orange-100 text-orange-700' :
-                              bg.brokerage.toLowerCase().includes('schwab') ? 'bg-fuchsia-100 text-fuchsia-800' :
-                              'bg-slate-100 text-slate-600'
+                            <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
+                              bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
+                              bg.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
+                              'bg-[#E5E5EA] text-[#6E6E73]'
                             }`}>{bg.brokerage}</span>
                           </td>
                           <td className="px-4 py-3 text-right text-[11px] font-medium text-slate-700">{fmt(bg.totalQty, 0)}</td>
@@ -355,17 +362,17 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
 
                         {/* Level 3 sub-header */}
                         {isBrokerageExpanded && (
-                          <tr className="bg-indigo-100/60 border-t border-indigo-200/60">
+                          <tr className="bg-[#E6EEFB]/30 border-t border-[#D2D2D7]/60">
                             <td></td>
-                            <td className="px-4 py-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-widest whitespace-nowrap">Buy Date</td>
-                            <td className="px-4 py-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-widest whitespace-nowrap text-right">Qty</td>
-                            <td className="px-4 py-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-widest whitespace-nowrap text-right">Avg Price</td>
-                            <td className="px-4 py-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-widest whitespace-nowrap text-right">Total Value</td>
-                            <td className="px-4 py-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-widest whitespace-nowrap text-right">Current Price</td>
-                            <td className="px-4 py-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-widest whitespace-nowrap text-right">Market Value</td>
-                            <td className="px-4 py-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-widest whitespace-nowrap text-right">Unrealized</td>
-                            <td className="px-4 py-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-widest whitespace-nowrap text-right">Retain</td>
-                            <td className="px-4 py-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-widest whitespace-nowrap text-right">Sellable</td>
+                            <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap">Buy Date</td>
+                            <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Qty</td>
+                            <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Avg Price</td>
+                            <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Total Value</td>
+                            <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Current Price</td>
+                            <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Market Value</td>
+                            <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Unrealized</td>
+                            <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Retain</td>
+                            <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Sellable</td>
                             <td></td>
                             <td></td>
                           </tr>
@@ -377,10 +384,10 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                           const posMarketValue = pos.quantity * 100 * pos.currentPrice;
                           const posUnrealized = posMarketValue - posTotalValue;
                           return (
-                            <tr key={pos.id} className="bg-indigo-50/20 border-t border-indigo-100/40">
+                            <tr key={pos.id} className="bg-[#F5F5F7] border-t border-[#D2D2D7]">
                               <td className="px-4 py-2">
                                 <div className="flex justify-center pl-4">
-                                  <div className="w-px h-full min-h-[16px] bg-indigo-200"></div>
+                                  <div className="w-px h-full min-h-[16px] bg-[#D2D2D7]"></div>
                                 </div>
                               </td>
                               {/* Buy Date */}
@@ -415,7 +422,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                                     onChange={e => handleRetainChange(pos.id, e.target.value)}
                                     onBlur={() => handleRetainSave(pos)}
                                     onKeyDown={e => e.key === 'Enter' && handleRetainSave(pos)}
-                                    className="w-20 px-2 py-0.5 text-right border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-indigo-50 font-semibold text-indigo-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="w-20 px-2 py-0.5 text-right border border-[#D2D2D7] rounded text-[11px] focus:outline-none focus:ring-2 focus:ring-[#0F52BA] bg-[#E6EEFB]/20 font-semibold text-[#0A3E8F] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                   />
                                 </div>
                               </td>

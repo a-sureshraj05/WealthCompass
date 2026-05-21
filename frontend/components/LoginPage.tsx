@@ -57,17 +57,17 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
       <div className="w-full max-w-md">
         {/* Logo / App name */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-indigo-600 rounded-2xl mb-4 shadow-lg shadow-indigo-600/30">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-[#0F52BA] rounded mb-4 shadow-lg shadow-[#0F52BA]/20">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
-          <h1 className="text-2xl font-black text-slate-900">WealthCompass</h1>
+          <h1 className="font-display text-2xl font-bold text-[#1D1D1F]">WealthCompass</h1>
           <p className="text-sm text-slate-500 mt-1">Your personal portfolio tracker</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl border shadow-sm p-8">
+        <div className="bg-white rounded border shadow-sm p-8">
           <h2 className="text-lg font-bold text-slate-900 mb-6">
             {isRegistering ? 'Create your account' : 'Sign in to your account'}
           </h2>
@@ -81,7 +81,7 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
                 onChange={e => setEmail(e.target.value)}
                 required
                 placeholder="you@example.com"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 rounded-md border border-slate-200 text-sm text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0F52BA] focus:border-transparent"
               />
             </div>
 
@@ -93,18 +93,18 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
                 onChange={e => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 rounded-md border border-slate-200 text-sm text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0F52BA] focus:border-transparent"
               />
             </div>
 
             {error && (
-              <p className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-2 rounded-lg">{error}</p>
+              <p className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-2 rounded">{error}</p>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-60"
+              className="w-full py-2.5 bg-[#0F52BA] text-white text-sm font-bold rounded-md hover:bg-[#0A3E8F] transition-colors disabled:opacity-60"
             >
               {loading ? 'Please wait…' : isRegistering ? 'Create Account' : 'Sign In'}
             </button>
@@ -114,12 +114,12 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
             {isRegistering ? (
               <p className="text-xs text-slate-500">
                 Already have an account?{' '}
-                <button onClick={() => { setIsRegistering(false); setError(''); }} className="text-indigo-600 font-bold hover:underline">Sign in</button>
+                <button onClick={() => { setIsRegistering(false); setError(''); }} className="text-[#0F52BA] font-bold hover:underline">Sign in</button>
               </p>
             ) : (
               <p className="text-xs text-slate-500">
                 First time here?{' '}
-                <button onClick={() => { setIsRegistering(true); setError(''); }} className="text-indigo-600 font-bold hover:underline">Create account</button>
+                <button onClick={() => { setIsRegistering(true); setError(''); }} className="text-[#0F52BA] font-bold hover:underline">Create account</button>
               </p>
             )}
           </div>

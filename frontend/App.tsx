@@ -6,6 +6,7 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LoginPage from './components/LoginPage';
 import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchAnalystData } from './services/apiService';
+import TickerTypeContext from './contexts/TickerTypeContext';
 
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(null);
@@ -45,6 +46,13 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState<'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses'>('dashboardView');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const transactionsDirty = React.useRef(false);
+
+  // Ticker → assetType lookup, drives TickerLogo icon selection across all pages
+  const tickerTypeMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    holdings.forEach(h => { if (h.ticker && h.assetType) map[h.ticker.toUpperCase()] = h.assetType; });
+    return map;
+  }, [holdings]);
 
   // Shared filters — reflected across all pages
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
@@ -172,7 +180,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const handleUpdateTransaction = async (id: string, updates: Partial<Transaction>) => {
     try {
-      await updateTransaction(id, updates as any);
+      await updateTransaction(id, updates);
       setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates, is_override: true } : t));
       transactionsDirty.current = true;
     } catch (error) {
@@ -267,6 +275,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   return (
+    <TickerTypeContext.Provider value={tickerTypeMap}>
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
 
@@ -312,6 +321,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         </div>
       )}
     </div>
+    </TickerTypeContext.Provider>
   );
 };
 

@@ -9,11 +9,38 @@ interface Props {
 }
 
 const BROKERAGES = [
-  { name: 'Robinhood', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
-  { name: 'Schwab', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m4 0h1m-7 4h1m4 0h1m-7 4h1m4 0h1' },
-  { name: 'Fidelity', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-  { name: 'Other', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }
+  { name: 'Robinhood', domain: 'robinhood.com' },
+  { name: 'Schwab', domain: 'schwab.com' },
+  { name: 'Fidelity', domain: 'fidelity.com' },
+  { name: 'Other', domain: null },
 ];
+
+const BrokerageLogo: React.FC<{ name: string; domain: string | null; size?: number }> = ({ name, domain, size = 40 }) => {
+  const [failed, setFailed] = useState(false);
+
+  if (!domain || failed) {
+    return (
+      <div
+        className="rounded bg-[#EFEFF4] flex items-center justify-center shrink-0"
+        style={{ width: size, height: size }}
+      >
+        <svg className="w-5 h-5 text-[#6E6E73]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
+      alt={name}
+      className="rounded object-contain shrink-0"
+      style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
+    />
+  );
+};
 
 const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initialTab = 'manual' }) => {
   const [activeTab, setActiveTab] = useState<'manual' | 'connect'>(initialTab);
@@ -160,28 +187,28 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4">
-      <div className="text-center space-y-2">
-        <h2 className="text-3xl font-extrabold text-slate-900">Import Your Portfolio</h2>
-        <p className="text-slate-500">Connect your brokerage or upload a statement manually.</p>
+      <div className="space-y-1">
+        <h2 className="font-display text-2xl font-bold text-[#1D1D1F]">Import Your Portfolio</h2>
+        <p className="text-[#6E6E73] text-sm">Connect your brokerage or upload a statement manually.</p>
       </div>
 
       {/* Tab switcher */}
-      <div className="flex items-center p-1 bg-slate-100 rounded-2xl w-fit">
+      <div className="flex items-center p-1 bg-[#EFEFF4] rounded w-fit">
         <button
           onClick={() => setActiveTab('manual')}
-          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'manual' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'manual' ? 'bg-white text-[#0F52BA] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
           Manual Upload
         </button>
         <button
           onClick={() => setActiveTab('connect')}
-          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'connect' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'connect' ? 'bg-white text-[#0F52BA] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
           Connect Brokerage
         </button>
       </div>
 
-      <div className="bg-white rounded-3xl border shadow-xl overflow-hidden">
+      <div className="bg-white rounded border border-[#D2D2D7] shadow-sm overflow-hidden">
         <div className="p-8 space-y-8">
 
           {/* ── Manual Tab ── */}
@@ -194,16 +221,14 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                     <button
                       key={broker.name}
                       onClick={() => setSelectedBroker(broker.name)}
-                      className={`flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-200 ${
+                      className={`flex flex-col items-center justify-center p-6 rounded border-2 transition-all duration-200 ${
                         selectedBroker === broker.name
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                          : 'border-slate-100 hover:border-slate-200 text-slate-500'
+                          ? 'border-[#0F52BA] bg-[#E6EEFB]/20 text-[#0A3E8F]'
+                          : 'border-[#D2D2D7] hover:border-[#D2D2D7] text-[#6E6E73]'
                       }`}
                     >
-                      <svg className="w-8 h-8 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={broker.icon} />
-                      </svg>
-                      <span className="font-bold text-sm">{broker.name}</span>
+                      <BrokerageLogo name={broker.name} domain={broker.domain} size={40} />
+                      <span className="font-bold text-sm mt-3">{broker.name}</span>
                     </button>
                   ))}
                 </div>
@@ -212,8 +237,8 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
               <div className="space-y-6">
                 <label className="block text-sm font-bold text-slate-700">2. Upload Statement or Paste Content</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="border-2 border-dashed border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center space-y-4 hover:border-indigo-400 transition-colors bg-slate-50/50">
-                    <div className="w-16 h-16 rounded-full bg-white shadow-sm flex items-center justify-center text-indigo-600">
+                  <div className="border-2 border-dashed border-[#D2D2D7] rounded p-8 flex flex-col items-center justify-center text-center space-y-4 hover:border-[#0F52BA] transition-colors bg-[#F5F5F7]">
+                    <div className="w-16 h-16 rounded-full bg-white shadow-sm flex items-center justify-center text-[#0F52BA]">
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
@@ -223,13 +248,13 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       <p className="text-sm text-slate-500 mt-1">Export your data from your broker</p>
                     </div>
                     <input type="file" id="file-upload" className="hidden" onChange={handleFileUpload} accept=".csv,.txt" />
-                    <label htmlFor="file-upload" className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-xl cursor-pointer hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">
+                    <label htmlFor="file-upload" className="px-6 py-2 bg-[#0F52BA] text-white font-bold rounded cursor-pointer hover:bg-[#0A3E8F] transition-colors shadow-sm">
                       Select File
                     </label>
                   </div>
                   <div className="space-y-4">
                     <textarea
-                      className="w-full h-44 p-4 rounded-3xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm font-medium outline-none resize-none"
+                      className="w-full h-44 p-4 rounded border border-[#D2D2D7] focus:ring-2 focus:ring-[#0F52BA] focus:border-[#0F52BA] transition-all text-sm font-medium outline-none resize-none"
                       placeholder="Or paste your CSV/text statement here..."
                       value={manualText}
                       onChange={(e) => setManualText(e.target.value)}
@@ -237,7 +262,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                     <button
                       onClick={handleManualImport}
                       disabled={!manualText || !selectedBroker}
-                      className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors shadow-xl"
+                      className="w-full py-3 bg-slate-900 text-white font-bold rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors shadow-xl"
                     >
                       Parse Statement
                     </button>
@@ -246,7 +271,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
               </div>
 
               {uploadError && (
-                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center space-x-3 text-rose-700">
+                <div className="p-4 bg-rose-50 border border-rose-100 rounded flex items-center space-x-3 text-[#FF3B30]">
                   <span className="text-sm font-medium">{uploadError}</span>
                 </div>
               )}
@@ -287,16 +312,14 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                     <button
                       key={broker.name}
                       onClick={() => setConnectBroker(broker.name)}
-                      className={`flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-200 ${
+                      className={`flex flex-col items-center justify-center p-6 rounded border-2 transition-all duration-200 ${
                         connectBroker === broker.name
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                          : 'border-slate-100 hover:border-slate-200 text-slate-500'
+                          ? 'border-[#0F52BA] bg-[#E6EEFB]/20 text-[#0A3E8F]'
+                          : 'border-[#D2D2D7] hover:border-[#D2D2D7] text-[#6E6E73]'
                       }`}
                     >
-                      <svg className="w-8 h-8 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={broker.icon} />
-                      </svg>
-                      <span className="font-bold text-sm">{broker.name}</span>
+                      <BrokerageLogo name={broker.name} domain={broker.domain} size={40} />
+                      <span className="font-bold text-sm mt-3">{broker.name}</span>
                     </button>
                   ))}
                 </div>
@@ -308,7 +331,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                 <button
                   onClick={handleConnect}
                   disabled={!connectBroker}
-                  className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors shadow-lg"
+                  className="w-full py-3 bg-[#0F52BA] text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0A3E8F] transition-colors shadow-sm"
                 >
                   Connect Brokerage
                 </button>
@@ -326,7 +349,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       <select
                         value={syncBrokerage}
                         onChange={e => { setSyncBrokerage(e.target.value); setSyncAccountIds([]); }}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm text-[#1D1D1F] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
                       >
                         <option value="">All Brokerages</option>
                         {connections.map(c => (
@@ -342,15 +365,15 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                           <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Accounts</label>
                           <div className="flex flex-col gap-2">
                             {filteredAccounts.map(a => (
-                              <div key={a.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm transition-colors ${syncAccountIds.includes(a.id) ? 'bg-indigo-50 border-indigo-300' : 'bg-slate-50 border-slate-200'}`}>
+                              <div key={a.id} className={`flex items-center gap-3 px-4 py-3 rounded border text-sm transition-colors ${syncAccountIds.includes(a.id) ? 'bg-[#E6EEFB]/20 border-[#0F52BA]/30' : 'bg-[#F5F5F7] border-[#D2D2D7]'}`}>
                                 <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
                                   <input
                                     type="checkbox"
-                                    className="w-4 h-4 accent-indigo-600 shrink-0"
+                                    className="w-4 h-4 accent-[#0F52BA] shrink-0"
                                     checked={syncAccountIds.includes(a.id)}
                                     onChange={() => setSyncAccountIds(prev => prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id])}
                                   />
-                                  <p className={`font-semibold ${syncAccountIds.includes(a.id) ? 'text-indigo-700' : 'text-slate-700'}`}>
+                                  <p className={`font-semibold ${syncAccountIds.includes(a.id) ? 'text-[#0A3E8F]' : 'text-[#1D1D1F]'}`}>
                                     {a.name || 'Brokerage Account'}
                                   </p>
                                 </label>
@@ -385,7 +408,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       type="date"
                       value={syncStartDate}
                       onChange={e => setSyncStartDate(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
                     />
                   </div>
                   <div className="space-y-1">
@@ -394,7 +417,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       type="date"
                       value={syncEndDate}
                       onChange={e => setSyncEndDate(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
                     />
                   </div>
                 </div>
@@ -414,7 +437,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                         }
                       }}
                       placeholder="e.g. AAPL"
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="flex-1 px-3 py-2 rounded-md border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
                     />
                     <button
                       onClick={() => {
@@ -423,7 +446,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                         setSyncTickerInput('');
                       }}
                       disabled={!syncTickerInput.trim()}
-                      className="px-3 py-2 bg-indigo-100 text-indigo-700 font-bold rounded-xl text-sm disabled:opacity-40 hover:bg-indigo-200 transition-colors"
+                      className="px-3 py-2 bg-[#E6EEFB] text-[#0A3E8F] font-bold rounded text-sm disabled:opacity-40 hover:bg-[#D2D2D7] transition-colors"
                     >
                       Add
                     </button>
@@ -431,9 +454,9 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                   {syncTickers.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {syncTickers.map(t => (
-                        <span key={t} className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full text-xs font-bold">
+                        <span key={t} className="flex items-center gap-1 px-2.5 py-1 bg-[#E6EEFB]/30 text-[#0A3E8F] border border-[#D2D2D7] rounded text-xs font-bold">
                           {t}
-                          <button onClick={() => setSyncTickers(prev => prev.filter(x => x !== t))} className="text-indigo-400 hover:text-rose-500 transition-colors">
+                          <button onClick={() => setSyncTickers(prev => prev.filter(x => x !== t))} className="text-[#AEAEB2] hover:text-[#FF3B30] transition-colors">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
@@ -448,14 +471,14 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={handleRefreshConnections}
-                    className="py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+                    className="py-3 bg-slate-100 text-slate-700 font-bold rounded-md hover:bg-slate-200 transition-colors"
                   >
                     Refresh Connections
                   </button>
                   <button
                     onClick={handleSync}
                     disabled={connections.length === 0}
-                    className="py-3 bg-slate-900 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors shadow-xl"
+                    className="py-3 bg-slate-900 text-white font-bold rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors shadow-xl"
                   >
                     Sync Transactions
                   </button>
@@ -463,7 +486,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
               </div>
 
               {connectStatus && (
-                <div className={`p-4 rounded-2xl border text-sm font-medium ${
+                <div className={`p-4 rounded border text-sm font-medium ${
                   connectStatus.includes('Synced') || connectStatus.includes('refreshed') || connectStatus.includes('tab has opened')
                     ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
                     : 'bg-rose-50 border-rose-100 text-rose-700'
@@ -473,7 +496,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
               )}
 
               {/* Danger Zone */}
-              <div className="border border-rose-100 rounded-2xl p-5 space-y-3">
+              <div className="border border-rose-100 rounded p-5 space-y-3">
                 <p className="text-xs font-bold text-rose-400 uppercase tracking-widest">Danger Zone</p>
                 <div className="grid grid-cols-1 gap-2">
                   <button
@@ -486,7 +509,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       } catch { setConnectStatus('Failed to delete SnapTrade raw data.'); }
                       finally { setLoading(false); }
                     }}
-                    className="w-full py-2.5 text-sm font-semibold text-rose-600 border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors"
+                    className="w-full py-2.5 text-sm font-semibold text-rose-600 border border-rose-200 rounded-md hover:bg-rose-50 transition-colors"
                   >
                     Delete SnapTrade Raw Data
                   </button>
@@ -500,7 +523,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       } catch { setConnectStatus('Failed to delete manual raw data.'); }
                       finally { setLoading(false); }
                     }}
-                    className="w-full py-2.5 text-sm font-semibold text-rose-600 border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors"
+                    className="w-full py-2.5 text-sm font-semibold text-rose-600 border border-rose-200 rounded-md hover:bg-rose-50 transition-colors"
                   >
                     Delete Manual Upload Raw Data
                   </button>
@@ -514,7 +537,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
                       } catch { setConnectStatus('Failed to delete all raw data.'); }
                       finally { setLoading(false); }
                     }}
-                    className="w-full py-2.5 text-sm font-bold text-white bg-rose-500 rounded-xl hover:bg-rose-600 transition-colors"
+                    className="w-full py-2.5 text-sm font-bold text-white bg-rose-500 rounded-md hover:bg-rose-600 transition-colors"
                   >
                     Delete All Data (Full Reset)
                   </button>
@@ -524,7 +547,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
           )}
         </div>
 
-        <div className="bg-slate-50 p-6 border-t flex items-center justify-between text-slate-500">
+        <div className="bg-[#F5F5F7] p-6 border-t border-[#D2D2D7] flex items-center justify-between text-[#6E6E73]">
           <div className="flex items-center space-x-2">
             <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -537,15 +560,15 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
 
       {showSuccessPrompt && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center space-y-4">
+          <div className="bg-white p-8 rounded border border-[#D2D2D7] shadow-sm flex flex-col items-center space-y-4">
             <svg className="w-16 h-16 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <h3 className="text-xl font-bold text-slate-900">Upload Successful!</h3>
+            <h3 className="font-display text-xl font-bold text-[#1D1D1F]">Upload Successful!</h3>
             <p className="text-slate-600">Your statement has been successfully parsed and processed.</p>
             <button
               onClick={() => setShowSuccessPrompt(false)}
-              className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg"
+              className="px-6 py-3 bg-[#0F52BA] text-white font-bold rounded hover:bg-[#0A3E8F] transition-colors shadow-sm"
             >
               OK
             </button>

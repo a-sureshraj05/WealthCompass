@@ -1,6 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { StockHolding, UnrealizedLot, RealizedGain } from '../types';
 import { fetchAnalystData } from '../services/apiService';
+import TickerLogo from './TickerLogo';
+import SortIndicator from './SortIndicator';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { optionsMultiplier } from '../utils/finance';
 
 type SortKey = 'ticker' | 'quantity' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain';
 type SortDirection = 'asc' | 'desc' | null;
@@ -10,6 +14,8 @@ interface Props {
   unrealizedGains: UnrealizedLot[];
   realizedGains: RealizedGain[];
   onRemove: (id: string) => void;
+  onNavigateToTransactions?: (ticker: string, brokerage: string, buyDate: string) => void;
+  autoExpand?: { ticker: string; brokerage: string } | null;
   selectedBrokerages: string[];
   setSelectedBrokerages: (v: string[]) => void;
   selectedAssetTypes: string[];
@@ -19,13 +25,17 @@ interface Props {
 }
 
 const HoldingsView: React.FC<Props> = ({
-  holdings, unrealizedGains, realizedGains, onRemove,
+  holdings, unrealizedGains, realizedGains, onRemove, onNavigateToTransactions, autoExpand,
   selectedBrokerages, setSelectedBrokerages,
   selectedAssetTypes, setSelectedAssetTypes,
   selectedTickers, setSelectedTickers,
 }) => {
-  const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
-  const [expandedBrokerages, setExpandedBrokerages] = useState<Set<string>>(new Set());
+  const [expandedTickers, setExpandedTickers] = useState<Set<string>>(
+    autoExpand ? new Set([autoExpand.ticker]) : new Set()
+  );
+  const [expandedBrokerages, setExpandedBrokerages] = useState<Set<string>>(
+    autoExpand ? new Set([`${autoExpand.ticker}::${autoExpand.brokerage}`]) : new Set()
+  );
   const [lotSortKey, setLotSortKey] = useState<'buyDate' | 'quantity' | 'buyPrice' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain'>('buyDate');
   const [lotSortDir, setLotSortDir] = useState<'asc' | 'desc'>('asc');
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
@@ -49,14 +59,10 @@ const HoldingsView: React.FC<Props> = ({
       .catch(console.error);
   }, [holdings]);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (brokerageMenuRef.current && !brokerageMenuRef.current.contains(e.target as Node)) setIsBrokerageMenuOpen(false);
-      if (tickerMenuRef.current && !tickerMenuRef.current.contains(e.target as Node)) setIsTickerMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(
+    [brokerageMenuRef, tickerMenuRef],
+    [setIsBrokerageMenuOpen, setIsTickerMenuOpen],
+  );
 
   // Realized gains summed by ticker
   const realizedByTicker = useMemo(() => {
@@ -124,7 +130,7 @@ const HoldingsView: React.FC<Props> = ({
   };
 
   const LotSortIndicator = ({ col }: { col: typeof lotSortKey }) => (
-    <svg className={`w-2.5 h-2.5 ml-0.5 ${lotSortKey === col ? 'text-indigo-600' : 'opacity-20'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className={`w-2.5 h-2.5 ml-0.5 ${lotSortKey === col ? 'text-[#0F52BA]' : 'opacity-20'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       {lotSortKey !== col || lotSortDir === 'asc'
         ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
         : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
@@ -132,17 +138,9 @@ const HoldingsView: React.FC<Props> = ({
     </svg>
   );
 
-  const SortIndicator = ({ column }: { column: SortKey }) => {
-    if (sortKey !== column) return <svg className="w-3 h-3 ml-1 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
-    return (
-      <span className="ml-1 text-indigo-600">
-        {sortDirection === 'asc'
-          ? <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
-          : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-        }
-      </span>
-    );
-  };
+  const SI = ({ column }: { column: SortKey }) => (
+    <SortIndicator column={column} sortKey={sortKey} sortDirection={sortDirection} />
+  );
 
   // Aggregate holdings by ticker
   const tickerRows = useMemo(() => {
@@ -236,7 +234,7 @@ const HoldingsView: React.FC<Props> = ({
 
   if (holdings.length === 0) {
     return (
-      <div className="py-20 text-center bg-white border border-slate-200 rounded-3xl shadow-sm">
+      <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
         <div className="max-w-xs mx-auto space-y-4">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,7 +252,7 @@ const HoldingsView: React.FC<Props> = ({
     <div className="space-y-4">
 
       {/* Filter Bar */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative z-30">
+      <div className="bg-white p-5 rounded border border-[#D2D2D7] relative z-30">
         <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center space-x-2">
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -266,10 +264,10 @@ const HoldingsView: React.FC<Props> = ({
           <div className="flex flex-wrap items-center gap-4 flex-1">
             {/* Brokerage Filter */}
             <div className="relative" ref={brokerageMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter z-10">Brokerage</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Brokerage</label>
               <button
                 onClick={() => setIsBrokerageMenuOpen(!isBrokerageMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedBrokerages.length === 0 ? 'All Brokers' : selectedBrokerages.length === 1 ? selectedBrokerages[0] : `${selectedBrokerages.length} Brokers`}
@@ -277,15 +275,15 @@ const HoldingsView: React.FC<Props> = ({
                 <svg className={`w-4 h-4 text-slate-400 transition-transform ${isBrokerageMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
               {isBrokerageMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50">
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Brokerages</span>
-                    {selectedBrokerages.length > 0 && <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-indigo-600 px-2">Clear</button>}
+                    {selectedBrokerages.length > 0 && <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {allBrokerages.map(b => (
-                      <label key={b} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
-                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={selectedBrokerages.includes(b)} onChange={() => toggleBrokerage(b)} />
+                      <label key={b} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
+                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedBrokerages.includes(b)} onChange={() => toggleBrokerage(b)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{b}</span>
                       </label>
                     ))}
@@ -296,10 +294,10 @@ const HoldingsView: React.FC<Props> = ({
 
             {/* Ticker Filter */}
             <div className="relative" ref={tickerMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-indigo-500 uppercase tracking-tighter z-10">Ticker</label>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Ticker</label>
               <button
                 onClick={() => setIsTickerMenuOpen(!isTickerMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer min-w-[140px] text-left"
+                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
               >
                 <span className="truncate max-w-[100px]">
                   {selectedTickers.length === 0 ? 'All Tickers' : selectedTickers.length === 1 ? selectedTickers[0] : `${selectedTickers.length} Tickers`}
@@ -307,15 +305,15 @@ const HoldingsView: React.FC<Props> = ({
                 <svg className={`w-4 h-4 text-slate-400 transition-transform ${isTickerMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
               {isTickerMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50">
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50">
                   <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Tickers</span>
-                    {selectedTickers.length > 0 && <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-indigo-600 px-2">Clear</button>}
+                    {selectedTickers.length > 0 && <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     {allTickers.map(t => (
-                      <label key={t} className="flex items-center px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
-                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={selectedTickers.includes(t)} onChange={() => toggleTickerFilter(t)} />
+                      <label key={t} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
+                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedTickers.includes(t)} onChange={() => toggleTickerFilter(t)} />
                         <span className="ml-3 text-sm font-bold text-slate-700">{t}</span>
                       </label>
                     ))}
@@ -330,23 +328,23 @@ const HoldingsView: React.FC<Props> = ({
           {/* After-Tax Keep slider */}
           <div className="relative shrink-0">
             <div className="absolute -top-2 left-2 bg-white px-1 z-10 flex items-center gap-1">
-              <span className="text-[9px] font-black text-indigo-500 uppercase tracking-tighter">After-Tax Keep</span>
+              <span className="text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter">After-Tax Keep</span>
               <div className="relative group">
                 <svg className="w-3 h-3 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <div className="absolute left-0 bottom-5 w-56 bg-slate-900 text-white text-[11px] font-normal normal-case tracking-normal rounded-xl px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed">
+                <div className="absolute left-0 bottom-5 w-56 bg-slate-900 text-white text-[11px] font-normal normal-case tracking-normal rounded-md px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed">
                   Applied to <span className="text-emerald-400 font-bold">profits only</span>. Losses are always counted at <span className="text-rose-400 font-bold">100%</span>.
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
-              <input type="range" min={0} max={100} step={5} value={keepPct} onChange={e => setKeepPct(Number(e.target.value))} className="w-28 accent-indigo-600 cursor-pointer" />
-              <span className="text-sm font-bold text-indigo-600 w-8 text-right">{keepPct}%</span>
+            <div className="flex items-center gap-2 pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md">
+              <input type="range" min={0} max={100} step={5} value={keepPct} onChange={e => setKeepPct(Number(e.target.value))} className="w-28 accent-[#0F52BA]00 cursor-pointer" />
+              <span className="text-sm font-bold text-[#0F52BA] w-8 text-right">{keepPct}%</span>
             </div>
           </div>
 
-          <button onClick={resetFilters} className="text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest px-2 shrink-0">
+          <button onClick={resetFilters} className="text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 shrink-0">
             Reset
           </button>
         </div>
@@ -354,22 +352,22 @@ const HoldingsView: React.FC<Props> = ({
 
       {/* Table */}
       {tickerRows.length === 0 ? (
-        <div className="py-20 text-center bg-white border border-slate-200 rounded-3xl shadow-sm">
+        <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
           <div className="max-w-xs mx-auto space-y-4">
             <h4 className="text-slate-900 font-bold">No results found</h4>
             <p className="text-sm text-slate-400">No holdings match these criteria.</p>
-            <button onClick={resetFilters} className="text-indigo-600 text-sm font-bold hover:underline">Clear all filters</button>
+            <button onClick={resetFilters} className="text-[#0F52BA] text-sm font-bold hover:underline">Clear all filters</button>
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white overflow-hidden">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-slate-50/50 border-b border-slate-200">
+              <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
                 <th className="px-4 py-4 w-8">
                   <button
                     onClick={() => { if (expandedTickers.size > 0) { setExpandedTickers(new Set()); setExpandedBrokerages(new Set()); } else setExpandedTickers(new Set(tickerRows.map(r => r.ticker))); }}
-                    className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                    className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
                     title={expandedTickers.size > 0 ? 'Collapse all' : 'Expand all'}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -380,24 +378,24 @@ const HoldingsView: React.FC<Props> = ({
                     </svg>
                   </button>
                 </th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-indigo-600" onClick={() => handleSort('ticker')}>
-                  <div className="flex items-center">Ticker <SortIndicator column="ticker" /></div>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA]" onClick={() => handleSort('ticker')}>
+                  <div className="flex items-center">Ticker <SI column="ticker" /></div>
                 </th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-indigo-600 text-right" onClick={() => handleSort('quantity')}>
-                  <div className="flex items-center justify-end">Quantity <SortIndicator column="quantity" /></div>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('quantity')}>
+                  <div className="flex items-center justify-end">Quantity <SI column="quantity" /></div>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Avg Cost</th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-indigo-600 text-right" onClick={() => handleSort('totalCost')}>
-                  <div className="flex items-center justify-end">Total Cost <SortIndicator column="totalCost" /></div>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('totalCost')}>
+                  <div className="flex items-center justify-end">Total Cost <SI column="totalCost" /></div>
                 </th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-indigo-600 text-right" onClick={() => handleSort('currentPrice')}>
-                  <div className="flex items-center justify-end">Current Price <SortIndicator column="currentPrice" /></div>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('currentPrice')}>
+                  <div className="flex items-center justify-end">Current Price <SI column="currentPrice" /></div>
                 </th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-indigo-600 text-right" onClick={() => handleSort('marketValue')}>
-                  <div className="flex items-center justify-end">Market Value <SortIndicator column="marketValue" /></div>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('marketValue')}>
+                  <div className="flex items-center justify-end">Market Value <SI column="marketValue" /></div>
                 </th>
-                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-indigo-600 text-right" onClick={() => handleSort('gain')}>
-                  <div className="flex items-center justify-end">Unrealized <SortIndicator column="gain" /></div>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('gain')}>
+                  <div className="flex items-center justify-end">Unrealized <SI column="gain" /></div>
                 </th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Realized</th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Total Gain</th>
@@ -412,12 +410,12 @@ const HoldingsView: React.FC<Props> = ({
                   <React.Fragment key={row.ticker}>
 
                     {/* Level 1 — Ticker */}
-                    <tr className={`hover:bg-slate-50 transition-colors group border-t border-slate-100 ${isExpanded ? 'bg-slate-50/70' : ''}`}>
+                    <tr className={`hover:bg-[#F5F5F7] transition-colors group border-t border-[#D2D2D7] ${isExpanded ? 'bg-slate-50/70' : ''}`}>
                       <td className="px-4 py-4">
                         {row.brokerageGroups.length > 0 && (
                           <button
                             onClick={() => toggleTicker(row.ticker)}
-                            className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                            className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
                           >
                             <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -426,9 +424,10 @@ const HoldingsView: React.FC<Props> = ({
                         )}
                       </td>
                       <td className="px-4 py-4">
-                        <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-tight">
-                          {row.ticker}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <TickerLogo ticker={row.ticker} size={32} assetType={row.assetType} />
+                          <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{row.ticker}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-right font-bold text-slate-800 text-sm">{row.totalQty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-4 py-4 text-right text-sm text-slate-500 font-medium">${row.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -462,7 +461,7 @@ const HoldingsView: React.FC<Props> = ({
                           const pct = ((analystMedian[row.ticker] - row.currentPrice) / row.currentPrice) * 100;
                           return (
                             <div>
-                              <div className="text-sm font-bold text-indigo-600">${analystMedian[row.ticker].toFixed(2)}</div>
+                              <div className="text-sm font-bold text-[#0F52BA]">${analystMedian[row.ticker].toFixed(2)}</div>
                               <div className={`text-xs font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</div>
                             </div>
                           );
@@ -471,11 +470,8 @@ const HoldingsView: React.FC<Props> = ({
                       <td className="px-4 py-4 text-right">
                         {analystMedian[row.ticker] ? (() => {
                           const target = analystMedian[row.ticker];
-                          const isOpts = (row.assetType || '').toLowerCase() === 'options';
-                          // Options: avgCost = 100×premium/contract; equity: avgCost = cost/share
-                          const g = isOpts
-                            ? row.totalQty * (target * 100 - row.avgCost)
-                            : row.totalQty * (target - row.avgCost);
+                          const m = optionsMultiplier(row.assetType);
+                          const g = row.totalQty * (target * m - row.avgCost);
                           return (
                             <div className={`text-sm font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                               {g >= 0 ? '+' : '-'}${Math.abs(g).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -493,11 +489,11 @@ const HoldingsView: React.FC<Props> = ({
                         <React.Fragment key={brokerageKey}>
 
                           {/* Level 2 row — brokerage aggregated */}
-                          <tr className={`border-t border-indigo-100 ${isBrokerageExpanded ? 'bg-indigo-50/60' : 'bg-indigo-50/30'} hover:bg-indigo-50/70 transition-colors`}>
+                          <tr className={`border-t border-[#D2D2D7] ${isBrokerageExpanded ? 'bg-[#0F52BA]/5' : 'bg-[#F5F5F7]'} hover:bg-[#0F52BA]/5 transition-colors`}>
                             <td className="pl-8 pr-4 py-3">
                               <button
                                 onClick={() => toggleBrokerageRow(brokerageKey)}
-                                className="w-5 h-5 flex items-center justify-center rounded-md text-indigo-300 hover:text-indigo-600 hover:bg-indigo-100 transition-all"
+                                className="w-5 h-5 flex items-center justify-center rounded-md text-[#D2D2D7] hover:text-[#0F52BA] hover:bg-[#E6EEFB] transition-all"
                               >
                                 <svg className={`w-3 h-3 transition-transform ${isBrokerageExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -505,10 +501,10 @@ const HoldingsView: React.FC<Props> = ({
                               </button>
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${
-                                bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-orange-100 text-orange-700' :
-                                bg.brokerage.toLowerCase().includes('schwab') ? 'bg-fuchsia-100 text-fuchsia-800' :
-                                'bg-slate-100 text-slate-600'
+                              <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
+                                bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
+                                bg.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
+                                'bg-[#E5E5EA] text-[#6E6E73]'
                               }`}>{bg.brokerage}</span>
                             </td>
                             <td className="px-4 py-3 text-right text-[11px] font-medium text-slate-700">{bg.totalQty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -528,7 +524,7 @@ const HoldingsView: React.FC<Props> = ({
                                 const pct = bg.currentPrice > 0 ? ((target - bg.currentPrice) / bg.currentPrice) * 100 : 0;
                                 return (
                                   <div>
-                                    <div className="text-[11px] font-bold text-indigo-600">${target.toFixed(2)}</div>
+                                    <div className="text-[11px] font-bold text-[#0F52BA]">${target.toFixed(2)}</div>
                                     <div className={`text-[10px] font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</div>
                                   </div>
                                 );
@@ -537,10 +533,8 @@ const HoldingsView: React.FC<Props> = ({
                             <td className="px-4 py-3 text-right">
                               {analystMedian[row.ticker] ? (() => {
                                 const target = analystMedian[row.ticker];
-                                const isOpts = (row.assetType || '').toLowerCase() === 'options';
-                                const g = isOpts
-                                  ? bg.totalQty * (target * 100 - bg.avgCost)
-                                  : bg.totalQty * (target - bg.avgCost);
+                                const m = optionsMultiplier(row.assetType);
+                                const g = bg.totalQty * (target * m - bg.avgCost);
                                 return (
                                   <div className={`text-[11px] font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                     {g >= 0 ? '+' : '-'}${Math.abs(g).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -553,17 +547,17 @@ const HoldingsView: React.FC<Props> = ({
                           {/* Level 3 sub-header */}
                           {isBrokerageExpanded && (() => {
                             const th = (col: typeof lotSortKey, label: string) => (
-                              <td className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap text-right cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                                  style={{ color: lotSortKey === col ? '#6366f1' : undefined }}
+                              <td className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap text-right cursor-pointer select-none hover:text-[#0F52BA] transition-colors"
+                                  style={{ color: lotSortKey === col ? '#0F52BA' : undefined }}
                                   onClick={() => handleLotSort(col)}>
                                 <div className="flex items-center justify-end gap-0.5">{label}<LotSortIndicator col={col} /></div>
                               </td>
                             );
                             return (
-                              <tr className="bg-indigo-100/60 border-t border-indigo-200/60">
+                              <tr className="bg-[#E6EEFB]/30 border-t border-[#D2D2D7]/60">
                                 <td></td>
-                                <td className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                                    style={{ color: lotSortKey === 'buyDate' ? '#6366f1' : undefined }}
+                                <td className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap cursor-pointer select-none hover:text-[#0F52BA] transition-colors"
+                                    style={{ color: lotSortKey === 'buyDate' ? '#0F52BA' : undefined }}
                                     onClick={() => handleLotSort('buyDate')}>
                                   <div className="flex items-center gap-0.5">Buy Date<LotSortIndicator col="buyDate" /></div>
                                 </td>
@@ -573,10 +567,10 @@ const HoldingsView: React.FC<Props> = ({
                                 {th('currentPrice', 'Current Price')}
                                 {th('marketValue', 'Market Value')}
                                 {th('gain', 'Unrealized')}
-                                <td className="px-4 py-1.5 text-[9px] font-black text-indigo-400 uppercase tracking-widest whitespace-nowrap text-right">Term</td>
+                                <td className="px-4 py-1.5 text-[9px] font-black text-[#AEAEB2] uppercase tracking-widest whitespace-nowrap text-right">Term</td>
                                 <td></td>
-                                <td className="px-4 py-1.5 text-[9px] font-black text-indigo-400 uppercase tracking-widest whitespace-nowrap text-right">Target</td>
-                                <td className="px-4 py-1.5 text-[9px] font-black text-indigo-400 uppercase tracking-widest whitespace-nowrap text-right">Gain to Sell</td>
+                                <td className="px-4 py-1.5 text-[9px] font-black text-[#AEAEB2] uppercase tracking-widest whitespace-nowrap text-right">Target</td>
+                                <td className="px-4 py-1.5 text-[9px] font-black text-[#AEAEB2] uppercase tracking-widest whitespace-nowrap text-right">Gain to Sell</td>
                               </tr>
                             );
                           })()}
@@ -586,13 +580,26 @@ const HoldingsView: React.FC<Props> = ({
                             const lotCost = lot.quantity * lot.buyPrice;
                             const lotMarket = lot.quantity * lot.currentPrice;
                             return (
-                              <tr key={`${brokerageKey}-lot-${idx}`} className="bg-indigo-50/20 border-t border-indigo-100/40">
+                              <tr
+                                key={`${brokerageKey}-lot-${idx}`}
+                                className={`bg-white border-t border-[#D2D2D7]/40 ${onNavigateToTransactions ? 'cursor-pointer hover:bg-[#E6EEFB]/40 group/lot' : ''}`}
+                                onClick={() => onNavigateToTransactions?.(row.ticker, bg.brokerage, lot.buyDate)}
+                              >
                                 <td className="px-4 py-2">
                                   <div className="flex justify-center pl-4">
-                                    <div className="w-px h-full min-h-[16px] bg-indigo-200"></div>
+                                    <div className="w-px h-full min-h-[16px] bg-[#D2D2D7]"></div>
                                   </div>
                                 </td>
-                                <td className="px-4 py-2 text-[11px] text-slate-500 font-bold whitespace-nowrap">{new Date(lot.buyDate).toLocaleDateString('en-CA')}</td>
+                                <td className="px-4 py-2 text-[11px] text-slate-500 font-bold whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5">
+                                    {new Date(lot.buyDate).toLocaleDateString('en-CA')}
+                                    {onNavigateToTransactions && (
+                                      <svg className="w-3 h-3 text-[#0F52BA] opacity-0 group-hover/lot:opacity-100 transition-opacity shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="px-4 py-2 text-right text-[11px] text-slate-600 font-medium">{lot.quantity.toFixed(2)}</td>
                                 <td className="px-4 py-2 text-right text-[11px] text-slate-500">${lot.buyPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                 <td className="px-4 py-2 text-right text-[11px] text-slate-500">${lotCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -603,24 +610,21 @@ const HoldingsView: React.FC<Props> = ({
                                   {lot.buyPrice > 0 && <div className="text-[10px] font-bold">{lot.gain >= 0 ? '+' : ''}{((lot.currentPrice - lot.buyPrice) / lot.buyPrice * 100).toFixed(1)}%</div>}
                                 </td>
                                 <td className="px-4 py-2 text-right">
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${lot.isLongTerm ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${lot.isLongTerm ? 'bg-[#E6EEFB] text-[#0A3E8F]' : 'bg-[#E5E5EA] text-[#6E6E73]'}`}>
                                     {lot.isLongTerm ? 'LT' : 'ST'}
                                   </span>
                                 </td>
                                 <td></td>
                                 <td className="px-4 py-2 text-right">
                                   {analystMedian[row.ticker] ? (
-                                    <div className="text-[11px] font-bold text-indigo-600">${analystMedian[row.ticker].toFixed(2)}</div>
+                                    <div className="text-[11px] font-bold text-[#0F52BA]">${analystMedian[row.ticker].toFixed(2)}</div>
                                   ) : <div className="text-[10px] text-slate-300">—</div>}
                                 </td>
                                 <td className="px-4 py-2 text-right">
                                   {analystMedian[row.ticker] ? (() => {
                                     const target = analystMedian[row.ticker];
-                                    const isOpts = (lot.assetType || '').toLowerCase() === 'options';
-                                    // lot.buyPrice is always per-share; multiply by 100 for options contracts
-                                    const g = isOpts
-                                      ? lot.quantity * 100 * (target - lot.buyPrice)
-                                      : lot.quantity * (target - lot.buyPrice);
+                                    const m = optionsMultiplier(lot.assetType);
+                                    const g = lot.quantity * m * (target - lot.buyPrice);
                                     return (
                                       <div className={`text-[11px] font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                         {g >= 0 ? '+' : '-'}${Math.abs(g).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

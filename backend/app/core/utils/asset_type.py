@@ -53,6 +53,9 @@ ASSET_TYPE_MAP: dict = {
 
 # Ticker-based overrides — takes precedence over asset type string
 TICKER_OVERRIDES: dict = {
+    # Portfolio-specific overrides (tickers misclassified by the data provider)
+    "RVI": "ETF",
+
     # Fidelity money market funds
     "SPAXX": "Cash",
     "FDRXX": "Cash",
