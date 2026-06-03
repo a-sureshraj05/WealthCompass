@@ -60,7 +60,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
             lot = raw_lot
 
             # Ensure lot quantity is positive before processing
-            if lot["quantity"] <= 0:
+            if lot["quantity"] < 1e-6:
                 continue
 
             buy_date_dt = lot["date"]
