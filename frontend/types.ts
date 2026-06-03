@@ -50,6 +50,8 @@ export interface Transaction {
   assetType: string;
   is_deleted: boolean;
   is_override: boolean;
+  is_duplicate: boolean;
+  current_brokerage?: string | null;
 }
 
 export interface RealizedGain {

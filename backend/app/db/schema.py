@@ -30,6 +30,8 @@ class Transaction(Base):
     raw_id = Column(Integer, nullable=True)
     is_deleted = Column(Boolean, default=False, nullable=False, server_default="0")
     is_override = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_duplicate = Column(Boolean, default=False, nullable=False, server_default="0")
+    current_brokerage = Column(String, nullable=True)  # set when shares transferred to another brokerage
     original_values = Column(String, nullable=True)
     option_symbol = Column(String, nullable=True)  # OCC option symbol e.g. MSFT250117C00400000
 
@@ -170,6 +172,20 @@ class StockSplit(Base):
     denominator = Column(Float, nullable=False)  # e.g.  1 for a 20:1 split
 
     __table_args__ = (UniqueConstraint("ticker", "split_date", name="uq_stock_split"),)
+
+
+class TransactionSplitConfig(Base):
+    """Persists user-defined splits on a raw transaction so they survive resets."""
+    __tablename__ = "transaction_split_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    raw_id = Column(Integer, nullable=False, index=True)
+    source = Column(String, nullable=False)  # 'manual' | 'snaptrade'
+    # JSON list: [{"qty": float, "current_brokerage": str|null}, ...]
+    # Sum of qty == original raw quantity. Order preserved on replay.
+    pieces = Column(String, nullable=False)
+
+    __table_args__ = (UniqueConstraint("raw_id", "source", name="uq_split_config"),)
 
 
 class LotAssignment(Base):

@@ -54,6 +54,12 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     return map;
   }, [holdings]);
 
+  // All known brokerages from unfiltered holdings — used for transfer destination picker
+  const allKnownBrokerages = useMemo(
+    () => Array.from(new Set(holdings.map(h => h.brokerage))).sort(),
+    [holdings],
+  );
+
   // Shared filters — reflected across all pages
   const [selectedBrokerages, setSelectedBrokerages] = useState<string[]>([]);
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([]);
@@ -308,6 +314,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             setSelectedAssetTypes={setSelectedAssetTypes}
             selectedTickers={selectedTickers}
             setSelectedTickers={setSelectedTickers}
+            allKnownBrokerages={allKnownBrokerages}
           />
         </main>
       </div>

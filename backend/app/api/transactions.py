@@ -1,5 +1,6 @@
 import datetime
 import json
+from collections import Counter
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -87,6 +88,8 @@ class Transaction(BaseModel):
     assetType: str
     is_deleted: bool = False
     is_override: bool = False
+    is_duplicate: bool = False
+    current_brokerage: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -103,6 +106,11 @@ class TransactionUpdate(BaseModel):
     costPerShare: Optional[float] = None
     totalCost: Optional[float] = None
     assetType: Optional[str] = None
+    current_brokerage: Optional[str] = None
+
+
+class SplitRequest(BaseModel):
+    quantity: float
 
 
 @router.get("/transactions", response_model=List[Transaction])
@@ -118,10 +126,12 @@ def get_transactions(
     query = db.query(DBTransaction)
 
     if visibility == "active":
-        query = query.filter(DBTransaction.is_deleted == False)
+        query = query.filter(DBTransaction.is_deleted == False, DBTransaction.is_duplicate == False)
     elif visibility == "hidden":
         query = query.filter(DBTransaction.is_deleted == True)
-    # "all" applies no is_deleted filter
+    elif visibility == "duplicates":
+        query = query.filter(DBTransaction.is_duplicate == True)
+    # "all" applies no filter
 
     if brokerages:
         query = query.filter(DBTransaction.brokerage.in_(brokerages))
@@ -178,6 +188,8 @@ def update_transaction(transaction_id: int, updates: TransactionUpdate, db: Sess
         transaction.totalCost = updates.totalCost
     if updates.assetType is not None:
         transaction.assetType = updates.assetType
+    if updates.current_brokerage is not None:
+        transaction.current_brokerage = updates.current_brokerage
     transaction.is_override = True
     db.commit()
     db.refresh(transaction)
@@ -244,6 +256,47 @@ def revert_transaction(transaction_id: int, db: Session = Depends(get_db)):
     return transaction
 
 
+@router.post("/transactions/{transaction_id}/split")
+def split_transaction(transaction_id: int, body: SplitRequest, db: Session = Depends(get_db)):
+    """Split a BUY lot into two. The split is persisted in transaction_split_configs so it survives resets."""
+    transaction = db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if body.quantity <= 0 or body.quantity >= transaction.quantity:
+        raise HTTPException(status_code=400, detail=f"Split quantity must be between 0 and {transaction.quantity}")
+
+    original_qty = transaction.quantity
+    remaining_qty = original_qty - body.quantity
+
+    # Apply the split to the live DBTransactions
+    split_txn = DBTransaction(
+        brokerage=transaction.brokerage,
+        date=transaction.date,
+        ticker=transaction.ticker,
+        name=transaction.name,
+        action=transaction.action,
+        quantity=body.quantity,
+        price=transaction.price,
+        costPerShare=transaction.costPerShare,
+        totalCost=round(transaction.totalCost * (body.quantity / original_qty), 2),
+        assetType=transaction.assetType,
+        source=transaction.source,
+        raw_id=transaction.raw_id,
+        current_brokerage=transaction.current_brokerage,
+        option_symbol=transaction.option_symbol,
+        is_override=True,
+    )
+    transaction.quantity = remaining_qty
+    transaction.totalCost = round(transaction.totalCost * (remaining_qty / original_qty), 2)
+    transaction.is_override = True
+
+    db.add(split_txn)
+    db.commit()
+    db.refresh(transaction)
+    db.refresh(split_txn)
+    return {"original_id": transaction.id, "split_id": split_txn.id}
+
+
 @router.patch("/transactions/{transaction_id}/hidden")
 def set_transaction_hidden(transaction_id: int, is_deleted: bool, db: Session = Depends(get_db)):
     transaction = (
@@ -304,8 +357,37 @@ def clear_processed_data(db: Session = Depends(get_db)):
 
 @router.post("/transactions/reset")
 def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(get_db)):
-    """Clear transactions table and re-seed from raw source tables. Optionally filter by brokerage."""
-    db.query(DBTransaction).delete()
+    """Clear transactions table and re-seed from raw source tables. Optionally filter by brokerage.
+    Manual customisations (current_brokerage, is_deleted, field edits) are snapshotted before
+    the wipe and replayed onto the freshly-seeded rows so they survive the reset.
+    """
+    # Snapshot all customised rows keyed by (raw_id, source)
+    overrides: dict = {}
+    for t in db.query(DBTransaction).all():
+        is_customised = (
+            t.is_deleted
+            or t.is_override
+            or (t.current_brokerage and t.current_brokerage != t.brokerage)
+        )
+        if is_customised and t.raw_id and t.source:
+            overrides[(t.raw_id, t.source)] = {
+                "is_deleted": t.is_deleted,
+                "is_override": t.is_override,
+                "current_brokerage": t.current_brokerage,
+                "original_values": t.original_values,
+                "date": t.date,
+                "brokerage": t.brokerage,
+                "ticker": t.ticker,
+                "name": t.name,
+                "action": t.action,
+                "quantity": t.quantity,
+                "price": t.price,
+                "costPerShare": t.costPerShare,
+                "totalCost": t.totalCost,
+                "assetType": t.assetType,
+            }
+
+    db.query(DBTransaction).delete(synchronize_session=False)
     db.commit()
 
     # Re-seed from manual raw transactions
@@ -326,13 +408,24 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
             assetType=normalize_asset_type(raw.assetType, ticker=raw.ticker),
             source="manual",
             raw_id=raw.id,
+            current_brokerage=raw.brokerage,
         ))
 
-    # Re-seed from snaptrade transactions
+    # Re-seed from snaptrade transactions.
+    # Intra-brokerage transfers (e.g. Schwab account A → Schwab account B) produce
+    # two identical rows with different IDs. Flag ALL rows whose key appears more
+    # than once so both sides of the internal transfer are excluded from P&L.
     snaptrade_q = db.query(DBSnaptradeTransaction)
     if brokerage:
         snaptrade_q = snaptrade_q.filter(DBSnaptradeTransaction.brokerage == brokerage)
-    for raw in snaptrade_q.all():
+    snaptrade_rows = snaptrade_q.all()
+    key_counts = Counter(
+        (raw.brokerage, raw.ticker, raw.action, raw.quantity, raw.price, raw.date)
+        for raw in snaptrade_rows
+    )
+    for raw in snaptrade_rows:
+        key = (raw.brokerage, raw.ticker, raw.action, raw.quantity, raw.price, raw.date)
+        is_dup = key_counts[key] > 1
         db.add(DBTransaction(
             brokerage=raw.brokerage,
             date=raw.date,
@@ -347,9 +440,35 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
             option_symbol=raw.option_symbol,
             source="snaptrade",
             raw_id=raw.id,
+            is_duplicate=is_dup,
+            current_brokerage=raw.brokerage,
         ))
 
     db.commit()
+
+    # Replay manual customisations onto the freshly-seeded rows
+    if overrides:
+        for t in db.query(DBTransaction).all():
+            ov = overrides.get((t.raw_id, t.source))
+            if not ov:
+                continue
+            t.is_deleted = ov["is_deleted"]
+            t.current_brokerage = ov["current_brokerage"]
+            if ov["is_override"]:
+                t.is_override = True
+                t.original_values = ov["original_values"]
+                t.date = ov["date"]
+                t.brokerage = ov["brokerage"]
+                t.ticker = ov["ticker"]
+                t.name = ov["name"]
+                t.action = ov["action"]
+                t.quantity = ov["quantity"]
+                t.price = ov["price"]
+                t.costPerShare = ov["costPerShare"]
+                t.totalCost = ov["totalCost"]
+                t.assetType = ov["assetType"]
+        db.commit()
+
     process.process_transactions(db, brokerage_name=brokerage)
     label = brokerage if brokerage else "all brokerages"
     return {"message": f"Transactions reset and reprocessed for {label}."}

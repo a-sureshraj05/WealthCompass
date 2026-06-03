@@ -41,7 +41,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
   const brokerageData = React.useMemo(() => {
     const brokers: Record<string, number> = {};
     holdings.forEach(h => {
-      brokers[h.brokerage] = (brokers[h.brokerage] || 0) + (h.quantity * h.currentPrice);
+      brokers[h.brokerage] = (brokers[h.brokerage] || 0) + h.marketValue;
     });
     const entries = Object.entries(brokers).map(([name, value]) => ({ name, value }));
     const total = entries.reduce((s, e) => s + e.value, 0);

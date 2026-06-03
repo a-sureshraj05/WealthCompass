@@ -91,6 +91,7 @@ export const fetchTransactions = async (
 export const updateTransaction = async (id: string, updates: {
   date?: string; brokerage?: string; ticker?: string; name?: string; action?: string;
   quantity?: number; price?: number; costPerShare?: number; totalCost?: number; assetType?: string;
+  current_brokerage?: string | null;
 }): Promise<void> => {
   const response = await apiFetch(`/api/v1/transactions/${id}`, {
     method: "PATCH",
@@ -104,6 +105,16 @@ export const revertTransaction = async (id: string): Promise<void> => {
   const response = await apiFetch(`/api/v1/transactions/${id}/revert`, { method: "POST" });
   if (!response.ok) throw new Error(`Failed to revert transaction: ${response.status}`);
   await response.json();
+};
+
+export const splitTransaction = async (id: string, quantity: number): Promise<{ original_id: number; split_id: number }> => {
+  const response = await apiFetch(`/api/v1/transactions/${id}/split`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ quantity }),
+  });
+  if (!response.ok) throw new Error(`Failed to split transaction: ${response.status}`);
+  return response.json();
 };
 
 export const softDeleteTransaction = async (id: string, isDeleted: boolean): Promise<void> => {
