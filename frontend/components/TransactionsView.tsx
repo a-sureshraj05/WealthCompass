@@ -5,7 +5,7 @@ import SortIndicator from './SortIndicator';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { brokerageColor } from '../utils/finance';
 import {
-  fetchOpenBuys, fetchLotAssignments, createLotAssignment, deleteLotAssignment,
+  fetchOpenBuys, fetchLotAssignments, createLotAssignment, deleteLotAssignment, splitTransaction,
   OpenBuyLot, LotAssignment,
 } from '../services/apiService';
 
@@ -13,7 +13,7 @@ type DateRangeType = 'all' | '30d' | '90d' | 'ytd' | 'custom';
 type SortKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'action' | 'quantity' | 'price' | 'amount';
 type SortDirection = 'asc' | 'desc' | null;
 
-type VisibilityFilter = 'active' | 'hidden' | 'all';
+type VisibilityFilter = 'active' | 'hidden' | 'duplicates' | 'all';
 
 interface Props {
   transactions: Transaction[];
@@ -30,9 +30,10 @@ interface Props {
   focusTicker?: string | null;
   focusDate?: string | null;
   onClearFocus?: () => void;
+  allKnownBrokerages?: string[];
 }
 
-const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert, selectedBrokerages, setSelectedBrokerages, selectedAssetTypes, setSelectedAssetTypes, selectedTickers, setSelectedTickers, focusTicker, focusDate, onClearFocus }) => {
+const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert, selectedBrokerages, setSelectedBrokerages, selectedAssetTypes, setSelectedAssetTypes, selectedTickers, setSelectedTickers, focusTicker, focusDate, onClearFocus, allKnownBrokerages }) => {
   const [dateRangeType, setDateRangeType] = useState<DateRangeType>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -53,6 +54,35 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
       setMappedSellIds(new Set(all.map(a => String(a.sell_transaction_id))));
     }).catch(() => {});
   }, []);
+
+  // Split modal state
+  const [splitTxn, setSplitTxn] = useState<Transaction | null>(null);
+  const [splitQty, setSplitQty] = useState<string>('');
+  const [splitError, setSplitError] = useState<string | null>(null);
+  const [splitLoading, setSplitLoading] = useState(false);
+
+  const openSplitModal = (t: Transaction) => { setSplitTxn(t); setSplitQty(''); setSplitError(null); };
+  const closeSplitModal = () => { setSplitTxn(null); setSplitQty(''); setSplitError(null); };
+
+  const confirmSplit = async () => {
+    if (!splitTxn) return;
+    const qty = parseFloat(splitQty);
+    if (!qty || qty <= 0 || qty >= splitTxn.quantity) {
+      setSplitError(`Enter a quantity between 0 and ${splitTxn.quantity}`);
+      return;
+    }
+    setSplitLoading(true);
+    setSplitError(null);
+    try {
+      await splitTransaction(splitTxn.id, qty);
+      closeSplitModal();
+      window.location.reload();
+    } catch (e: any) {
+      setSplitError(e.message);
+    } finally {
+      setSplitLoading(false);
+    }
+  };
 
   // Lot assignment modal state
   const [lotModalSellId, setLotModalSellId] = useState<string | null>(null);
@@ -152,6 +182,27 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
     [setIsBrokerageMenuOpen, setIsAssetTypeMenuOpen, setIsTickerMenuOpen],
   );
 
+  const [transferPopoverId, setTransferPopoverId] = useState<string | null>(null);
+  const [transferPopoverFlip, setTransferPopoverFlip] = useState(false);
+  const transferPopoverRef = useRef<HTMLDivElement>(null);
+
+  const openTransferPopover = (id: string, btn: HTMLElement) => {
+    const rect = btn.getBoundingClientRect();
+    setTransferPopoverFlip(window.innerHeight - rect.bottom < 220);
+    setTransferPopoverId(id);
+  };
+
+  useEffect(() => {
+    if (!transferPopoverId) return;
+    const handler = (e: MouseEvent) => {
+      if (transferPopoverRef.current && !transferPopoverRef.current.contains(e.target as Node)) {
+        setTransferPopoverId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [transferPopoverId]);
+
   const formatAssetType = (type: string) => {
     if (!type) return '';
     return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
@@ -216,8 +267,9 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
     let result = transactions.filter((t) => {
       const matchesVisibility =
         visibilityFilter === 'all' ||
-        (visibilityFilter === 'active' && !t.is_deleted) ||
-        (visibilityFilter === 'hidden' && t.is_deleted);
+        (visibilityFilter === 'active' && !t.is_deleted && !t.is_duplicate) ||
+        (visibilityFilter === 'hidden' && t.is_deleted) ||
+        (visibilityFilter === 'duplicates' && t.is_duplicate);
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.map(b => b.toLowerCase().trim()).includes((t.brokerage || '').toLowerCase().trim());
       const matchesAssetType = selectedAssetTypes.length === 0 || selectedAssetTypes.map(at => at.toLowerCase()).includes((t.assetType || '').toLowerCase());
       const matchesTicker = focusTicker
@@ -514,19 +566,28 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
           <div className="relative">
             <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Show</label>
             <div className="flex items-center bg-slate-50 border border-slate-200 rounded-md overflow-hidden">
-              {(['active', 'hidden', 'all'] as VisibilityFilter[]).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setVisibilityFilter(v)}
-                  className={`px-3 py-2 text-xs font-bold capitalize transition-colors ${
-                    visibilityFilter === v
-                      ? 'bg-[#0F52BA] text-white'
-                      : 'text-slate-500 hover:text-[#0F52BA]'
-                  }`}
-                >
-                  {v}
-                </button>
-              ))}
+              {(() => {
+                const dupCount = transactions.filter(t => t.is_duplicate).length;
+                const tabs: VisibilityFilter[] = dupCount > 0
+                  ? ['active', 'hidden', 'duplicates', 'all']
+                  : ['active', 'hidden', 'all'];
+                return tabs.map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setVisibilityFilter(v)}
+                    className={`px-3 py-2 text-xs font-bold capitalize transition-colors flex items-center gap-1 ${
+                      visibilityFilter === v
+                        ? v === 'duplicates' ? 'bg-orange-500 text-white' : 'bg-[#0F52BA] text-white'
+                        : v === 'duplicates' ? 'text-orange-500 hover:text-orange-600' : 'text-slate-500 hover:text-[#0F52BA]'
+                    }`}
+                  >
+                    {v}
+                    {v === 'duplicates' && (
+                      <span className={`text-[10px] font-black px-1 rounded-full ${visibilityFilter === 'duplicates' ? 'bg-white/30' : 'bg-orange-100'}`}>{dupCount}</span>
+                    )}
+                  </button>
+                ));
+              })()}
             </div>
           </div>
 
@@ -662,7 +723,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                 };
 
                 return (
-                  <tr key={`${t.brokerage}-${t.id}`} className={`transition-colors group ${isEditing ? 'bg-[#0F52BA]/5' : 'hover:bg-[#F5F5F7]'} ${t.is_deleted && !isEditing ? 'opacity-40' : ''}`}>
+                  <tr key={`${t.brokerage}-${t.id}`} className={`transition-colors group ${isEditing ? 'bg-[#0F52BA]/5' : t.is_duplicate ? 'bg-orange-50/60 hover:bg-orange-50' : 'hover:bg-[#F5F5F7]'} ${t.is_deleted && !isEditing ? 'opacity-40' : ''}`}>
                     {/* Hide checkbox */}
                     <td className="px-4 py-4 text-center">
                       {!isEditing && (
@@ -692,10 +753,21 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                         <input className={inputCls} value={editDraft.brokerage || ''}
                           onChange={e => setEditDraft(d => ({ ...d, brokerage: e.target.value }))} />
                       ) : (
-                        <span
-                          className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight"
-                          style={{ backgroundColor: brokerageColor(t.brokerage) + '22', color: brokerageColor(t.brokerage) }}
-                        >{t.brokerage}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight"
+                            style={{ backgroundColor: brokerageColor(t.brokerage) + '22', color: brokerageColor(t.brokerage) }}
+                          >{t.brokerage}</span>
+                          {t.current_brokerage && t.current_brokerage !== t.brokerage && (
+                            <>
+                              <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                              <span
+                                className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight"
+                                style={{ backgroundColor: brokerageColor(t.current_brokerage) + '22', color: brokerageColor(t.current_brokerage) }}
+                              >{t.current_brokerage}</span>
+                            </>
+                          )}
+                        </div>
                       )}
                     </td>
 
@@ -783,6 +855,62 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Transfer button — BUY rows only */}
+                          {['BUY', 'REI'].includes(t.action.toUpperCase()) && (
+                            <div className="relative" ref={transferPopoverId === t.id ? transferPopoverRef : null}>
+                              <button
+                                onClick={(e) => transferPopoverId === t.id ? setTransferPopoverId(null) : openTransferPopover(t.id, e.currentTarget)}
+                                className={`p-1.5 rounded transition-all ${
+                                  t.current_brokerage && t.current_brokerage !== t.brokerage
+                                    ? 'text-[#0F52BA] bg-[#0F52BA]/10 hover:bg-[#0F52BA]/20'
+                                    : 'text-slate-200 hover:text-[#0F52BA] hover:bg-[#0F52BA]/10'
+                                }`}
+                                title={t.current_brokerage && t.current_brokerage !== t.brokerage ? `Lots moved to ${t.current_brokerage}` : 'Move lots to another brokerage'}
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                              </button>
+                              {transferPopoverId === t.id && (
+                                <div className={`absolute right-0 z-50 bg-white rounded-lg shadow-xl border border-slate-100 min-w-[180px] py-1 ${transferPopoverFlip ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+                                  <p className="px-3 py-1.5 text-[9px] font-black text-slate-400 uppercase tracking-wider">Move lots to</p>
+                                  {(allKnownBrokerages || allBrokerages).filter(b => b !== t.brokerage).map(broker => (
+                                    <button
+                                      key={broker}
+                                      onClick={() => { onUpdate(t.id, { current_brokerage: broker }); setTransferPopoverId(null); }}
+                                      className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors ${t.current_brokerage === broker ? 'text-[#0F52BA]' : 'text-slate-700'}`}
+                                    >
+                                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: brokerageColor(broker) }} />
+                                      {broker}
+                                      {t.current_brokerage === broker && (
+                                        <svg className="w-3 h-3 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                      )}
+                                    </button>
+                                  ))}
+                                  {t.current_brokerage && t.current_brokerage !== t.brokerage && (
+                                    <>
+                                      <div className="my-1 border-t border-slate-100" />
+                                      <button
+                                        onClick={() => { onUpdate(t.id, { current_brokerage: t.brokerage }); setTransferPopoverId(null); }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-50 transition-colors"
+                                      >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        Clear transfer
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {/* Split button — BUY rows with qty > 0 */}
+                          {['BUY', 'REI'].includes(t.action.toUpperCase()) && t.quantity > 0 && (
+                            <button
+                              onClick={() => openSplitModal(t)}
+                              className="p-1.5 rounded transition-all text-slate-200 hover:text-violet-600 hover:bg-violet-50"
+                              title="Split lot into two"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" /></svg>
+                            </button>
+                          )}
                           {/* Lot assignment button — always visible on SELL rows */}
                           {t.action.toUpperCase() === 'SELL' && (
                             <button
@@ -796,6 +924,12 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
                             </button>
+                          )}
+                          {/* Duplicate flag — orange icon, visible when is_duplicate */}
+                          {t.is_duplicate && (
+                            <span className="p-1.5 rounded bg-orange-50 text-orange-500" title="Flagged as duplicate — review and hide if confirmed">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            </span>
                           )}
                           {/* Edit button — always visible, amber when overridden */}
                           <button
@@ -928,6 +1062,60 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   Save Assignments
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Split Modal */}
+      {splitTxn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-slate-900">Split Lot</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{splitTxn.ticker} · {splitTxn.brokerage} · {new Date(splitTxn.date).toLocaleDateString('en-CA')}</p>
+              </div>
+              <button onClick={closeSplitModal} className="p-2 hover:bg-slate-100 rounded-md text-slate-400 hover:text-slate-600 transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-slate-50 rounded-lg px-4 py-3 flex items-center justify-between text-sm">
+                <span className="text-slate-500 font-medium">Current quantity</span>
+                <span className="font-black text-slate-900">{splitTxn.quantity}</span>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wide mb-1.5">Quantity to split off</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={splitTxn.quantity}
+                  step="any"
+                  value={splitQty}
+                  onChange={e => { setSplitQty(e.target.value); setSplitError(null); }}
+                  onKeyDown={e => e.key === 'Enter' && confirmSplit()}
+                  autoFocus
+                  placeholder={`0 – ${splitTxn.quantity}`}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+                {splitQty && !isNaN(parseFloat(splitQty)) && parseFloat(splitQty) > 0 && parseFloat(splitQty) < splitTxn.quantity && (
+                  <p className="text-xs text-slate-400 mt-1.5">
+                    Splits into <span className="font-bold text-slate-700">{parseFloat(splitQty)}</span> + <span className="font-bold text-slate-700">{+(splitTxn.quantity - parseFloat(splitQty)).toFixed(6)}</span> shares
+                  </p>
+                )}
+                {splitError && <p className="text-xs text-rose-500 mt-1.5">{splitError}</p>}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+              <button onClick={closeSplitModal} className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-md transition-colors">Cancel</button>
+              <button
+                onClick={confirmSplit}
+                disabled={splitLoading || !splitQty || parseFloat(splitQty) <= 0 || parseFloat(splitQty) >= splitTxn.quantity}
+                className="px-4 py-2 text-sm font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {splitLoading ? 'Splitting…' : 'Split'}
+              </button>
             </div>
           </div>
         </div>

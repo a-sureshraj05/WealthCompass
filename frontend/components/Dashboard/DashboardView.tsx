@@ -35,6 +35,7 @@ interface Props {
   setSelectedAssetTypes: (v: string[]) => void;
   selectedTickers: string[];
   setSelectedTickers: (v: string[]) => void;
+  allKnownBrokerages: string[];
 }
 
 const DashboardView: React.FC<Props> = ({
@@ -62,6 +63,7 @@ const DashboardView: React.FC<Props> = ({
   setSelectedAssetTypes,
   selectedTickers,
   setSelectedTickers,
+  allKnownBrokerages,
 }) => {
   const [syncMessage, setSyncMessage] = useState('');
   const [focusTicker, setFocusTicker] = useState<string | null>(null);
@@ -143,7 +145,7 @@ const DashboardView: React.FC<Props> = ({
             {syncMessage}
           </p>
         )}
-        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} focusTicker={focusTicker} focusDate={focusDate} onClearFocus={() => { setFocusTicker(null); setFocusDate(null); }} />
+        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} focusTicker={focusTicker} focusDate={focusDate} onClearFocus={() => { setFocusTicker(null); setFocusDate(null); }} allKnownBrokerages={allKnownBrokerages} />
       </div>
     );
   }

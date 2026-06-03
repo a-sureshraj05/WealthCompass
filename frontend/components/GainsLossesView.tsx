@@ -44,6 +44,24 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [stExpanded, setStExpanded] = useState(false);
   const [ltExpanded, setLtExpanded] = useState(false);
+  const [expandedAssetTypes, setExpandedAssetTypes] = useState<Set<string>>(new Set());
+  const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
+
+  const toggleAssetTypeExpand = (key: string) => {
+    setExpandedAssetTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleTickerExpand = (key: string) => {
+    setExpandedTickers(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   const tickerMenuRef = useRef<HTMLDivElement>(null);
   const brokerageMenuRef = useRef<HTMLDivElement>(null);
@@ -183,66 +201,220 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   );
 
 
-  const GainTableSection = ({ title, data, isLT }: { title: string; data: (RealizedGain | UnrealizedLot)[]; isLT: boolean }) => (
-    <div className="overflow-hidden rounded border border-[#D2D2D7] bg-white overflow-x-auto">
-      <table className="w-full text-left min-w-[860px]">
-        <thead>
-          <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
-            {[
-              { key: 'ticker', label: 'Asset / Ticker', align: 'left' },
-              { key: 'brokerage', label: 'Brokerage', align: 'left' },
-              { key: 'buyDate', label: 'Date Opened', align: 'left' },
-              ...(activeSubTab === 'realized' ? [{ key: 'sellDate', label: 'Date Closed', align: 'left' }] : []),
-              { key: 'quantity', label: 'Qty', align: 'right' },
-              { key: 'proceeds', label: activeSubTab === 'realized' ? 'Proceeds' : 'Mkt Value', align: 'right' },
-              { key: 'costBasis', label: 'Cost Basis', align: 'right' },
-              { key: 'gain', label: 'Realized G/L', align: 'right' },
-            ].map(({ key, label, align }) => (
-              <th key={key} className={`px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors ${align === 'right' ? 'text-right' : ''}`} onClick={() => handleSort(key as GainSortKey)}>
-                <div className={`flex items-center ${align === 'right' ? 'justify-end' : ''}`}>{label}<SI column={key as GainSortKey} /></div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[#D2D2D7]">
-          {data.length === 0 ? (
-            <tr><td colSpan={activeSubTab === 'realized' ? 8 : 7} className="py-10 text-center text-slate-400 text-xs italic">No {title.toLowerCase()} entries for the current filter.</td></tr>
-          ) : data.map((g: RealizedGain | UnrealizedLot) => {
-            const proceeds = activeSubTab === 'realized' ? g.quantity * (g as RealizedGain).sellPrice : g.quantity * (g as UnrealizedLot).currentPrice;
-            const costBasis = g.quantity * g.buyPrice;
-            return (
-              <tr key={g.id} className="hover:bg-[#F5F5F7]/60 transition-colors">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <TickerLogo ticker={g.ticker} size={32} assetType={g.assetType} />
-                    <div>
-                      <p className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{g.ticker}</p>
-                      <p className="text-[10px] text-slate-400 capitalize">{g.assetType || '—'}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
-                    g.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
-                    g.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
-                    'bg-[#E5E5EA] text-[#6E6E73]'
-                  }`}>{g.brokerage}</span>
-                </td>
-                <td className="px-4 py-3 text-[11px] text-slate-500 font-medium whitespace-nowrap">{fmtDate(g.buyDate)}</td>
-                {activeSubTab === 'realized' && <td className="px-4 py-3 text-[11px] text-slate-500 font-medium whitespace-nowrap">{fmtDate((g as RealizedGain).sellDate)}</td>}
-                <td className="px-4 py-3 text-right text-[11px] text-slate-900 font-bold">{g.quantity.toFixed(g.quantity % 1 === 0 ? 0 : 4)}</td>
-                <td className="px-4 py-3 text-right text-[11px] text-slate-700 font-semibold">{fmt(proceeds)}</td>
-                <td className="px-4 py-3 text-right text-[11px] text-slate-500">{fmt(costBasis)}</td>
-                <td className={`px-4 py-3 text-right text-[11px] font-black ${g.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {g.gain >= 0 ? '+' : '-'}${Math.abs(g.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+  const GainTableSection = ({ title, data, isLT, prefix }: { title: string; data: (RealizedGain | UnrealizedLot)[]; isLT: boolean; prefix: string }) => {
+    const optMult = (at: string) => (at || '').toLowerCase() === 'options' ? 100 : 1;
+
+    // Level 2: assetType → Level 3: ticker → lots
+    type TickerEntry = { lots: (RealizedGain | UnrealizedLot)[]; totalQty: number; totalCost: number; totalProceeds: number; totalGain: number; brokerages: string[] };
+    type AssetTypeEntry = { tickers: Map<string, TickerEntry>; tickerOrder: string[]; totalQty: number; totalCost: number; totalProceeds: number; totalGain: number };
+
+    const atMap = new Map<string, AssetTypeEntry>();
+    const atOrder: string[] = [];
+
+    data.forEach(g => {
+      const at = g.assetType || 'Equity';
+      const m = optMult(at);
+      const proc = activeSubTab === 'realized'
+        ? g.quantity * (g as RealizedGain).sellPrice * m
+        : g.quantity * (g as UnrealizedLot).currentPrice * m;
+      const cost = g.quantity * g.buyPrice * m;
+
+      if (!atMap.has(at)) {
+        atMap.set(at, { tickers: new Map(), tickerOrder: [], totalQty: 0, totalCost: 0, totalProceeds: 0, totalGain: 0 });
+        atOrder.push(at);
+      }
+      const atEntry = atMap.get(at)!;
+      atEntry.totalQty += g.quantity;
+      atEntry.totalCost += cost;
+      atEntry.totalProceeds += proc;
+      atEntry.totalGain += g.gain;
+
+      if (!atEntry.tickers.has(g.ticker)) {
+        atEntry.tickers.set(g.ticker, { lots: [], totalQty: 0, totalCost: 0, totalProceeds: 0, totalGain: 0, brokerages: [] });
+        atEntry.tickerOrder.push(g.ticker);
+      }
+      const tEntry = atEntry.tickers.get(g.ticker)!;
+      tEntry.lots.push(g);
+      tEntry.totalQty += g.quantity;
+      tEntry.totalCost += cost;
+      tEntry.totalProceeds += proc;
+      tEntry.totalGain += g.gain;
+      if (!tEntry.brokerages.includes(g.brokerage)) tEntry.brokerages.push(g.brokerage);
+    });
+
+    // Sort tickers within each assetType when a sort key is active
+    const sortedAtOrder = [...atOrder].sort((a, b) => {
+      // Equity before Options
+      if (a === 'Equity' && b !== 'Equity') return -1;
+      if (b === 'Equity' && a !== 'Equity') return 1;
+      return a.localeCompare(b);
+    });
+
+    const badge = (b: string) => (
+      <span key={b} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight ${
+        b.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
+        b.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
+        'bg-[#E5E5EA] text-[#6E6E73]'
+      }`}>{b}</span>
+    );
+
+    if (data.length === 0) return (
+      <div className="rounded border border-[#D2D2D7] bg-white px-6 py-10 text-center text-slate-400 text-xs italic">
+        No {title.toLowerCase()} entries for the current filter.
+      </div>
+    );
+
+    return (
+      <div className="overflow-hidden rounded border border-[#D2D2D7] bg-white overflow-x-auto">
+        <table className="w-full text-left min-w-[760px]">
+          <thead>
+            <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
+              {([
+                { key: 'ticker', label: 'Asset / Ticker', align: 'left' },
+                { key: 'brokerage', label: 'Brokerage', align: 'left' },
+                { key: 'quantity', label: 'Qty', align: 'right' },
+                { key: 'proceeds', label: activeSubTab === 'realized' ? 'Proceeds' : 'Mkt Value', align: 'right' },
+                { key: 'costBasis', label: 'Cost Basis', align: 'right' },
+                { key: 'gain', label: activeSubTab === 'realized' ? 'Realized G/L' : 'Unrealized G/L', align: 'right' },
+              ] as { key: GainSortKey; label: string; align: string }[]).map(({ key, label, align }) => (
+                <th key={key} className={`px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors ${align === 'right' ? 'text-right' : ''}`} onClick={() => handleSort(key)}>
+                  <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>{label}<SI column={key} /></div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedAtOrder.map(at => {
+              const atEntry = atMap.get(at)!;
+              const atKey = `${prefix}-${at}`;
+              const atExpanded = expandedAssetTypes.has(atKey);
+              const isOptions = at.toLowerCase() === 'options';
+              const qtyUnit = isOptions ? 'contract' : 'share';
+
+              // Sort tickers within this assetType
+              const sortedTickers: [string, TickerEntry][] = atEntry.tickerOrder.map(t => [t, atEntry.tickers.get(t)!]);
+              if (sortKey && sortDirection) {
+                sortedTickers.sort(([, a], [, b]) => {
+                  let va: any, vb: any;
+                  if (sortKey === 'ticker') { va = sortedTickers.findIndex(([t]) => atEntry.tickers.get(t) === a); vb = 0; return 0; }
+                  if (sortKey === 'quantity') { va = a.totalQty; vb = b.totalQty; }
+                  else if (sortKey === 'proceeds') { va = a.totalProceeds; vb = b.totalProceeds; }
+                  else if (sortKey === 'costBasis') { va = a.totalCost; vb = b.totalCost; }
+                  else if (sortKey === 'gain') { va = a.totalGain; vb = b.totalGain; }
+                  else if (sortKey === 'brokerage') { va = a.brokerages[0] || ''; vb = b.brokerages[0] || ''; }
+                  else return 0;
+                  if (va < vb) return sortDirection === 'asc' ? -1 : 1;
+                  if (va > vb) return sortDirection === 'asc' ? 1 : -1;
+                  return 0;
+                });
+              }
+
+              return (
+                <React.Fragment key={at}>
+                  {/* ── Asset Type row (Level 2) ── */}
+                  <tr
+                    className="bg-[#F0F4FA] border-b border-[#D2D2D7] hover:bg-[#E8EEF8] transition-colors cursor-pointer select-none"
+                    onClick={() => toggleAssetTypeExpand(atKey)}
+                  >
+                    <td className="px-4 py-2.5" colSpan={2}>
+                      <div className="flex items-center gap-2">
+                        <svg className={`w-3 h-3 text-[#0F52BA] transition-transform shrink-0 ${atExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                        </svg>
+                        <span className="text-[11px] font-black text-[#0F52BA] uppercase tracking-widest">{at}</span>
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          · {atEntry.totalQty % 1 === 0 ? atEntry.totalQty.toFixed(0) : atEntry.totalQty.toFixed(4)} {qtyUnit}{atEntry.totalQty !== 1 ? 's' : ''}
+                          · {atEntry.tickerOrder.length} ticker{atEntry.tickerOrder.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-[10px] text-slate-500 font-semibold">
+                      {atEntry.totalQty % 1 === 0 ? atEntry.totalQty.toFixed(0) : atEntry.totalQty.toFixed(4)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-[10px] text-slate-600 font-semibold">{fmt(atEntry.totalProceeds)}</td>
+                    <td className="px-4 py-2.5 text-right text-[10px] text-slate-500">{fmt(atEntry.totalCost)}</td>
+                    <td className={`px-4 py-2.5 text-right text-[10px] font-black ${atEntry.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {atEntry.totalGain >= 0 ? '+' : '-'}${Math.abs(atEntry.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+
+                  {atExpanded && sortedTickers.map(([ticker, tEntry]) => {
+                    const tkKey = `${prefix}-${at}-${ticker}`;
+                    const tkExpanded = expandedTickers.has(tkKey);
+                    return (
+                      <React.Fragment key={ticker}>
+                        {/* ── Ticker row (Level 3) ── */}
+                        <tr
+                          className="border-b border-[#D2D2D7] hover:bg-[#F5F5F7]/60 transition-colors cursor-pointer select-none"
+                          onClick={() => toggleTickerExpand(tkKey)}
+                        >
+                          <td className="px-4 py-3 pl-8">
+                            <div className="flex items-center gap-2.5">
+                              <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform shrink-0 ${tkExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                              </svg>
+                              <TickerLogo ticker={ticker} size={28} assetType={at} />
+                              <div>
+                                <p className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{ticker}</p>
+                                <p className="text-[10px] text-slate-400">{tEntry.lots.length} lot{tEntry.lots.length !== 1 ? 's' : ''}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-1">{tEntry.brokerages.map(b => badge(b))}</div>
+                          </td>
+                          <td className="px-4 py-3 text-right text-[11px] text-slate-900 font-bold">
+                            {tEntry.totalQty % 1 === 0 ? tEntry.totalQty.toFixed(0) : tEntry.totalQty.toFixed(4)}
+                          </td>
+                          <td className="px-4 py-3 text-right text-[11px] text-slate-700 font-semibold">{fmt(tEntry.totalProceeds)}</td>
+                          <td className="px-4 py-3 text-right text-[11px] text-slate-500">{fmt(tEntry.totalCost)}</td>
+                          <td className={`px-4 py-3 text-right text-[11px] font-black ${tEntry.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {tEntry.totalGain >= 0 ? '+' : '-'}${Math.abs(tEntry.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+
+                        {/* ── Individual lot rows (Level 4) ── */}
+                        {tkExpanded && tEntry.lots.map((g, i) => {
+                          const m = optMult(at);
+                          const proc = activeSubTab === 'realized'
+                            ? g.quantity * (g as RealizedGain).sellPrice * m
+                            : g.quantity * (g as UnrealizedLot).currentPrice * m;
+                          const cost = g.quantity * g.buyPrice * m;
+                          const isLast = i === tEntry.lots.length - 1;
+                          return (
+                            <tr key={g.id} className={`bg-[#FAFAFA] hover:bg-[#F2F2F7] transition-colors ${isLast ? 'border-b border-[#D2D2D7]' : 'border-b border-[#EBEBEB]'}`}>
+                              <td className="px-4 py-2 pl-16">
+                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
+                                  <span className="text-slate-300 text-xs">↳</span>
+                                  <span>Opened {fmtDate(g.buyDate)}</span>
+                                  {activeSubTab === 'realized' && (
+                                    <span className="text-slate-400">→ Closed {fmtDate((g as RealizedGain).sellDate)}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-2">{badge(g.brokerage)}</td>
+                              <td className="px-4 py-2 text-right text-[10px] text-slate-700 font-medium">
+                                {g.quantity.toFixed(g.quantity % 1 === 0 ? 0 : 4)}
+                              </td>
+                              <td className="px-4 py-2 text-right text-[10px] text-slate-600">{fmt(proc)}</td>
+                              <td className="px-4 py-2 text-right text-[10px] text-slate-400">{fmt(cost)}</td>
+                              <td className={`px-4 py-2 text-right text-[10px] font-bold ${g.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {g.gain >= 0 ? '+' : '-'}${Math.abs(g.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   const FilterDropdown = ({ label, refEl, isOpen, onToggle, count, onClear, children }: {
     label: string; refEl: React.RefObject<HTMLDivElement>; isOpen: boolean; onToggle: () => void;
@@ -519,7 +691,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               {stats.stTotal >= 0 ? '+' : '-'}${Math.abs(stats.stTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </button>
-          {stExpanded && <GainTableSection title="Short-Term" data={shortTerm} isLT={false} />}
+          {stExpanded && <GainTableSection title="Short-Term" data={shortTerm} isLT={false} prefix="ST" />}
         </div>
 
         {/* Long Term */}
@@ -544,7 +716,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               {stats.ltTotal >= 0 ? '+' : '-'}${Math.abs(stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </button>
-          {ltExpanded && <GainTableSection title="Long-Term" data={longTerm} isLT={true} />}
+          {ltExpanded && <GainTableSection title="Long-Term" data={longTerm} isLT={true} prefix="LT" />}
         </div>
       </div>
 

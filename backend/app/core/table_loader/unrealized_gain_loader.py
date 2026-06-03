@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from backend.app.db.schema import UnrealizedGain
 from backend.app.core.stock_fetcher import get_stock_price, get_stock_quote
 from backend.app.core.utils.ticker import underlying_ticker
-from backend.app.core.stock_split_utils import build_split_map, apply_splits_to_lot
+from backend.app.core.stock_split_utils import build_split_map
 
 _OPTIONS_MULTIPLIER = 100  # 1 contract = 100 underlying shares
 
@@ -56,12 +56,8 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
             prev_close_cache[ticker] = prev_close
 
         for raw_lot in open_lots:
-            # Apply stock splits that occurred after this buy date (equity only)
-            if not option_symbol and ticker in split_map:
-                splits_after = [s for s in split_map[ticker] if s.split_date > raw_lot["date"]]
-                lot = apply_splits_to_lot(raw_lot, splits_after)
-            else:
-                lot = raw_lot
+            # Lots from realized_gain_loader are already split-normalized — no re-application needed
+            lot = raw_lot
 
             # Ensure lot quantity is positive before processing
             if lot["quantity"] <= 0:
