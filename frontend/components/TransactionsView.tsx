@@ -826,7 +826,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                         <input type="number" className={inputCls + ' text-right'} value={editDraft.price ?? ''}
                           onChange={e => setEditDraft(d => ({ ...d, price: parseFloat(e.target.value) }))} />
                       ) : (
-                        <span className="text-sm text-slate-500 font-medium">${t.price.toFixed(2)}</span>
+                        <span className="text-sm text-slate-500 font-medium">${(t.price ?? 0).toFixed(2)}</span>
                       )}
                     </td>
 
@@ -835,8 +835,8 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                       <div className="text-sm font-black text-slate-900">
                         ${(() => {
                           const amount = isEditing
-                            ? ((editDraft.quantity ?? t.quantity) * (editDraft.price ?? t.price)) || t.totalCost
-                            : t.totalCost || (t.quantity * t.price);
+                            ? ((editDraft.quantity ?? t.quantity) * (editDraft.price ?? t.price ?? 0)) || t.totalCost || 0
+                            : t.totalCost || (t.quantity * (t.price ?? 0));
                           return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                         })()}
                       </div>
@@ -1026,7 +1026,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-bold text-slate-700">{new Date(lot.date).toLocaleDateString('en-CA')}</div>
                           <div className="text-xs text-slate-400">
-                            {lot.available_quantity} of {lot.quantity} shares available &nbsp;·&nbsp; ${lot.price.toFixed(2)}/share
+                            {lot.available_quantity} of {lot.quantity} shares available &nbsp;·&nbsp; ${(lot.price ?? 0).toFixed(2)}/share
                           </div>
                         </div>
                         <div className="flex items-center gap-2">

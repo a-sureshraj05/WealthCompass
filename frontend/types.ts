@@ -40,17 +40,18 @@ export interface Transaction {
   id: string;
   date: string; // ISO date string
   quantity: number;
-  price: number;
+  price: number | null;
   brokerage: string;
   ticker: string;
-  name: string;
+  name: string | null;
   action: string;
-  costPerShare: number;
-  totalCost: number;
-  assetType: string;
+  costPerShare: number | null;
+  totalCost: number | null;
+  assetType: string | null;
   is_deleted: boolean;
   is_override: boolean;
   is_duplicate: boolean;
+  is_backend_verified?: boolean;
   current_brokerage?: string | null;
 }
 

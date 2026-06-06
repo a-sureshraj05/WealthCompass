@@ -37,23 +37,13 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
 
   const [isTickerMenuOpen, setIsTickerMenuOpen] = useState(false);
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
-  const [isAssetTypeMenuOpen, setIsAssetTypeMenuOpen] = useState(false);
-  const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([]);
 
   const [sortKey, setSortKey] = useState<GainSortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [optExpanded, setOptExpanded] = useState(false);
   const [stExpanded, setStExpanded] = useState(false);
   const [ltExpanded, setLtExpanded] = useState(false);
-  const [expandedAssetTypes, setExpandedAssetTypes] = useState<Set<string>>(new Set());
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
-
-  const toggleAssetTypeExpand = (key: string) => {
-    setExpandedAssetTypes(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  };
 
   const toggleTickerExpand = (key: string) => {
     setExpandedTickers(prev => {
@@ -65,11 +55,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
 
   const tickerMenuRef = useRef<HTMLDivElement>(null);
   const brokerageMenuRef = useRef<HTMLDivElement>(null);
-  const assetTypeMenuRef = useRef<HTMLDivElement>(null);
 
   useClickOutside(
-    [tickerMenuRef, brokerageMenuRef, assetTypeMenuRef],
-    [setIsTickerMenuOpen, setIsBrokerageMenuOpen, setIsAssetTypeMenuOpen],
+    [tickerMenuRef, brokerageMenuRef],
+    [setIsTickerMenuOpen, setIsBrokerageMenuOpen],
   );
 
   const yoyData = useMemo(() => {
@@ -119,11 +108,6 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     return Array.from(new Set(source.map((g: RealizedGain | UnrealizedLot) => g.brokerage))).sort();
   }, [realizedGainsData, unrealizedGainsData, activeSubTab]);
 
-  const uniqueAssetTypes = useMemo(() => {
-    const source = activeSubTab === 'realized' ? realizedGainsData : unrealizedGainsData;
-    return Array.from(new Set(source.map((g: RealizedGain | UnrealizedLot) => g.assetType || '').filter(Boolean))).sort();
-  }, [realizedGainsData, unrealizedGainsData, activeSubTab]);
-
   const availableYears = useMemo(() => {
     const years = new Set(realizedGainsData.map(g => new Date(g.sellDate).getFullYear().toString()));
     return ['Overall', ...Array.from(years)].sort((a, b) => b.localeCompare(a));
@@ -134,12 +118,11 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     let result = source.filter(g => {
       const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(g.ticker);
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(g.brokerage);
-      const matchesAssetType = selectedAssetTypes.length === 0 || selectedAssetTypes.includes(g.assetType || '');
       if (activeSubTab === 'realized') {
         const year = new Date((g as RealizedGain).sellDate).getFullYear().toString();
-        return matchesTicker && matchesBrokerage && matchesAssetType && (selectedYear === 'Overall' || year === selectedYear);
+        return matchesTicker && matchesBrokerage && (selectedYear === 'Overall' || year === selectedYear);
       }
-      return matchesTicker && matchesBrokerage && matchesAssetType;
+      return matchesTicker && matchesBrokerage;
     });
 
     if (sortKey && sortDirection) {
@@ -171,22 +154,28 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       result = [...result].sort((a, b) => new Date(b.buyDate).getTime() - new Date(a.buyDate).getTime());
     }
     return result;
-  }, [realizedGainsData, unrealizedGainsData, selectedTickers, selectedBrokerages, selectedAssetTypes, selectedYear, activeSubTab, sortKey, sortDirection]);
+  }, [realizedGainsData, unrealizedGainsData, selectedTickers, selectedBrokerages, selectedYear, activeSubTab, sortKey, sortDirection]);
 
-  const shortTerm = filteredData.filter(g => !g.isLongTerm);
-  const longTerm = filteredData.filter(g => g.isLongTerm);
+  const isOpt = (g: RealizedGain | UnrealizedLot) => (g.assetType || '').toLowerCase() === 'options';
+  const options   = filteredData.filter(g => isOpt(g));
+  const shortTerm = filteredData.filter(g => !isOpt(g) && !g.isLongTerm);
+  const longTerm  = filteredData.filter(g => !isOpt(g) && g.isLongTerm);
 
   const stats = useMemo(() => {
-    const stTotal = shortTerm.reduce((sum, g) => sum + g.gain, 0);
-    const ltTotal = longTerm.reduce((sum, g) => sum + g.gain, 0);
-    const taxEst = (stTotal > 0 ? stTotal * (stTaxRate / 100) : 0) + (ltTotal > 0 ? ltTotal * (ltTaxRate / 100) : 0);
-    const ltShare = stTotal + ltTotal !== 0 ? (ltTotal / (stTotal + ltTotal)) * 100 : 0;
-    return { stTotal, ltTotal, taxEst, ltShare };
-  }, [shortTerm, longTerm, stTaxRate, ltTaxRate]);
+    const optTotal = options.reduce((sum, g) => sum + g.gain, 0);
+    const stTotal  = shortTerm.reduce((sum, g) => sum + g.gain, 0);
+    const ltTotal  = longTerm.reduce((sum, g) => sum + g.gain, 0);
+    const taxEst =
+      (optTotal > 0 ? optTotal * (stTaxRate / 100) : 0) +
+      (stTotal  > 0 ? stTotal  * (stTaxRate / 100) : 0) +
+      (ltTotal  > 0 ? ltTotal  * (ltTaxRate / 100) : 0);
+    const total = optTotal + stTotal + ltTotal;
+    const ltShare = total !== 0 ? (ltTotal / total) * 100 : 0;
+    return { optTotal, stTotal, ltTotal, taxEst, ltShare };
+  }, [options, shortTerm, longTerm, stTaxRate, ltTaxRate]);
 
   const toggleTicker = (ticker: string) => setSelectedTickers(selectedTickers.includes(ticker) ? selectedTickers.filter(t => t !== ticker) : [...selectedTickers, ticker]);
   const toggleBrokerage = (broker: string) => setSelectedBrokerages(selectedBrokerages.includes(broker) ? selectedBrokerages.filter(b => b !== broker) : [...selectedBrokerages, broker]);
-  const toggleAssetType = (type: string) => setSelectedAssetTypes(selectedAssetTypes.includes(type) ? selectedAssetTypes.filter(t => t !== type) : [...selectedAssetTypes, type]);
 
   const handleSort = (key: GainSortKey) => {
     if (sortKey === key) {
@@ -201,39 +190,23 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   );
 
 
-  const GainTableSection = ({ title, data, isLT, prefix }: { title: string; data: (RealizedGain | UnrealizedLot)[]; isLT: boolean; prefix: string }) => {
-    const optMult = (at: string) => (at || '').toLowerCase() === 'options' ? 100 : 1;
+  const GainTableSection = ({ title, data, prefix, isOptions: sectionIsOptions }: { title: string; data: (RealizedGain | UnrealizedLot)[]; prefix: string; isOptions: boolean }) => {
+    const m = sectionIsOptions ? 100 : 1;
 
-    // Level 2: assetType → Level 3: ticker → lots
-    type TickerEntry = { lots: (RealizedGain | UnrealizedLot)[]; totalQty: number; totalCost: number; totalProceeds: number; totalGain: number; brokerages: string[] };
-    type AssetTypeEntry = { tickers: Map<string, TickerEntry>; tickerOrder: string[]; totalQty: number; totalCost: number; totalProceeds: number; totalGain: number };
-
-    const atMap = new Map<string, AssetTypeEntry>();
-    const atOrder: string[] = [];
+    type TickerEntry = { lots: (RealizedGain | UnrealizedLot)[]; totalQty: number; totalCost: number; totalProceeds: number; totalGain: number; brokerages: string[]; assetType: string };
+    const tickerMap = new Map<string, TickerEntry>();
+    const tickerOrder: string[] = [];
 
     data.forEach(g => {
-      const at = g.assetType || 'Equity';
-      const m = optMult(at);
       const proc = activeSubTab === 'realized'
         ? g.quantity * (g as RealizedGain).sellPrice * m
         : g.quantity * (g as UnrealizedLot).currentPrice * m;
       const cost = g.quantity * g.buyPrice * m;
-
-      if (!atMap.has(at)) {
-        atMap.set(at, { tickers: new Map(), tickerOrder: [], totalQty: 0, totalCost: 0, totalProceeds: 0, totalGain: 0 });
-        atOrder.push(at);
+      if (!tickerMap.has(g.ticker)) {
+        tickerMap.set(g.ticker, { lots: [], totalQty: 0, totalCost: 0, totalProceeds: 0, totalGain: 0, brokerages: [], assetType: g.assetType || 'Equity' });
+        tickerOrder.push(g.ticker);
       }
-      const atEntry = atMap.get(at)!;
-      atEntry.totalQty += g.quantity;
-      atEntry.totalCost += cost;
-      atEntry.totalProceeds += proc;
-      atEntry.totalGain += g.gain;
-
-      if (!atEntry.tickers.has(g.ticker)) {
-        atEntry.tickers.set(g.ticker, { lots: [], totalQty: 0, totalCost: 0, totalProceeds: 0, totalGain: 0, brokerages: [] });
-        atEntry.tickerOrder.push(g.ticker);
-      }
-      const tEntry = atEntry.tickers.get(g.ticker)!;
+      const tEntry = tickerMap.get(g.ticker)!;
       tEntry.lots.push(g);
       tEntry.totalQty += g.quantity;
       tEntry.totalCost += cost;
@@ -242,13 +215,21 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       if (!tEntry.brokerages.includes(g.brokerage)) tEntry.brokerages.push(g.brokerage);
     });
 
-    // Sort tickers within each assetType when a sort key is active
-    const sortedAtOrder = [...atOrder].sort((a, b) => {
-      // Equity before Options
-      if (a === 'Equity' && b !== 'Equity') return -1;
-      if (b === 'Equity' && a !== 'Equity') return 1;
-      return a.localeCompare(b);
-    });
+    const sortedTickers: [string, TickerEntry][] = tickerOrder.map(t => [t, tickerMap.get(t)!]);
+    if (sortKey && sortDirection) {
+      sortedTickers.sort(([, a], [, b]) => {
+        let va: any, vb: any;
+        if (sortKey === 'quantity') { va = a.totalQty; vb = b.totalQty; }
+        else if (sortKey === 'proceeds') { va = a.totalProceeds; vb = b.totalProceeds; }
+        else if (sortKey === 'costBasis') { va = a.totalCost; vb = b.totalCost; }
+        else if (sortKey === 'gain') { va = a.totalGain; vb = b.totalGain; }
+        else if (sortKey === 'brokerage') { va = a.brokerages[0] || ''; vb = b.brokerages[0] || ''; }
+        else return 0;
+        if (va < vb) return sortDirection === 'asc' ? -1 : 1;
+        if (va > vb) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
 
     const badge = (b: string) => (
       <span key={b} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight ${
@@ -270,9 +251,9 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           <thead>
             <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
               {([
-                { key: 'ticker', label: 'Asset / Ticker', align: 'left' },
+                { key: 'ticker', label: 'Ticker', align: 'left' },
                 { key: 'brokerage', label: 'Brokerage', align: 'left' },
-                { key: 'quantity', label: 'Qty', align: 'right' },
+                { key: 'quantity', label: sectionIsOptions ? 'Contracts' : 'Qty', align: 'right' },
                 { key: 'proceeds', label: activeSubTab === 'realized' ? 'Proceeds' : 'Mkt Value', align: 'right' },
                 { key: 'costBasis', label: 'Cost Basis', align: 'right' },
                 { key: 'gain', label: activeSubTab === 'realized' ? 'Realized G/L' : 'Unrealized G/L', align: 'right' },
@@ -284,127 +265,69 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             </tr>
           </thead>
           <tbody>
-            {sortedAtOrder.map(at => {
-              const atEntry = atMap.get(at)!;
-              const atKey = `${prefix}-${at}`;
-              const atExpanded = expandedAssetTypes.has(atKey);
-              const isOptions = at.toLowerCase() === 'options';
-              const qtyUnit = isOptions ? 'contract' : 'share';
-
-              // Sort tickers within this assetType
-              const sortedTickers: [string, TickerEntry][] = atEntry.tickerOrder.map(t => [t, atEntry.tickers.get(t)!]);
-              if (sortKey && sortDirection) {
-                sortedTickers.sort(([, a], [, b]) => {
-                  let va: any, vb: any;
-                  if (sortKey === 'ticker') { va = sortedTickers.findIndex(([t]) => atEntry.tickers.get(t) === a); vb = 0; return 0; }
-                  if (sortKey === 'quantity') { va = a.totalQty; vb = b.totalQty; }
-                  else if (sortKey === 'proceeds') { va = a.totalProceeds; vb = b.totalProceeds; }
-                  else if (sortKey === 'costBasis') { va = a.totalCost; vb = b.totalCost; }
-                  else if (sortKey === 'gain') { va = a.totalGain; vb = b.totalGain; }
-                  else if (sortKey === 'brokerage') { va = a.brokerages[0] || ''; vb = b.brokerages[0] || ''; }
-                  else return 0;
-                  if (va < vb) return sortDirection === 'asc' ? -1 : 1;
-                  if (va > vb) return sortDirection === 'asc' ? 1 : -1;
-                  return 0;
-                });
-              }
-
+            {sortedTickers.map(([ticker, tEntry]) => {
+              const tkKey = `${prefix}-${ticker}`;
+              const tkExpanded = expandedTickers.has(tkKey);
               return (
-                <React.Fragment key={at}>
-                  {/* ── Asset Type row (Level 2) ── */}
+                <React.Fragment key={ticker}>
+                  {/* ── Ticker row (Level 2) ── */}
                   <tr
-                    className="bg-[#F0F4FA] border-b border-[#D2D2D7] hover:bg-[#E8EEF8] transition-colors cursor-pointer select-none"
-                    onClick={() => toggleAssetTypeExpand(atKey)}
+                    className="border-b border-[#D2D2D7] hover:bg-[#F5F5F7]/60 transition-colors cursor-pointer select-none"
+                    onClick={() => toggleTickerExpand(tkKey)}
                   >
-                    <td className="px-4 py-2.5" colSpan={2}>
-                      <div className="flex items-center gap-2">
-                        <svg className={`w-3 h-3 text-[#0F52BA] transition-transform shrink-0 ${atExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform shrink-0 ${tkExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                         </svg>
-                        <span className="text-[11px] font-black text-[#0F52BA] uppercase tracking-widest">{at}</span>
-                        <span className="text-[10px] text-slate-500 font-medium">
-                          · {atEntry.totalQty % 1 === 0 ? atEntry.totalQty.toFixed(0) : atEntry.totalQty.toFixed(4)} {qtyUnit}{atEntry.totalQty !== 1 ? 's' : ''}
-                          · {atEntry.tickerOrder.length} ticker{atEntry.tickerOrder.length !== 1 ? 's' : ''}
-                        </span>
+                        <TickerLogo ticker={ticker} size={28} assetType={tEntry.assetType} />
+                        <div>
+                          <p className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{ticker}</p>
+                          <p className="text-[10px] text-slate-400">{tEntry.lots.length} lot{tEntry.lots.length !== 1 ? 's' : ''}</p>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 text-right text-[10px] text-slate-500 font-semibold">
-                      {atEntry.totalQty % 1 === 0 ? atEntry.totalQty.toFixed(0) : atEntry.totalQty.toFixed(4)}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">{tEntry.brokerages.map(b => badge(b))}</div>
                     </td>
-                    <td className="px-4 py-2.5 text-right text-[10px] text-slate-600 font-semibold">{fmt(atEntry.totalProceeds)}</td>
-                    <td className="px-4 py-2.5 text-right text-[10px] text-slate-500">{fmt(atEntry.totalCost)}</td>
-                    <td className={`px-4 py-2.5 text-right text-[10px] font-black ${atEntry.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {atEntry.totalGain >= 0 ? '+' : '-'}${Math.abs(atEntry.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <td className="px-4 py-3 text-right text-[11px] text-slate-900 font-bold">
+                      {tEntry.totalQty % 1 === 0 ? tEntry.totalQty.toFixed(0) : tEntry.totalQty.toFixed(4)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-[11px] text-slate-700 font-semibold">{fmt(tEntry.totalProceeds)}</td>
+                    <td className="px-4 py-3 text-right text-[11px] text-slate-500">{fmt(tEntry.totalCost)}</td>
+                    <td className={`px-4 py-3 text-right text-[11px] font-black ${tEntry.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {tEntry.totalGain >= 0 ? '+' : '-'}${Math.abs(tEntry.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
 
-                  {atExpanded && sortedTickers.map(([ticker, tEntry]) => {
-                    const tkKey = `${prefix}-${at}-${ticker}`;
-                    const tkExpanded = expandedTickers.has(tkKey);
+                  {/* ── Individual lot rows (Level 3) ── */}
+                  {tkExpanded && tEntry.lots.map((g, i) => {
+                    const proc = activeSubTab === 'realized'
+                      ? g.quantity * (g as RealizedGain).sellPrice * m
+                      : g.quantity * (g as UnrealizedLot).currentPrice * m;
+                    const cost = g.quantity * g.buyPrice * m;
+                    const isLast = i === tEntry.lots.length - 1;
                     return (
-                      <React.Fragment key={ticker}>
-                        {/* ── Ticker row (Level 3) ── */}
-                        <tr
-                          className="border-b border-[#D2D2D7] hover:bg-[#F5F5F7]/60 transition-colors cursor-pointer select-none"
-                          onClick={() => toggleTickerExpand(tkKey)}
-                        >
-                          <td className="px-4 py-3 pl-8">
-                            <div className="flex items-center gap-2.5">
-                              <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform shrink-0 ${tkExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                              </svg>
-                              <TickerLogo ticker={ticker} size={28} assetType={at} />
-                              <div>
-                                <p className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{ticker}</p>
-                                <p className="text-[10px] text-slate-400">{tEntry.lots.length} lot{tEntry.lots.length !== 1 ? 's' : ''}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1">{tEntry.brokerages.map(b => badge(b))}</div>
-                          </td>
-                          <td className="px-4 py-3 text-right text-[11px] text-slate-900 font-bold">
-                            {tEntry.totalQty % 1 === 0 ? tEntry.totalQty.toFixed(0) : tEntry.totalQty.toFixed(4)}
-                          </td>
-                          <td className="px-4 py-3 text-right text-[11px] text-slate-700 font-semibold">{fmt(tEntry.totalProceeds)}</td>
-                          <td className="px-4 py-3 text-right text-[11px] text-slate-500">{fmt(tEntry.totalCost)}</td>
-                          <td className={`px-4 py-3 text-right text-[11px] font-black ${tEntry.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {tEntry.totalGain >= 0 ? '+' : '-'}${Math.abs(tEntry.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-
-                        {/* ── Individual lot rows (Level 4) ── */}
-                        {tkExpanded && tEntry.lots.map((g, i) => {
-                          const m = optMult(at);
-                          const proc = activeSubTab === 'realized'
-                            ? g.quantity * (g as RealizedGain).sellPrice * m
-                            : g.quantity * (g as UnrealizedLot).currentPrice * m;
-                          const cost = g.quantity * g.buyPrice * m;
-                          const isLast = i === tEntry.lots.length - 1;
-                          return (
-                            <tr key={g.id} className={`bg-[#FAFAFA] hover:bg-[#F2F2F7] transition-colors ${isLast ? 'border-b border-[#D2D2D7]' : 'border-b border-[#EBEBEB]'}`}>
-                              <td className="px-4 py-2 pl-16">
-                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
-                                  <span className="text-slate-300 text-xs">↳</span>
-                                  <span>Opened {fmtDate(g.buyDate)}</span>
-                                  {activeSubTab === 'realized' && (
-                                    <span className="text-slate-400">→ Closed {fmtDate((g as RealizedGain).sellDate)}</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-4 py-2">{badge(g.brokerage)}</td>
-                              <td className="px-4 py-2 text-right text-[10px] text-slate-700 font-medium">
-                                {g.quantity.toFixed(g.quantity % 1 === 0 ? 0 : 4)}
-                              </td>
-                              <td className="px-4 py-2 text-right text-[10px] text-slate-600">{fmt(proc)}</td>
-                              <td className="px-4 py-2 text-right text-[10px] text-slate-400">{fmt(cost)}</td>
-                              <td className={`px-4 py-2 text-right text-[10px] font-bold ${g.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {g.gain >= 0 ? '+' : '-'}${Math.abs(g.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </React.Fragment>
+                      <tr key={g.id} className={`bg-[#FAFAFA] hover:bg-[#F2F2F7] transition-colors ${isLast ? 'border-b border-[#D2D2D7]' : 'border-b border-[#EBEBEB]'}`}>
+                        <td className="px-4 py-2 pl-14">
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
+                            <span className="text-slate-300 text-xs">↳</span>
+                            <span>Opened {fmtDate(g.buyDate)}</span>
+                            {activeSubTab === 'realized' && (
+                              <span className="text-slate-400">→ Closed {fmtDate((g as RealizedGain).sellDate)}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">{badge(g.brokerage)}</td>
+                        <td className="px-4 py-2 text-right text-[10px] text-slate-700 font-medium">
+                          {g.quantity.toFixed(g.quantity % 1 === 0 ? 0 : 4)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-[10px] text-slate-600">{fmt(proc)}</td>
+                        <td className="px-4 py-2 text-right text-[10px] text-slate-400">{fmt(cost)}</td>
+                        <td className={`px-4 py-2 text-right text-[10px] font-bold ${g.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {g.gain >= 0 ? '+' : '-'}${Math.abs(g.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
                     );
                   })}
                 </React.Fragment>
@@ -621,15 +544,6 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             ))}
           </FilterDropdown>
 
-          <FilterDropdown label="Asset Type" refEl={assetTypeMenuRef} isOpen={isAssetTypeMenuOpen} onToggle={() => setIsAssetTypeMenuOpen(v => !v)} count={selectedAssetTypes.length} onClear={() => setSelectedAssetTypes([])}>
-            {uniqueAssetTypes.map(t => (
-              <label key={t} className="flex items-center gap-2.5 px-3 py-1.5 rounded hover:bg-slate-50 cursor-pointer">
-                <input type="checkbox" className="w-3.5 h-3.5 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedAssetTypes.includes(t)} onChange={() => toggleAssetType(t)} />
-                <span className="text-xs font-medium text-slate-700 capitalize">{t}</span>
-              </label>
-            ))}
-          </FilterDropdown>
-
           <FilterDropdown label="Ticker" refEl={tickerMenuRef} isOpen={isTickerMenuOpen} onToggle={() => setIsTickerMenuOpen(v => !v)} count={selectedTickers.length} onClear={() => setSelectedTickers([])}>
             {uniqueTickers.map(ticker => (
               <label key={ticker} className="flex items-center gap-2.5 px-3 py-1.5 rounded hover:bg-slate-50 cursor-pointer">
@@ -650,6 +564,11 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           </div>
           <div className="w-px h-8 bg-[#D2D2D7]" />
           <div>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Options</p>
+            <p className={`text-sm font-bold ${stats.optTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.optTotal)}</p>
+          </div>
+          <div className="w-px h-8 bg-[#D2D2D7]" />
+          <div>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Short-Term</p>
             <p className={`text-sm font-bold ${stats.stTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.stTotal)}</p>
           </div>
@@ -667,8 +586,37 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         </div>
       </div>
 
-      {/* ST / LT Sections */}
+      {/* Options / ST / LT Sections */}
       <div className="space-y-4">
+
+        {/* Options */}
+        {options.length > 0 && (
+          <div className="space-y-3">
+            <button
+              onClick={() => setOptExpanded(v => !v)}
+              className="w-full p-4 bg-white rounded border border-[#D2D2D7] flex items-center justify-between hover:bg-[#F5F5F7] transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <svg className={`w-4 h-4 text-slate-400 transition-transform ${optExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                </svg>
+                <div className="text-left">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full inline-block bg-violet-500" />
+                    <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Options</h4>
+                    <span className="text-[10px] text-slate-400 font-medium">· {options.length} lot{options.length !== 1 ? 's' : ''}</span>
+                    <span className="text-[9px] font-black text-violet-400 uppercase tracking-widest border border-violet-200 rounded px-1.5 py-0.5 bg-violet-50">ST rate</span>
+                  </div>
+                </div>
+              </div>
+              <span className={`text-base font-black ${stats.optTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {stats.optTotal >= 0 ? '+' : '-'}${Math.abs(stats.optTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </button>
+            {optExpanded && <GainTableSection title="Options" data={options} prefix="OPT" isOptions={true} />}
+          </div>
+        )}
+
         {/* Short Term */}
         <div className="space-y-3">
           <button
@@ -683,7 +631,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: '#eab308' }} />
                   <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Short-Term</h4>
-                  <span className="text-[10px] text-slate-400 font-medium">· held ≤ 1 year · {shortTerm.length} lots</span>
+                  <span className="text-[10px] text-slate-400 font-medium">· held ≤ 1 year · {shortTerm.length} lot{shortTerm.length !== 1 ? 's' : ''}</span>
                 </div>
               </div>
             </div>
@@ -691,7 +639,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               {stats.stTotal >= 0 ? '+' : '-'}${Math.abs(stats.stTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </button>
-          {stExpanded && <GainTableSection title="Short-Term" data={shortTerm} isLT={false} prefix="ST" />}
+          {stExpanded && <GainTableSection title="Short-Term" data={shortTerm} prefix="ST" isOptions={false} />}
         </div>
 
         {/* Long Term */}
@@ -708,7 +656,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
                   <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Long-Term</h4>
-                  <span className="text-[10px] text-slate-400 font-medium">· held &gt; 1 year · {longTerm.length} lots</span>
+                  <span className="text-[10px] text-slate-400 font-medium">· held &gt; 1 year · {longTerm.length} lot{longTerm.length !== 1 ? 's' : ''}</span>
                 </div>
               </div>
             </div>
@@ -716,8 +664,9 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               {stats.ltTotal >= 0 ? '+' : '-'}${Math.abs(stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </button>
-          {ltExpanded && <GainTableSection title="Long-Term" data={longTerm} isLT={true} prefix="LT" />}
+          {ltExpanded && <GainTableSection title="Long-Term" data={longTerm} prefix="LT" isOptions={false} />}
         </div>
+
       </div>
 
     </div>

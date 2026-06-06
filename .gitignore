@@ -36,3 +36,6 @@ last_commit_hash.txt
 
 # Ignore user-specific SQL session/query files
 sql/*.sql
+
+# Local data files (personal brokerage CSVs — never commit)
+data/

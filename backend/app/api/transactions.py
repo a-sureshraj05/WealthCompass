@@ -79,16 +79,17 @@ class Transaction(BaseModel):
     brokerage: str
     date: datetime.datetime
     ticker: str
-    name: str
+    name: Optional[str] = None
     action: str
     quantity: float
-    price: float
-    costPerShare: float
-    totalCost: float
-    assetType: str
+    price: Optional[float] = None
+    costPerShare: Optional[float] = None
+    totalCost: Optional[float] = None
+    assetType: Optional[str] = None
     is_deleted: bool = False
     is_override: bool = False
     is_duplicate: bool = False
+    is_backend_verified: bool = False
     current_brokerage: Optional[str] = None
 
     class Config:
@@ -297,6 +298,18 @@ def split_transaction(transaction_id: int, body: SplitRequest, db: Session = Dep
     return {"original_id": transaction.id, "split_id": split_txn.id}
 
 
+@router.patch("/transactions/{transaction_id}/verify")
+def set_transaction_verified(transaction_id: int, is_backend_verified: bool, db: Session = Depends(get_db)):
+    """Manually mark a transaction as backend-verified. Only called explicitly by the user.
+    No automated process, sync, or loader should ever call this endpoint."""
+    transaction = db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    transaction.is_backend_verified = is_backend_verified
+    db.commit()
+    return {"message": "Transaction verification status updated"}
+
+
 @router.patch("/transactions/{transaction_id}/hidden")
 def set_transaction_hidden(transaction_id: int, is_deleted: bool, db: Session = Depends(get_db)):
     transaction = (
@@ -346,13 +359,13 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
 
 @router.post("/transactions/clear")
 def clear_processed_data(db: Session = Depends(get_db)):
-    """Clear all processed tables (transactions, holdings, gains) but keep raw source tables intact."""
-    db.query(DBTransaction).delete()
+    """Clear only derived tables (holdings, gains). Transactions table is never touched here —
+    use Reset to re-seed transactions from raw sources."""
     db.query(DBHolding).delete()
     db.query(DBRealizedGain).delete()
     db.query(DBUnrealizedGain).delete()
     db.commit()
-    return {"message": "All processed data cleared. Raw tables preserved."}
+    return {"message": "Processed data cleared. Transactions preserved."}
 
 
 @router.post("/transactions/reset")
@@ -361,18 +374,23 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
     Manual customisations (current_brokerage, is_deleted, field edits) are snapshotted before
     the wipe and replayed onto the freshly-seeded rows so they survive the reset.
     """
-    # Snapshot all customised rows keyed by (raw_id, source)
+    # Snapshot all customised rows keyed by (raw_id, source).
+    # Also capture is_backend_verified and is_duplicate so manual corrections survive the reset.
     overrides: dict = {}
     for t in db.query(DBTransaction).all():
         is_customised = (
             t.is_deleted
             or t.is_override
+            or t.is_backend_verified
+            or t.is_duplicate
             or (t.current_brokerage and t.current_brokerage != t.brokerage)
         )
         if is_customised and t.raw_id and t.source:
             overrides[(t.raw_id, t.source)] = {
                 "is_deleted": t.is_deleted,
                 "is_override": t.is_override,
+                "is_backend_verified": t.is_backend_verified,
+                "is_duplicate": t.is_duplicate,
                 "current_brokerage": t.current_brokerage,
                 "original_values": t.original_values,
                 "date": t.date,
@@ -387,14 +405,36 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
                 "assetType": t.assetType,
             }
 
-    db.query(DBTransaction).delete(synchronize_session=False)
+    # Delete only non-verified transactions. Rows with is_backend_verified=1 are
+    # manually curated (ACATS lots, corrected data) and must survive the reset.
+    db.query(DBTransaction).filter(
+        DBTransaction.is_backend_verified == False
+    ).delete(synchronize_session=False)
     db.commit()
+
+    # Build sets of raw_ids already covered by surviving verified rows — skip re-seeding these.
+    verified_manual_ids = {
+        t.raw_id for t in db.query(DBTransaction).filter(
+            DBTransaction.is_backend_verified == True,
+            DBTransaction.source == "manual",
+            DBTransaction.raw_id.isnot(None),
+        ).all()
+    }
+    verified_snaptrade_ids = {
+        t.raw_id for t in db.query(DBTransaction).filter(
+            DBTransaction.is_backend_verified == True,
+            DBTransaction.source == "snaptrade",
+            DBTransaction.raw_id.isnot(None),
+        ).all()
+    }
 
     # Re-seed from manual raw transactions
     manual_q = db.query(DBManualRawTransaction)
     if brokerage:
         manual_q = manual_q.filter(DBManualRawTransaction.brokerage == brokerage)
     for raw in manual_q.all():
+        if raw.id in verified_manual_ids:
+            continue  # verified row already exists for this raw entry
         db.add(DBTransaction(
             brokerage=raw.brokerage,
             date=raw.date,
@@ -424,6 +464,8 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
         for raw in snaptrade_rows
     )
     for raw in snaptrade_rows:
+        if raw.id in verified_snaptrade_ids:
+            continue  # verified row already exists for this raw entry
         key = (raw.brokerage, raw.ticker, raw.action, raw.quantity, raw.price, raw.date)
         is_dup = key_counts[key] > 1
         db.add(DBTransaction(
@@ -448,11 +490,13 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
 
     # Replay manual customisations onto the freshly-seeded rows
     if overrides:
-        for t in db.query(DBTransaction).all():
+        for t in db.query(DBTransaction).filter(DBTransaction.is_backend_verified == False).all():
             ov = overrides.get((t.raw_id, t.source))
             if not ov:
                 continue
             t.is_deleted = ov["is_deleted"]
+            t.is_duplicate = ov["is_duplicate"]
+            t.is_backend_verified = ov["is_backend_verified"]
             t.current_brokerage = ov["current_brokerage"]
             if ov["is_override"]:
                 t.is_override = True

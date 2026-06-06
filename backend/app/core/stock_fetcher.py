@@ -63,6 +63,8 @@ def get_stock_quote(ticker_symbol: str) -> tuple:
     try:
         hist = yf.Ticker(ticker_symbol).history(period='1mo')
         # history() only returns trading days, so iloc[-1] = last close, iloc[-2] = prev trading day close
+        # Drop NaN rows — yfinance sometimes returns NaN for the most recent row mid-day
+        hist = hist.dropna(subset=['Close'])
         if len(hist) >= 2:
             return float(hist['Close'].iloc[-1]), float(hist['Close'].iloc[-2])
         elif len(hist) == 1:

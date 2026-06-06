@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Set
 from sqlalchemy.orm import Session
 from backend.app.db.schema import LotAssignment, RealizedGain, Transaction as DBTransaction
 from backend.app.core.utils.ticker import underlying_ticker
@@ -14,7 +14,7 @@ def delete(db: Session, brokerage_name: str = None):
     db.commit()
 
 
-def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, Any]]]:
+def load(db: Session, brokerage_name: str = None, tracked_tickers: Optional[Set[str]] = None) -> Dict[str, List[Dict[str, Any]]]:
     delete(db, brokerage_name)
 
     # Fetch all active transactions — exclude soft-deleted and flagged duplicates
@@ -24,6 +24,8 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
     )
     if brokerage_name:
         q = q.filter(DBTransaction.brokerage == brokerage_name)
+    if tracked_tickers:
+        q = q.filter(DBTransaction.ticker.in_(tracked_tickers))
     transactions = q.order_by(DBTransaction.date).all()
 
     # Load explicit lot assignments: sell_transaction_id → [LotAssignment]
@@ -166,8 +168,10 @@ def load(db: Session, brokerage_name: str = None) -> Dict[str, List[Dict[str, An
                     "assetType": t.assetType,
                     "option_symbol": getattr(t, "option_symbol", None),
                 }
-                # Apply stock splits that occurred after this buy date (equity only)
-                if not option_symbol and t.ticker in split_map:
+                # Apply stock splits that occurred after this buy date (equity only).
+                # EXTERNAL_ASSET_TRANSFER_IN lots already carry post-split cost basis
+                # as recorded by the receiving brokerage — skip re-adjustment.
+                if not option_symbol and t.ticker in split_map and t.action.upper() != "EXTERNAL_ASSET_TRANSFER_IN":
                     splits_after = [s for s in split_map[t.ticker] if s.split_date > t.date]
                     lot = apply_splits_to_lot(lot, splits_after)
                 buy_lots_queue.append(lot)

@@ -31,6 +31,9 @@ class Transaction(Base):
     is_deleted = Column(Boolean, default=False, nullable=False, server_default="0")
     is_override = Column(Boolean, default=False, nullable=False, server_default="0")
     is_duplicate = Column(Boolean, default=False, nullable=False, server_default="0")
+    # Manually set only — never written by any loader, sync, or automated process.
+    # Set exclusively via PATCH /transactions/{id}/verify when working with Claude.
+    is_backend_verified = Column(Boolean, default=False, nullable=False, server_default="0")
     current_brokerage = Column(String, nullable=True)  # set when shares transferred to another brokerage
     original_values = Column(String, nullable=True)
     option_symbol = Column(String, nullable=True)  # OCC option symbol e.g. MSFT250117C00400000
@@ -117,31 +120,6 @@ class TickerReference(Base):
     first_addition_date = Column(Date)
     price = Column(Float)
 
-
-class PlaidItem(Base):
-    __tablename__ = "plaid_items"
-
-    id = Column(Integer, primary_key=True, index=True)
-    brokerage = Column(String)           # e.g. "Robinhood", "Schwab"
-    access_token = Column(String, unique=True)
-    item_id = Column(String, unique=True) # Plaid's item ID
-
-
-class PlaidTransaction(Base):
-    __tablename__ = "plaid_transactions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    plaid_item_id = Column(Integer, index=True)  # FK to PlaidItem.id
-    brokerage = Column(String)
-    date = Column(DateTime)
-    ticker = Column(String)
-    name = Column(String)
-    action = Column(String)              # buy / sell
-    quantity = Column(Float)
-    price = Column(Float)
-    amount = Column(Float)               # total value (quantity * price)
-    assetType = Column(String)           # equity, etf, etc.
-    plaid_transaction_id = Column(String, unique=True)  # Plaid's own ID (prevents duplicates)
 
 
 class SnaptradeConnection(Base):
