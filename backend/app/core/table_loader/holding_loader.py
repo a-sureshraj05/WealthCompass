@@ -33,7 +33,7 @@ def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, fl
     aggregated: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
 
     for row in unrealized_rows:
-        if row.quantity <= 0:
+        if row.quantity < 1e-6:
             continue
 
         key = (row.brokerage, row.ticker, (row.assetType or "equity").lower())

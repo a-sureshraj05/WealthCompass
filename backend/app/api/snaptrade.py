@@ -298,7 +298,25 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                 db.add(db_snaptrade)
                 db.flush()  # Get db_snaptrade.id before inserting transaction
 
-                # Also insert into unified Transaction table
+                # Mark as duplicate if an authoritative transaction already exists:
+                # - source='manual' (CSV import), OR
+                # - is_backend_verified=True (user-verified via PATCH /verify)
+                # This covers both the CSV-import workflow and the existing
+                # is_backend_verified setup for tickers like NVDA/GOOGL/AAPL.
+                from sqlalchemy import or_
+                manual_exists = db.query(DBTransaction).filter(
+                    DBTransaction.ticker == ticker,
+                    DBTransaction.date == date,
+                    DBTransaction.action == action,
+                    DBTransaction.quantity == abs(quantity),
+                    or_(
+                        DBTransaction.source == "manual",
+                        DBTransaction.is_backend_verified == True,
+                    ),
+                    DBTransaction.is_deleted == False,
+                    DBTransaction.is_duplicate == False,
+                ).first()
+
                 db.add(DBTransaction(
                     brokerage=brokerage_name,
                     date=date,
@@ -313,6 +331,7 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                     option_symbol=occ_symbol or None,
                     source="snaptrade",
                     raw_id=db_snaptrade.id,
+                    is_duplicate=bool(manual_exists),
                 ))
 
                 total_synced += 1

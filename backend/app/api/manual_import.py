@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.app.core import process
@@ -7,7 +8,8 @@ from backend.app.core.statement_parser import csv_data_parse
 from backend.app.core.database import get_db
 from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 from backend.app.db.schema import \
-    Transaction as DBTransaction, ManualRawTransaction as DBManualRawTransaction
+    Transaction as DBTransaction, ManualRawTransaction as DBManualRawTransaction, \
+    SnaptradeTransaction as DBSnaptradeTransaction
 
 router = APIRouter()
 
@@ -26,10 +28,12 @@ def parse_statement_import_endpoint(
         db.query(DBManualRawTransaction).filter(
             DBManualRawTransaction.brokerage == request.brokerageName
         ).delete()
-        # Delete existing manual transactions from the unified table for this brokerageName
+        # Delete existing manual transactions — preserve is_backend_verified ones
+        # (those are user-curated seed lots that must survive re-imports)
         db.query(DBTransaction).filter(
             DBTransaction.brokerage == request.brokerageName,
             DBTransaction.source == "manual",
+            DBTransaction.is_backend_verified == False,
         ).delete()
         db.commit()
 
@@ -37,11 +41,23 @@ def parse_statement_import_endpoint(
             request.text, request.brokerageName
         )
 
+        # Raw table keeps all tickers. Unified transactions table only gets manual
+        # rows that predate SnapTrade's earliest transaction for that ticker —
+        # SnapTrade covers from its min date onwards, manual fills the history before it.
+        snap_min_dates = {
+            (brokerage, ticker): min_date
+            for brokerage, ticker, min_date in db.query(
+                DBSnaptradeTransaction.brokerage,
+                DBSnaptradeTransaction.ticker,
+                func.min(DBSnaptradeTransaction.date),
+            ).group_by(DBSnaptradeTransaction.brokerage, DBSnaptradeTransaction.ticker).all()
+        }
+
         new_transaction_ids = []
         for transaction_data in parsed_transactions_data:
             asset_type = normalize_asset_type(transaction_data["assetType"], ticker=transaction_data["ticker"])
 
-            # Insert into ManualRawTransaction (raw log)
+            # Insert into ManualRawTransaction (raw log — always)
             db_raw = DBManualRawTransaction(
                 brokerage=transaction_data["brokerage"],
                 date=transaction_data["date"],
@@ -55,9 +71,16 @@ def parse_statement_import_endpoint(
                 assetType=asset_type,
             )
             db.add(db_raw)
-            db.flush()  # Get db_raw.id before inserting transaction
+            db.flush()
 
-            # Insert into unified Transaction table
+            # Only push to unified table if this row predates SnapTrade's coverage
+            snap_min = snap_min_dates.get((transaction_data["brokerage"], transaction_data["ticker"]))
+            if snap_min is None:
+                continue
+            snap_min_day = snap_min.date() if hasattr(snap_min, "date") else snap_min
+            if transaction_data["date"].date() >= snap_min_day:
+                continue
+
             db_transaction = DBTransaction(
                 brokerage=transaction_data["brokerage"],
                 date=transaction_data["date"],
