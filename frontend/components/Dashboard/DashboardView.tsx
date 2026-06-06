@@ -107,7 +107,7 @@ const DashboardView: React.FC<Props> = ({
         />
         <div className="space-y-2">
           <h3 className="font-display text-lg font-semibold text-[#1D1D1F]">Options Calculator</h3>
-          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} holdings={holdings} />
+          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} />
         </div>
       </div>
     );

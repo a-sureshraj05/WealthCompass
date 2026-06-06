@@ -307,6 +307,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                       : g.quantity * (g as UnrealizedLot).currentPrice * m;
                     const cost = g.quantity * g.buyPrice * m;
                     const isLast = i === tEntry.lots.length - 1;
+
                     return (
                       <tr key={g.id} className={`bg-[#FAFAFA] hover:bg-[#F2F2F7] transition-colors ${isLast ? 'border-b border-[#D2D2D7]' : 'border-b border-[#EBEBEB]'}`}>
                         <td className="px-4 py-2 pl-14">

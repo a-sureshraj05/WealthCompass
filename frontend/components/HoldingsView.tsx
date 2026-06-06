@@ -31,10 +31,10 @@ const HoldingsView: React.FC<Props> = ({
   selectedTickers, setSelectedTickers,
 }) => {
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(
-    autoExpand ? new Set([autoExpand.ticker]) : new Set()
+    autoExpand ? new Set([`${autoExpand.ticker}::Equity`]) : new Set()
   );
   const [expandedBrokerages, setExpandedBrokerages] = useState<Set<string>>(
-    autoExpand ? new Set([`${autoExpand.ticker}::${autoExpand.brokerage}`]) : new Set()
+    autoExpand ? new Set([`${autoExpand.ticker}::Equity::${autoExpand.brokerage}`]) : new Set()
   );
   const [lotSortKey, setLotSortKey] = useState<'buyDate' | 'quantity' | 'buyPrice' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain'>('buyDate');
   const [lotSortDir, setLotSortDir] = useState<'asc' | 'desc'>('asc');
@@ -64,6 +64,38 @@ const HoldingsView: React.FC<Props> = ({
     [setIsBrokerageMenuOpen, setIsTickerMenuOpen],
   );
 
+  // Per-ticker wash sale summary
+  const washSaleByTicker = useMemo(() => {
+    const today = new Date();
+    const result: Record<string, { type1Count: number; minDays: number; type2Count: number; lastLossDaysAgo: number | null }> = {};
+
+    unrealizedGains.forEach(lot => {
+      if (!result[lot.ticker]) result[lot.ticker] = { type1Count: 0, minDays: Infinity, type2Count: 0, lastLossDaysAgo: null };
+      const e = result[lot.ticker];
+      if (lot.wash_sale_clear_date) {
+        const clearDate = new Date(lot.wash_sale_clear_date);
+        if (clearDate > today) {
+          e.type1Count++;
+          e.minDays = Math.min(e.minDays, Math.ceil((clearDate.getTime() - today.getTime()) / 86400000));
+        }
+      }
+      if (lot.wash_sale_at_risk && lot.wash_sale_risk_trigger_date) {
+        const triggerDaysAgo = Math.floor((today.getTime() - new Date(lot.wash_sale_risk_trigger_date).getTime()) / 86400000);
+        if (triggerDaysAgo <= 30) e.type2Count++;
+      }
+    });
+
+    realizedGains.forEach(g => {
+      if (g.gain >= 0) return;
+      const daysAgo = Math.floor((Date.now() - new Date(g.sellDate).getTime()) / 86400000);
+      if (!result[g.ticker]) result[g.ticker] = { type1Count: 0, minDays: Infinity, type2Count: 0, lastLossDaysAgo: null };
+      const e = result[g.ticker];
+      if (e.lastLossDaysAgo === null || daysAgo < e.lastLossDaysAgo) e.lastLossDaysAgo = daysAgo;
+    });
+
+    return result;
+  }, [unrealizedGains, realizedGains]);
+
   // Realized gains summed by ticker
   const realizedByTicker = useMemo(() => {
     const map: Record<string, { gain: number; buyCost: number }> = {};
@@ -75,12 +107,13 @@ const HoldingsView: React.FC<Props> = ({
     return map;
   }, [realizedGains]);
 
-  // Lots grouped by ticker
+  // Lots grouped by ticker::assetType
   const lotsByTicker = useMemo(() => {
     const map: Record<string, UnrealizedLot[]> = {};
     unrealizedGains.forEach(lot => {
-      if (!map[lot.ticker]) map[lot.ticker] = [];
-      map[lot.ticker].push(lot);
+      const key = `${lot.ticker}::${lot.assetType || 'Equity'}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(lot);
     });
     return map;
   }, [unrealizedGains]);
@@ -152,16 +185,18 @@ const HoldingsView: React.FC<Props> = ({
 
     const grouped: Record<string, StockHolding[]> = {};
     filtered.forEach(h => {
-      if (!grouped[h.ticker]) grouped[h.ticker] = [];
-      grouped[h.ticker].push(h);
+      const key = `${h.ticker}::${h.assetType || 'Equity'}`;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(h);
     });
 
-    let rows = Object.entries(grouped).map(([ticker, tickerHoldings]) => {
+    let rows = Object.entries(grouped).map(([rowKey, tickerHoldings]) => {
+      const ticker = tickerHoldings[0].ticker;
+      const assetType = tickerHoldings[0].assetType || 'Equity';
       const totalQty = tickerHoldings.reduce((s, h) => s + h.quantity, 0);
       const totalCost = tickerHoldings.reduce((s, h) => s + h.totalCost, 0);
       const marketValue = tickerHoldings.reduce((s, h) => s + h.marketValue, 0);
       const currentPrice = tickerHoldings[0].currentPrice;
-      const assetType = tickerHoldings[0].assetType || 'Equity';
       const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
       const unrealizedGain = marketValue - totalCost;
       const r = realizedByTicker[ticker];
@@ -175,7 +210,7 @@ const HoldingsView: React.FC<Props> = ({
         if (!holdingsByBrokerage[h.brokerage]) holdingsByBrokerage[h.brokerage] = [];
         holdingsByBrokerage[h.brokerage].push(h);
       });
-      const allLots = (lotsByTicker[ticker] || []).filter(l =>
+      const allLots = (lotsByTicker[rowKey] || []).filter(l =>
         selectedBrokerages.length === 0 || selectedBrokerages.includes(l.brokerage)
       );
       const lotsByBrokerage: Record<string, UnrealizedLot[]> = {};
@@ -206,7 +241,7 @@ const HoldingsView: React.FC<Props> = ({
           return { brokerage, totalQty: bQty, avgCost: bQty > 0 ? bCost / bQty : 0, totalCost: bCost, currentPrice, marketValue: bMarket, unrealizedGain: bMarket - bCost, lots, assetType };
         });
 
-      return { ticker, totalQty, totalCost, avgCost, currentPrice, assetType, marketValue, unrealizedGain, afterTaxRealized, totalGain, brokerageGroups, ids: tickerHoldings.map(h => h.id) };
+      return { rowKey, ticker, totalQty, totalCost, avgCost, currentPrice, assetType, marketValue, unrealizedGain, afterTaxRealized, totalGain, brokerageGroups, ids: tickerHoldings.map(h => h.id) };
     });
 
     if (sortKey && sortDirection) {
@@ -366,7 +401,7 @@ const HoldingsView: React.FC<Props> = ({
               <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
                 <th className="px-4 py-4 w-8">
                   <button
-                    onClick={() => { if (expandedTickers.size > 0) { setExpandedTickers(new Set()); setExpandedBrokerages(new Set()); } else setExpandedTickers(new Set(tickerRows.map(r => r.ticker))); }}
+                    onClick={() => { if (expandedTickers.size > 0) { setExpandedTickers(new Set()); setExpandedBrokerages(new Set()); } else setExpandedTickers(new Set(tickerRows.map(r => r.rowKey))); }}
                     className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
                     title={expandedTickers.size > 0 ? 'Collapse all' : 'Expand all'}
                   >
@@ -381,6 +416,7 @@ const HoldingsView: React.FC<Props> = ({
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA]" onClick={() => handleSort('ticker')}>
                   <div className="flex items-center">Ticker <SI column="ticker" /></div>
                 </th>
+                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Wash Sale</th>
                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] text-right" onClick={() => handleSort('quantity')}>
                   <div className="flex items-center justify-end">Quantity <SI column="quantity" /></div>
                 </th>
@@ -405,16 +441,16 @@ const HoldingsView: React.FC<Props> = ({
             </thead>
             <tbody>
               {tickerRows.map(row => {
-                const isExpanded = expandedTickers.has(row.ticker);
+                const isExpanded = expandedTickers.has(row.rowKey);
                 return (
-                  <React.Fragment key={row.ticker}>
+                  <React.Fragment key={row.rowKey}>
 
                     {/* Level 1 — Ticker */}
                     <tr className={`hover:bg-[#F5F5F7] transition-colors group border-t border-[#D2D2D7] ${isExpanded ? 'bg-slate-50/70' : ''}`}>
                       <td className="px-4 py-4">
                         {row.brokerageGroups.length > 0 && (
                           <button
-                            onClick={() => toggleTicker(row.ticker)}
+                            onClick={() => toggleTicker(row.rowKey)}
                             className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
                           >
                             <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -426,8 +462,49 @@ const HoldingsView: React.FC<Props> = ({
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
                           <TickerLogo ticker={row.ticker} size={32} assetType={row.assetType} />
-                          <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{row.ticker}</span>
+                          <div>
+                            <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{row.ticker}</span>
+                            {row.assetType?.toLowerCase() === 'options' && (
+                              <span className="ml-1.5 px-1 py-0.5 rounded bg-violet-100 text-[9px] font-black text-violet-600 uppercase">OPT</span>
+                            )}
+                          </div>
                         </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        {(() => {
+                          const ws = washSaleByTicker[row.ticker];
+                          const isRed = ws && ((ws.lastLossDaysAgo !== null && ws.lastLossDaysAgo <= 30) || ws.type1Count > 0);
+                          const isYellow = !isRed && ws && ws.type2Count > 0;
+                          if (isRed) {
+                            const detail = ws.type1Count > 0 && ws.minDays !== Infinity
+                              ? `${ws.minDays}d to go`
+                              : ws.lastLossDaysAgo !== null ? `loss ${ws.lastLossDaysAgo}d ago` : '';
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                                <div>
+                                  <p className="text-[10px] font-black text-rose-600">Active</p>
+                                  {detail && <p className="text-[9px] text-rose-400">{detail}</p>}
+                                </div>
+                              </div>
+                            );
+                          }
+                          if (isYellow) return (
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                              <div>
+                                <p className="text-[10px] font-black text-amber-600">Caution</p>
+                                <p className="text-[9px] text-amber-400">don't sell at loss</p>
+                              </div>
+                            </div>
+                          );
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                              <p className="text-[10px] font-medium text-emerald-600">Clear</p>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-4 text-right font-bold text-slate-800 text-sm">{row.totalQty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-4 py-4 text-right text-sm text-slate-500 font-medium">${row.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -483,7 +560,7 @@ const HoldingsView: React.FC<Props> = ({
 
                     {/* Level 2 — Brokerage rows */}
                     {isExpanded && row.brokerageGroups.map(bg => {
-                      const brokerageKey = `${row.ticker}::${bg.brokerage}`;
+                      const brokerageKey = `${row.rowKey}::${bg.brokerage}`;
                       const isBrokerageExpanded = expandedBrokerages.has(brokerageKey);
                       return (
                         <React.Fragment key={brokerageKey}>
@@ -507,6 +584,7 @@ const HoldingsView: React.FC<Props> = ({
                                 'bg-[#E5E5EA] text-[#6E6E73]'
                               }`}>{bg.brokerage}</span>
                             </td>
+                            <td></td>
                             <td className="px-4 py-3 text-right text-[11px] font-medium text-slate-700">{bg.totalQty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td className="px-4 py-3 text-right text-[11px] text-slate-500">${bg.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td className="px-4 py-3 text-right text-[11px] font-semibold text-slate-700">${bg.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -561,6 +639,7 @@ const HoldingsView: React.FC<Props> = ({
                                     onClick={() => handleLotSort('buyDate')}>
                                   <div className="flex items-center gap-0.5">Buy Date<LotSortIndicator col="buyDate" /></div>
                                 </td>
+                                <td className="px-4 py-1.5 text-[9px] font-black text-[#AEAEB2] uppercase tracking-widest whitespace-nowrap">Wash Sale</td>
                                 {th('quantity', 'Qty')}
                                 {th('buyPrice', 'Buy Price')}
                                 {th('totalCost', 'Total Cost')}
@@ -599,6 +678,41 @@ const HoldingsView: React.FC<Props> = ({
                                       </svg>
                                     )}
                                   </div>
+                                </td>
+                                <td className="px-4 py-2">
+                                  {(() => {
+                                    const today = new Date();
+                                    const clearDate = lot.wash_sale_clear_date ? new Date(lot.wash_sale_clear_date) : null;
+                                    const daysToGo = clearDate && clearDate > today
+                                      ? Math.ceil((clearDate.getTime() - today.getTime()) / 86400000) : 0;
+                                    if (daysToGo > 0) return (
+                                      <div className="flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                                        <div>
+                                          <p className="text-[9px] font-black text-rose-600">Active</p>
+                                          <p className="text-[9px] text-rose-400">{daysToGo}d to go</p>
+                                        </div>
+                                      </div>
+                                    );
+                                    if (lot.wash_sale_at_risk && lot.wash_sale_risk_trigger_date) {
+                                      const riskDaysAgo = Math.floor((today.getTime() - new Date(lot.wash_sale_risk_trigger_date).getTime()) / 86400000);
+                                      if (riskDaysAgo <= 30) return (
+                                        <div className="flex items-center gap-1">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                                          <div>
+                                            <p className="text-[9px] font-black text-amber-600">Caution</p>
+                                            <p className="text-[9px] text-amber-400">new buy · {riskDaysAgo}d ago</p>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <div className="flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                        <p className="text-[9px] font-medium text-emerald-600">Clear</p>
+                                      </div>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="px-4 py-2 text-right text-[11px] text-slate-600 font-medium">{lot.quantity.toFixed(2)}</td>
                                 <td className="px-4 py-2 text-right text-[11px] text-slate-500">${lot.buyPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>

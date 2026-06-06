@@ -34,6 +34,8 @@ class RealizedGain(BaseModel):
     gain: float
     isLongTerm: bool
     assetType: Optional[str] = None
+    is_wash_sale: bool = False
+    wash_sale_disallowed_amount: float = 0.0
 
     class Config:
         from_attributes = True
@@ -51,6 +53,10 @@ class UnrealizedGain(BaseModel):
     unrealizedGain: float
     isLongTerm: bool
     assetType: Optional[str] = None
+    wash_sale_adjustment: float = 0.0
+    wash_sale_clear_date: Optional[datetime.date] = None
+    wash_sale_at_risk: bool = False
+    wash_sale_risk_trigger_date: Optional[datetime.date] = None
 
     class Config:
         from_attributes = True

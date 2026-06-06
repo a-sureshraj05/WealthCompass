@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import TickerLogo from './TickerLogo';
-import { StockHolding } from '../types';
+import { StockHolding, UnrealizedLot, RealizedGain } from '../types';
 import {
   OptionsPosition,
   OptionsCalculator,
@@ -49,9 +49,11 @@ interface OptionsViewProps {
   selectedBrokerages?: string[];
   selectedTickers?: string[];
   holdings?: StockHolding[];
+  unrealizedGains?: UnrealizedLot[];
+  realizedGains?: RealizedGain[];
 }
 
-const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [], holdings = [] }) => {
+const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [], holdings = [], unrealizedGains = [], realizedGains = [] }) => {
   const [positions, setPositions] = useState<OptionsPosition[]>([]);
   const [calculator, setCalculator] = useState<OptionsCalculator | null>(null);
   const [pendingRetain, setPendingRetain] = useState<Record<number, string>>({});
@@ -80,6 +82,47 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Per-ticker wash sale summary — must be before any early returns (Rules of Hooks)
+  const washSaleByTicker = useMemo(() => {
+    const today = new Date();
+    const result: Record<string, { type1Count: number; minDays: number; type2Count: number; lastLossDaysAgo: number | null }> = {};
+    unrealizedGains.filter(l => (l.assetType || '').toLowerCase() === 'options').forEach(lot => {
+      if (!result[lot.ticker]) result[lot.ticker] = { type1Count: 0, minDays: Infinity, type2Count: 0, lastLossDaysAgo: null };
+      const e = result[lot.ticker];
+      if (lot.wash_sale_clear_date) {
+        const cd = new Date(lot.wash_sale_clear_date);
+        if (cd > today) { e.type1Count++; e.minDays = Math.min(e.minDays, Math.ceil((cd.getTime() - today.getTime()) / 86400000)); }
+      }
+      if (lot.wash_sale_at_risk && lot.wash_sale_risk_trigger_date) {
+        const triggerDaysAgo = Math.floor((today.getTime() - new Date(lot.wash_sale_risk_trigger_date).getTime()) / 86400000);
+        if (triggerDaysAgo <= 30) e.type2Count++;
+      }
+    });
+    realizedGains.forEach(g => {
+      if (g.gain >= 0) return;
+      const daysAgo = Math.floor((Date.now() - new Date(g.sellDate).getTime()) / 86400000);
+      if (!result[g.ticker]) result[g.ticker] = { type1Count: 0, minDays: Infinity, type2Count: 0, lastLossDaysAgo: null };
+      const e = result[g.ticker];
+      if (e.lastLossDaysAgo === null || daysAgo < e.lastLossDaysAgo) e.lastLossDaysAgo = daysAgo;
+    });
+    return result;
+  }, [unrealizedGains, realizedGains]);
+
+  // Per-position wash sale flags matched by ticker + brokerage + buyDate
+  const washSaleByPosition = useMemo(() => {
+    const today = new Date();
+    const result: Record<string, { daysToGo: number; atRisk: boolean; riskDaysAgo: number }> = {};
+    unrealizedGains.filter(l => (l.assetType || '').toLowerCase() === 'options').forEach(lot => {
+      const key = `${lot.ticker}::${lot.brokerage}::${lot.buyDate.slice(0, 10)}`;
+      const clearDate = lot.wash_sale_clear_date ? new Date(lot.wash_sale_clear_date) : null;
+      const daysToGo = clearDate && clearDate > today ? Math.ceil((clearDate.getTime() - today.getTime()) / 86400000) : 0;
+      const riskDaysAgo = lot.wash_sale_at_risk && lot.wash_sale_risk_trigger_date
+        ? Math.floor((today.getTime() - new Date(lot.wash_sale_risk_trigger_date).getTime()) / 86400000) : 0;
+      result[key] = { daysToGo, atRisk: !!lot.wash_sale_at_risk, riskDaysAgo };
+    });
+    return result;
+  }, [unrealizedGains]);
 
   const handleRetainChange = (id: number, val: string) =>
     setPendingRetain(prev => ({ ...prev, [id]: val }));
@@ -249,6 +292,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                 </button>
               </th>
               <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Ticker</th>
+              <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Wash Sale</th>
               <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right whitespace-nowrap">Contracts</th>
               <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right whitespace-nowrap">Avg Price</th>
               <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right whitespace-nowrap">Total Value</th>
@@ -284,6 +328,42 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                         <TickerLogo ticker={tc.ticker} size={32} assetType={assetTypeByTicker[tc.ticker]} />
                         <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{tc.ticker}</span>
                       </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      {(() => {
+                        const ws = washSaleByTicker[tc.ticker];
+                        const isRed = ws && ((ws.lastLossDaysAgo !== null && ws.lastLossDaysAgo <= 30) || ws.type1Count > 0);
+                        const isYellow = !isRed && ws && ws.type2Count > 0;
+                        if (isRed) {
+                          const detail = ws.type1Count > 0 && ws.minDays !== Infinity
+                            ? `${ws.minDays}d to go`
+                            : ws.lastLossDaysAgo !== null ? `loss ${ws.lastLossDaysAgo}d ago` : '';
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                              <div>
+                                <p className="text-[10px] font-black text-rose-600">Active</p>
+                                {detail && <p className="text-[9px] text-rose-400">{detail}</p>}
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (isYellow) return (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                            <div>
+                              <p className="text-[10px] font-black text-amber-600">Caution</p>
+                              <p className="text-[9px] text-amber-400">don't sell at loss</p>
+                            </div>
+                          </div>
+                        );
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                            <p className="text-[10px] font-medium text-emerald-600">Clear</p>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-4 text-right font-bold text-slate-800 text-sm">{fmt(tc.totalQty, 0)}</td>
                     <td className="px-4 py-4 text-right text-sm text-slate-500 font-medium">{fmtCurrency(tc.avgBuyPrice)}</td>
@@ -346,6 +426,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                               'bg-[#E5E5EA] text-[#6E6E73]'
                             }`}>{bg.brokerage}</span>
                           </td>
+                          <td></td>
                           <td className="px-4 py-3 text-right text-[11px] font-medium text-slate-700">{fmt(bg.totalQty, 0)}</td>
                           <td className="px-4 py-3 text-right text-[11px] text-slate-500">{fmtCurrency(bg.avgBuyPrice)}</td>
                           <td className="px-4 py-3 text-right text-[11px] font-semibold text-slate-700">{fmtCurrency(bg.totalValue)}</td>
@@ -365,6 +446,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                           <tr className="bg-[#E6EEFB]/30 border-t border-[#D2D2D7]/60">
                             <td></td>
                             <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap">Buy Date</td>
+                            <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap">Wash Sale</td>
                             <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Qty</td>
                             <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Avg Price</td>
                             <td className="px-4 py-1.5 text-[9px] font-black text-[#6E6E73] uppercase tracking-widest whitespace-nowrap text-right">Total Value</td>
@@ -393,6 +475,37 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                               {/* Buy Date */}
                               <td className="px-4 py-2 text-[11px] text-slate-500 font-bold whitespace-nowrap">
                                 {new Date(pos.buyDate).toLocaleDateString('en-CA')}
+                              </td>
+                              {/* Wash Sale */}
+                              <td className="px-4 py-2">
+                                {(() => {
+                                  const key = `${pos.ticker}::${pos.brokerage}::${pos.buyDate.slice(0, 10)}`;
+                                  const ws = washSaleByPosition[key];
+                                  if (ws?.daysToGo > 0) return (
+                                    <div className="flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                                      <div>
+                                        <p className="text-[9px] font-black text-rose-600">Active</p>
+                                        <p className="text-[9px] text-rose-400">{ws.daysToGo}d to go</p>
+                                      </div>
+                                    </div>
+                                  );
+                                  if (ws?.atRisk && ws.riskDaysAgo <= 30) return (
+                                    <div className="flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                                      <div>
+                                        <p className="text-[9px] font-black text-amber-600">Caution</p>
+                                        <p className="text-[9px] text-amber-400">new buy · {ws.riskDaysAgo}d ago</p>
+                                      </div>
+                                    </div>
+                                  );
+                                  return (
+                                    <div className="flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                      <p className="text-[9px] font-medium text-emerald-600">Clear</p>
+                                    </div>
+                                  );
+                                })()}
                               </td>
                               {/* Qty */}
                               <td className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{fmt(pos.quantity, 0)}</td>
