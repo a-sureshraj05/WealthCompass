@@ -39,3 +39,6 @@ sql/*.sql
 
 # Local data files (personal brokerage CSVs — never commit)
 data/
+
+# One-time migration scripts (depend on local data/ files)
+scripts/
