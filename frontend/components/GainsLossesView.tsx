@@ -22,7 +22,7 @@ const fmt = formatCurrency;
 const fmtDate = formatDate;
 
 const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, unrealizedGains: unrealizedGainsData, selectedBrokerages, setSelectedBrokerages, selectedTickers, setSelectedTickers }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'realized' | 'unrealized'>('realized');
+  const [activeSubTab, setActiveSubTab] = useState<'realized' | 'unrealized'>('unrealized');
   const [selectedYear, setSelectedYear] = useState<string>('Overall');
 
   useEffect(() => {
@@ -373,7 +373,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
 
       {/* Sub-tabs — underline style */}
       <div className="flex items-center border-b border-[#D2D2D7]">
-        {(['realized', 'unrealized'] as const).map(tab => (
+        {(['unrealized', 'realized'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveSubTab(tab)}
