@@ -165,13 +165,23 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     const optTotal = options.reduce((sum, g) => sum + g.gain, 0);
     const stTotal  = shortTerm.reduce((sum, g) => sum + g.gain, 0);
     const ltTotal  = longTerm.reduce((sum, g) => sum + g.gain, 0);
-    const taxEst =
-      (optTotal > 0 ? optTotal * (stTaxRate / 100) : 0) +
-      (stTotal  > 0 ? stTotal  * (stTaxRate / 100) : 0) +
-      (ltTotal  > 0 ? ltTotal  * (ltTaxRate / 100) : 0);
+    // Options are always short-term; net them together before cross-bucket offsetting.
+    const netST = optTotal + stTotal;
+    const netLT = ltTotal;
+    let stTax = 0;
+    let ltTax = 0;
+    if (netST >= 0 && netLT >= 0) {
+      stTax = netST * (stTaxRate / 100);
+      ltTax = netLT * (ltTaxRate / 100);
+    } else if (netST < 0 && netLT > 0) {
+      ltTax = Math.max(0, netLT + netST) * (ltTaxRate / 100);
+    } else if (netST > 0 && netLT < 0) {
+      stTax = Math.max(0, netST + netLT) * (stTaxRate / 100);
+    }
+    const taxEst = stTax + ltTax;
     const total = optTotal + stTotal + ltTotal;
     const ltShare = total !== 0 ? (ltTotal / total) * 100 : 0;
-    return { optTotal, stTotal, ltTotal, taxEst, ltShare };
+    return { optTotal, stTotal, ltTotal, taxEst, stTax, ltTax, ltShare };
   }, [options, shortTerm, longTerm, stTaxRate, ltTaxRate]);
 
   const toggleTicker = (ticker: string) => setSelectedTickers(selectedTickers.includes(ticker) ? selectedTickers.filter(t => t !== ticker) : [...selectedTickers, ticker]);
@@ -476,11 +486,11 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             <div className="flex items-center gap-3 mt-3">
               <div className="flex-1 bg-yellow-50 border border-yellow-100 rounded px-2.5 py-2">
                 <p className="text-[9px] font-black uppercase tracking-widest mb-0.5" style={{ color: '#eab308' }}>Short-Term</p>
-                <p className="text-sm font-black" style={{ color: '#eab308' }}>{fmt(stats.stTotal > 0 ? stats.stTotal * (stTaxRate / 100) : 0)}</p>
+                <p className="text-sm font-black" style={{ color: '#eab308' }}>{fmt(stats.stTax)}</p>
               </div>
               <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded px-2.5 py-2">
                 <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-0.5">Long-Term</p>
-                <p className="text-sm font-black text-emerald-700">{fmt(stats.ltTotal > 0 ? stats.ltTotal * (ltTaxRate / 100) : 0)}</p>
+                <p className="text-sm font-black text-emerald-700">{fmt(stats.ltTax)}</p>
               </div>
             </div>
           </div>
