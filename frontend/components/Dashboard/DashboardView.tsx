@@ -36,6 +36,7 @@ interface Props {
   selectedTickers: string[];
   setSelectedTickers: (v: string[]) => void;
   allKnownBrokerages: string[];
+  buyingPower: Record<string, number>;
 }
 
 const DashboardView: React.FC<Props> = ({
@@ -64,6 +65,7 @@ const DashboardView: React.FC<Props> = ({
   selectedTickers,
   setSelectedTickers,
   allKnownBrokerages,
+  buyingPower,
 }) => {
   const [syncMessage, setSyncMessage] = useState('');
   const [focusTicker, setFocusTicker] = useState<string | null>(null);
@@ -174,11 +176,11 @@ const DashboardView: React.FC<Props> = ({
         <div className="mt-1 w-8 h-0.5 bg-[#0F52BA]" />
       </div>
 
-      <SummaryCards stats={stats} />
+      <SummaryCards stats={stats} cashByBrokerage={buyingPower} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 h-full">
-          <PortfolioVisuals holdings={holdings} />
+          <PortfolioVisuals holdings={holdings} cashByBrokerage={buyingPower} />
         </div>
 
         <div>

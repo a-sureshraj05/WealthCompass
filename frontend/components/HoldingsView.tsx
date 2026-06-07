@@ -757,6 +757,7 @@ const HoldingsView: React.FC<Props> = ({
                   </React.Fragment>
                 );
               })}
+
             </tbody>
           </table>
         </div>

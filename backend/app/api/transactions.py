@@ -540,6 +540,37 @@ def get_cash_balance(db: Session = Depends(get_db)):
     return {"balance": round(balance, 2)}
 
 
+@router.get("/buying-power")
+def get_buying_power():
+    """Return buying power per brokerage from SnapTrade account balances."""
+    try:
+        from backend.app.api.snaptrade import get_client, get_accounts
+        from backend.app.core.database import SessionLocal
+        db = SessionLocal()
+        try:
+            client = get_client()
+            from backend.app.api.snaptrade import USER_ID, USER_SECRET
+            accounts = get_accounts(db)
+            result: dict = {}
+            for account in accounts:
+                try:
+                    bal = client.account_information.get_user_account_balance(
+                        query_params={"userId": USER_ID, "userSecret": USER_SECRET},
+                        path_params={"accountId": account["id"]},
+                    )
+                    for b in bal.body:
+                        cash = b.get("cash") if b.get("cash") is not None else 0.0
+                        brokerage = account["brokerage"]
+                        result[brokerage] = round(result.get(brokerage, 0.0) + float(cash), 2)
+                except Exception:
+                    pass
+        finally:
+            db.close()
+        return result
+    except Exception as e:
+        return {}
+
+
 @router.get("/holdings", response_model=List[Holding])
 def get_holdings(db: Session = Depends(get_db)):
     return db.query(DBHolding).all()

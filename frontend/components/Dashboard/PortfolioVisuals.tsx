@@ -6,6 +6,7 @@ import { brokerageColor } from '../../utils/finance';
 
 interface Props {
   holdings: StockHolding[];
+  cashByBrokerage?: Record<string, number>;
 }
 
 const COLORS = ['#0F52BA', '#34C759', '#FF9500', '#FF2D55', '#AF52DE', '#5AC8FA', '#6E6E73'];
@@ -26,7 +27,7 @@ const SectorTooltip = ({ active, payload }: any) => {
   );
 };
 
-const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
+const PortfolioVisuals: React.FC<Props> = ({ holdings, cashByBrokerage = {} }) => {
   const allocationData = React.useMemo(() => {
     const sectors: Record<string, { value: number; tickers: string[] }> = {};
     holdings.forEach(h => {
@@ -43,10 +44,14 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
     holdings.forEach(h => {
       brokers[h.brokerage] = (brokers[h.brokerage] || 0) + h.marketValue;
     });
+    // Add cash balance per brokerage
+    Object.entries(cashByBrokerage).forEach(([brokerage, cash]) => {
+      brokers[brokerage] = (brokers[brokerage] || 0) + cash;
+    });
     const entries = Object.entries(brokers).map(([name, value]) => ({ name, value }));
     const total = entries.reduce((s, e) => s + e.value, 0);
     return entries.map(e => ({ ...e, pct: total > 0 ? (e.value / total) * 100 : 0 }));
-  }, [holdings]);
+  }, [holdings, cashByBrokerage]);
 
   const totalAllocation = React.useMemo(() => {
     const total = allocationData.reduce((s, d) => s + d.value, 0);
@@ -139,14 +144,14 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: brokerageColor(b.name, i) }} />
                   <span className="text-sm font-medium text-[#1D1D1F]">{b.name}</span>
                 </div>
-                <span className="text-sm font-semibold text-[#1D1D1F]">
-                  ${b.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                <span className={`text-sm font-semibold ${b.value < 0 ? 'text-rose-600' : 'text-[#1D1D1F]'}`}>
+                  {b.value < 0 ? '-' : ''}${Math.abs(b.value).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </span>
               </div>
               <div className="h-1.5 bg-[#F5F5F7] rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${b.pct}%`, backgroundColor: brokerageColor(b.name, i) }}
+                  style={{ width: `${Math.max(0, b.pct)}%`, backgroundColor: brokerageColor(b.name, i) }}
                 />
               </div>
             </div>
