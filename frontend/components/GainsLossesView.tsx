@@ -559,8 +559,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         <div className="px-5 py-3 bg-[#F5F5F7] flex flex-wrap items-center gap-6">
           <div>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain</p>
-            <p className={`text-lg font-black ${(stats.stTotal + stats.ltTotal) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {(stats.stTotal + stats.ltTotal) >= 0 ? '+' : ''}{fmt(stats.stTotal + stats.ltTotal)}
+            <p className={`text-lg font-black ${(stats.optTotal + stats.stTotal + stats.ltTotal) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {(stats.optTotal + stats.stTotal + stats.ltTotal) >= 0 ? '+' : ''}{fmt(stats.optTotal + stats.stTotal + stats.ltTotal)}
             </p>
           </div>
           <div className="w-px h-8 bg-[#D2D2D7]" />
