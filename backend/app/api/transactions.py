@@ -542,7 +542,10 @@ def get_cash_balance(db: Session = Depends(get_db)):
 
 @router.get("/buying-power")
 def get_buying_power():
-    """Return buying power per brokerage from SnapTrade account balances."""
+    """Return net cash per brokerage from SnapTrade account balances.
+    Uses buying_power for margin accounts (reflects borrowed funds), cash otherwise.
+    Only USD entries are counted to avoid summing multi-currency duplicates.
+    """
     try:
         from backend.app.api.snaptrade import get_client, get_accounts
         from backend.app.core.database import SessionLocal
@@ -558,16 +561,27 @@ def get_buying_power():
                         query_params={"userId": USER_ID, "userSecret": USER_SECRET},
                         path_params={"accountId": account["id"]},
                     )
+                    brokerage = account["brokerage"]
                     for b in bal.body:
-                        cash = b.get("cash") if b.get("cash") is not None else 0.0
-                        brokerage = account["brokerage"]
-                        result[brokerage] = round(result.get(brokerage, 0.0) + float(cash), 2)
-                except Exception:
-                    pass
+                        currency = (b.get("currency") or {})
+                        code = currency.get("code", "USD") if isinstance(currency, dict) else getattr(currency, "code", "USD")
+                        if code != "USD":
+                            continue
+                        buying_power = b.get("buying_power")
+                        cash = b.get("cash")
+                        # buying_power is the accurate value for margin accounts;
+                        # for non-margin accounts SnapTrade sets it equal to cash.
+                        value = buying_power if buying_power is not None else (cash if cash is not None else 0.0)
+                        print(f"[buying-power] {brokerage} cash={cash} buying_power={buying_power} → using {value}")
+                        result[brokerage] = round(result.get(brokerage, 0.0) + float(value), 2)
+                except Exception as e:
+                    print(f"[buying-power] error for {account.get('brokerage')}: {e}")
         finally:
             db.close()
+        print(f"[buying-power] result: {result}")
         return result
     except Exception as e:
+        print(f"[buying-power] top-level error: {e}")
         return {}
 
 
