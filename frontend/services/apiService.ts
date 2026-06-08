@@ -381,6 +381,7 @@ export const deleteLotAssignment = async (assignmentId: number): Promise<void> =
 export interface OptionsPosition {
   id: number;
   brokerage: string;
+  account_id?: number | null;
   ticker: string;
   buyDate: string;
   quantity: number;

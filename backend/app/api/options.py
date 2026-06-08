@@ -45,6 +45,7 @@ def get_open_options(db: Session = Depends(get_db)):
         result.append({
             "id": lot.id,
             "brokerage": lot.brokerage,
+            "account_id": lot.account_id,
             "ticker": _underlying_ticker(lot.ticker),
             "buyDate": lot.buyDate.isoformat() if lot.buyDate else None,
             "quantity": lot.quantity,

@@ -131,7 +131,7 @@ const DashboardView: React.FC<Props> = ({
               <p className="text-[10px] text-slate-400 mt-0.5">Applied to projected gain from sellable contracts</p>
             </div>
           </div>
-          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} taxRateInput={optionsTaxRate} onTaxRateChange={setOptionsTaxRate} />
+          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} taxRateInput={optionsTaxRate} onTaxRateChange={setOptionsTaxRate} accounts={accounts} />
         </div>
       </div>
     );
