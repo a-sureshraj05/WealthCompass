@@ -19,6 +19,7 @@ interface Props {
   unrealizedGains: UnrealizedLot[];
   stats: PortfolioStats;
   onAddTransactions: (t: Transaction[]) => void;
+  onRefresh: () => void | Promise<unknown>;
   onRemoveHolding: (id: string) => void;
   onRemoveTransaction: (id: string) => void;
   onSoftDeleteTransaction: (id: string, isDeleted: boolean) => void;
@@ -48,6 +49,7 @@ const DashboardView: React.FC<Props> = ({
   unrealizedGains,
   stats,
   onAddTransactions,
+  onRefresh,
   onRemoveHolding,
   onRemoveTransaction,
   onSoftDeleteTransaction,
@@ -76,7 +78,7 @@ const DashboardView: React.FC<Props> = ({
   useEffect(() => { if (activeTab !== 'transactions') { setFocusTicker(null); setFocusDate(null); } }, [activeTab]);
 
   if (activeTab === 'importData') {
-    return <ImportDataView onAddTransactions={onAddTransactions} setLoading={setLoading} initialTab="connect" />;
+    return <ImportDataView onAddTransactions={onAddTransactions} onRefresh={onRefresh} setLoading={setLoading} initialTab="connect" />;
   }
 
   if (activeTab === 'holdings') {

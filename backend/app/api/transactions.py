@@ -542,9 +542,10 @@ def get_cash_balance(db: Session = Depends(get_db)):
 
 @router.get("/buying-power")
 def get_buying_power():
-    """Return net cash per brokerage from SnapTrade account balances.
-    Uses buying_power for margin accounts (reflects borrowed funds), cash otherwise.
-    Only USD entries are counted to avoid summing multi-currency duplicates.
+    """Return net cash per brokerage.
+    Computed as: account total_value (brokerage-reported equity) minus sum of
+    stock/option positions market value. Goes negative when margin is in use.
+    Falls back to the balance cash field if total_value is unavailable.
     """
     try:
         from backend.app.api.snaptrade import get_client, get_accounts
@@ -556,26 +557,57 @@ def get_buying_power():
             accounts = get_accounts(db)
             result: dict = {}
             for account in accounts:
+                brokerage = account["brokerage"]
                 try:
-                    bal = client.account_information.get_user_account_balance(
+                    resp = client.account_information.get_user_holdings(
                         query_params={"userId": USER_ID, "userSecret": USER_SECRET},
                         path_params={"accountId": account["id"]},
                     )
-                    brokerage = account["brokerage"]
-                    for b in bal.body:
-                        currency = (b.get("currency") or {})
-                        code = currency.get("code", "USD") if isinstance(currency, dict) else getattr(currency, "code", "USD")
-                        if code != "USD":
-                            continue
-                        buying_power = b.get("buying_power")
-                        cash = b.get("cash")
-                        # buying_power is the accurate value for margin accounts;
-                        # for non-margin accounts SnapTrade sets it equal to cash.
-                        value = buying_power if buying_power is not None else (cash if cash is not None else 0.0)
-                        print(f"[buying-power] {brokerage} cash={cash} buying_power={buying_power} → using {value}")
-                        result[brokerage] = round(result.get(brokerage, 0.0) + float(value), 2)
+                    body = resp.body
+
+                    def _get(obj, key, default=None):
+                        if obj is None:
+                            return default
+                        return obj.get(key, default) if hasattr(obj, "get") else getattr(obj, key, default)
+
+                    # Primary: sum the cash field from USD balance entries (direct brokerage-reported cash)
+                    balances = _get(body, "balances") or []
+                    usd_cash_values = []
+                    for b in balances:
+                        curr = _get(b, "currency")
+                        code = _get(curr, "code", "USD") or "USD"
+                        cash_val = _get(b, "cash")
+                        print(f"[buying-power] {brokerage} balance: currency={code} cash={cash_val} buying_power={_get(b,'buying_power')}")
+                        if code == "USD" and cash_val is not None:
+                            usd_cash_values.append(float(cash_val))
+
+                    if usd_cash_values:
+                        net_cash = sum(usd_cash_values)
+                        print(f"[buying-power] {brokerage}: balance.cash={net_cash:.2f}")
+                        result[brokerage] = round(result.get(brokerage, 0.0) + net_cash, 2)
+                    else:
+                        # Fallback: account total minus positions market value
+                        acct = _get(body, "account")
+                        acct_bal = _get(acct, "balance")
+                        acct_total_raw = _get(acct_bal, "total")
+                        acct_total = _get(acct_total_raw, "amount") if isinstance(acct_total_raw, dict) else acct_total_raw
+                        tv = _get(body, "total_value")
+                        tv_value = _get(tv, "value")
+                        total = acct_total if acct_total is not None else tv_value
+                        positions_value = sum(
+                            float(_get(pos, "units") or 0) * float(_get(pos, "price") or 0)
+                            for pos in (_get(body, "positions") or [])
+                        )
+                        if total is not None:
+                            net_cash = float(total) - positions_value
+                            print(f"[buying-power] {brokerage}: fallback total={float(total):.2f} - positions={positions_value:.2f} → net_cash={net_cash:.2f}")
+                            result[brokerage] = round(result.get(brokerage, 0.0) + net_cash, 2)
+                        else:
+                            print(f"[buying-power] {brokerage}: no cash or total available, skipping")
                 except Exception as e:
-                    print(f"[buying-power] error for {account.get('brokerage')}: {e}")
+                    import traceback
+                    print(f"[buying-power] error for {brokerage}: {e}")
+                    traceback.print_exc()
         finally:
             db.close()
         print(f"[buying-power] result: {result}")

@@ -242,6 +242,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       setRealizedGains([]);
       setUnrealizedGains([]);
       setCashBalance(0);
+      setBuyingPower({});
     } catch (error) {
       console.error('Failed to clear data:', error);
     } finally {
@@ -302,6 +303,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             unrealizedGains={unrealizedGains}
             stats={stats}
             onAddTransactions={handleAddTransactions}
+            onRefresh={() => Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains()])}
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
             onSoftDeleteTransaction={handleSoftDeleteTransaction}
