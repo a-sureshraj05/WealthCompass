@@ -45,6 +45,7 @@ class RealizedGain(BaseModel):
 class UnrealizedGain(BaseModel):
     id: int
     brokerage: str
+    account_id: Optional[int] = None
     ticker: str
     buyDate: datetime.datetime
     quantity: float
@@ -66,6 +67,7 @@ class UnrealizedGain(BaseModel):
 class Holding(BaseModel):
     id: int
     brokerage: str
+    account_id: Optional[int] = None
     ticker: str
     quantity: float
     averageCostPerShare: float
