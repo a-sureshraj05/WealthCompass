@@ -67,6 +67,8 @@ export interface RealizedGain {
   isLongTerm: boolean;
   brokerage: string;
   assetType?: string;
+  is_wash_sale?: boolean;
+  wash_sale_disallowed_amount?: number;
 }
 
 export interface UnrealizedLot {
@@ -80,4 +82,10 @@ export interface UnrealizedLot {
   isLongTerm: boolean;
   brokerage: string;
   assetType?: string;
+  // Type 1: this lot absorbed a disallowed wash sale loss
+  wash_sale_adjustment?: number;
+  wash_sale_clear_date?: string | null;
+  // Type 2: selling at a loss today would be disallowed (recent same-ticker buy exists)
+  wash_sale_at_risk?: boolean;
+  wash_sale_risk_trigger_date?: string | null;
 }

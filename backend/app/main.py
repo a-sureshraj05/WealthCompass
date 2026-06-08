@@ -87,6 +87,38 @@ def startup_event():
                 conn.execute(text("ALTER TABLE snaptrade_transactions ADD COLUMN option_symbol TEXT"))
                 conn.commit()
 
+    # Migration: wash sale columns on realized_gains
+    if "realized_gains" in inspector.get_table_names():
+        rg_columns = [col["name"] for col in inspector.get_columns("realized_gains")]
+        if "is_wash_sale" not in rg_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE realized_gains ADD COLUMN is_wash_sale BOOLEAN NOT NULL DEFAULT 0"))
+                conn.commit()
+        if "wash_sale_disallowed_amount" not in rg_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE realized_gains ADD COLUMN wash_sale_disallowed_amount REAL NOT NULL DEFAULT 0"))
+                conn.commit()
+
+    # Migration: wash sale columns on unrealized_gains
+    if "unrealized_gains" in inspector.get_table_names():
+        ug_columns = [col["name"] for col in inspector.get_columns("unrealized_gains")]
+        if "wash_sale_adjustment" not in ug_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_adjustment REAL NOT NULL DEFAULT 0"))
+                conn.commit()
+        if "wash_sale_clear_date" not in ug_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_clear_date DATE"))
+                conn.commit()
+        if "wash_sale_at_risk" not in ug_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_at_risk BOOLEAN NOT NULL DEFAULT 0"))
+                conn.commit()
+        if "wash_sale_risk_trigger_date" not in ug_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_risk_trigger_date DATE"))
+                conn.commit()
+
     # Seed stock_splits with well-known historical splits (safe to run every startup — skips duplicates)
     from backend.app.core.stock_split_seeds import SEED_SPLITS
     from backend.app.db.schema import StockSplit

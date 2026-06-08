@@ -79,6 +79,15 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
                 # contract (100x), so keep price for options calculations.
                 is_options = (lot.get("assetType") or "").lower() == "options"
                 buy_price = lot["price"] if is_options else lot.get("cost_per_unit", lot["price"])
+                unrealized_gain_value = lot["quantity"] * m * (current_price - buy_price)
+
+                ws_clear_dt = lot.get("wash_sale_clear_date")
+                ws_clear_date = ws_clear_dt.date() if ws_clear_dt and hasattr(ws_clear_dt, "date") else ws_clear_dt
+
+                recent_buy_dt = lot.get("wash_sale_recent_buy_date")
+                ws_at_risk = bool(recent_buy_dt and unrealized_gain_value < 0)
+                ws_risk_trigger = recent_buy_dt.date() if recent_buy_dt and hasattr(recent_buy_dt, "date") else recent_buy_dt
+
                 unrealized_gain = UnrealizedGain(
                     brokerage=lot["brokerage"],
                     ticker=underlying_ticker(lot.get("ticker", ticker)),
@@ -86,9 +95,13 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
                     quantity=lot["quantity"],
                     buyPrice=buy_price,
                     currentPrice=current_price,
-                    unrealizedGain=lot["quantity"] * m * (current_price - buy_price),
+                    unrealizedGain=unrealized_gain_value,
                     isLongTerm=is_long_term,
                     assetType=lot.get("assetType"),
+                    wash_sale_adjustment=lot.get("wash_sale_adjustment", 0.0),
+                    wash_sale_clear_date=ws_clear_date,
+                    wash_sale_at_risk=ws_at_risk,
+                    wash_sale_risk_trigger_date=ws_risk_trigger if ws_at_risk else None,
                 )
                 unrealized_gains_list.append(unrealized_gain)
             except Exception as e:

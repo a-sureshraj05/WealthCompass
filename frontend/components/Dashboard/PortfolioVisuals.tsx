@@ -1,41 +1,26 @@
 
 import React from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { StockHolding } from '../types';
 import { brokerageColor } from '../../utils/finance';
 
 interface Props {
   holdings: StockHolding[];
+  cashByBrokerage?: Record<string, number>;
 }
 
-const COLORS = ['#0F52BA', '#34C759', '#FF9500', '#FF2D55', '#AF52DE', '#5AC8FA', '#6E6E73'];
+const COLORS = ['#0F52BA', '#34C759', '#FF9500', '#FF2D55', '#AF52DE', '#5AC8FA', '#6E6E73', '#FF6B35', '#00C7BE', '#30B0C7'];
 
-const SectorTooltip = ({ active, payload }: any) => {
-  if (!active || !payload?.length) return null;
-  const { name, value, tickers } = payload[0].payload;
-  return (
-    <div className="bg-white border border-[#D2D2D7] rounded p-3 text-xs" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
-      <p className="font-bold text-[#1D1D1F] mb-1">{name}</p>
-      <p className="text-slate-500 mb-2">${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-      <div className="flex flex-wrap gap-1">
-        {tickers.map((t: string) => (
-          <span key={t} className="bg-[#E6EEFB] text-[#0A3E8F] font-semibold px-1.5 py-0.5 rounded">{t}</span>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
-  const allocationData = React.useMemo(() => {
-    const sectors: Record<string, { value: number; tickers: string[] }> = {};
+const PortfolioVisuals: React.FC<Props> = ({ holdings, cashByBrokerage = {} }) => {
+  const tickerAllocationData = React.useMemo(() => {
+    const tickers: Record<string, number> = {};
     holdings.forEach(h => {
-      const key = h.sector || h.assetType || 'Other';
-      if (!sectors[key]) sectors[key] = { value: 0, tickers: [] };
-      sectors[key].value += h.marketValue;
-      if (!sectors[key].tickers.includes(h.ticker)) sectors[key].tickers.push(h.ticker);
+      tickers[h.ticker] = (tickers[h.ticker] || 0) + h.marketValue;
     });
-    return Object.entries(sectors).map(([name, { value, tickers }]) => ({ name, value, tickers }));
+    const entries = Object.entries(tickers).map(([ticker, value]) => ({ ticker, value }));
+    const total = entries.reduce((s, e) => s + e.value, 0);
+    return entries
+      .map(e => ({ ...e, pct: total > 0 ? (e.value / total) * 100 : 0 }))
+      .sort((a, b) => b.pct - a.pct);
   }, [holdings]);
 
   const brokerageData = React.useMemo(() => {
@@ -43,15 +28,13 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
     holdings.forEach(h => {
       brokers[h.brokerage] = (brokers[h.brokerage] || 0) + h.marketValue;
     });
+    Object.entries(cashByBrokerage).forEach(([brokerage, cash]) => {
+      brokers[brokerage] = (brokers[brokerage] || 0) + cash;
+    });
     const entries = Object.entries(brokers).map(([name, value]) => ({ name, value }));
     const total = entries.reduce((s, e) => s + e.value, 0);
     return entries.map(e => ({ ...e, pct: total > 0 ? (e.value / total) * 100 : 0 }));
-  }, [holdings]);
-
-  const totalAllocation = React.useMemo(() => {
-    const total = allocationData.reduce((s, d) => s + d.value, 0);
-    return allocationData.map(d => ({ ...d, pct: total > 0 ? (d.value / total) * 100 : 0 }));
-  }, [allocationData]);
+  }, [holdings, cashByBrokerage]);
 
   if (holdings.length === 0) {
     return (
@@ -71,52 +54,38 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
-      {/* Sector Allocation */}
+      {/* Company Allocation */}
       <div className="bg-white border border-[#D2D2D7] rounded p-6 flex flex-col" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-[#1D1D1F]">Sector Allocation</h3>
+          <h3 className="text-sm font-semibold text-[#1D1D1F]">Company Allocation</h3>
           <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
           </svg>
         </div>
 
-        <div className="relative flex-1 min-h-[180px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={allocationData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                paddingAngle={3}
-                dataKey="value"
-                startAngle={90}
-                endAngle={-270}
-              >
-                {allocationData.map((_entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
-                ))}
-              </Pie>
-              <Tooltip content={<SectorTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          {/* Center label */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.05em]">Total</span>
-            <span className="text-lg font-bold text-[#1D1D1F]">100%</span>
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div className="mt-4 space-y-1.5">
-          {totalAllocation.slice(0, 5).map((d, i) => (
-            <div key={d.name} className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                <span className="text-xs text-slate-600 truncate max-w-[140px]">{d.name}</span>
+        <div className="flex-1 space-y-2.5 overflow-y-auto max-h-[300px] pr-1">
+          {tickerAllocationData.map((d, i) => (
+            <div key={d.ticker}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                  <span className="text-xs font-semibold text-[#1D1D1F]">{d.ticker}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-slate-400 tabular-nums">
+                    ${d.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </span>
+                  <span className="text-xs font-semibold text-[#1D1D1F] w-9 text-right tabular-nums">
+                    {d.pct.toFixed(1)}%
+                  </span>
+                </div>
               </div>
-              <span className="text-xs font-semibold text-[#1D1D1F]">{d.pct.toFixed(0)}%</span>
+              <div className="h-1 bg-[#F5F5F7] rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${d.pct}%`, backgroundColor: COLORS[i % COLORS.length] }}
+                />
+              </div>
             </div>
           ))}
         </div>
@@ -139,14 +108,14 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings }) => {
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: brokerageColor(b.name, i) }} />
                   <span className="text-sm font-medium text-[#1D1D1F]">{b.name}</span>
                 </div>
-                <span className="text-sm font-semibold text-[#1D1D1F]">
-                  ${b.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                <span className={`text-sm font-semibold ${b.value < 0 ? 'text-rose-600' : 'text-[#1D1D1F]'}`}>
+                  {b.value < 0 ? '-' : ''}${Math.abs(b.value).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </span>
               </div>
               <div className="h-1.5 bg-[#F5F5F7] rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${b.pct}%`, backgroundColor: brokerageColor(b.name, i) }}
+                  style={{ width: `${Math.max(0, b.pct)}%`, backgroundColor: brokerageColor(b.name, i) }}
                 />
               </div>
             </div>

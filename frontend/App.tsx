@@ -5,7 +5,7 @@ import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LoginPage from './components/LoginPage';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchAnalystData } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchAnalystData } from './services/apiService';
 import TickerTypeContext from './contexts/TickerTypeContext';
 
 const App: React.FC = () => {
@@ -39,6 +39,7 @@ const App: React.FC = () => {
 const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
   const [cashBalance, setCashBalance] = useState<number>(0);
+  const [buyingPower, setBuyingPower] = useState<Record<string, number>>({});
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [realizedGains, setRealizedGains] = useState<RealizedGain[]>([]);
   const [unrealizedGains, setUnrealizedGains] = useState<UnrealizedLot[]>([]);
@@ -70,13 +71,14 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const getHoldings = useCallback(async () => {
     try {
-      const [h, cash] = await Promise.all([fetchHoldings(), fetchCashBalance()]);
+      const [h, cash, bp] = await Promise.all([fetchHoldings(), fetchCashBalance(), fetchBuyingPower()]);
       const tickers = [...new Set(h.map(x => x.ticker))];
       const analystData = tickers.length > 0 ? await fetchAnalystData(tickers) : [];
       const sectorMap: Record<string, string> = {};
       analystData.forEach(a => { if (a.sector) sectorMap[a.ticker] = a.sector; });
       setHoldings(h.map(x => ({ ...x, sector: sectorMap[x.ticker] })));
       setCashBalance(cash);
+      setBuyingPower(bp);
     } catch (error) {
       console.error("Failed to fetch holdings:", error);
     }
@@ -158,8 +160,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const dayChange = holdings.reduce((sum, h) => sum + h.quantity * (h.currentPrice - (h.previousClose > 0 ? h.previousClose : h.currentPrice)), 0);
     const dayChangePercentage = investmentValue > 0 ? (dayChange / (investmentValue - dayChange)) * 100 : 0;
 
-    return { totalValue, investmentValue, totalGain, gainPercentage, dayChange, dayChangePercentage, buyingPower: cashBalance };
-  }, [holdings, cashBalance]);
+    const totalBuyingPower = Object.values(buyingPower).reduce((s, v) => s + v, 0);
+    const netValue = investmentValue + totalBuyingPower;
+    return { totalValue: netValue, investmentValue, totalGain, gainPercentage, dayChange, dayChangePercentage, buyingPower: totalBuyingPower };
+  }, [holdings, cashBalance, buyingPower]);
 
   const handleAddHoldings = (newHoldings: StockHolding[]) => {
     setHoldings(newHoldings);
@@ -238,6 +242,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       setRealizedGains([]);
       setUnrealizedGains([]);
       setCashBalance(0);
+      setBuyingPower({});
     } catch (error) {
       console.error('Failed to clear data:', error);
     } finally {
@@ -298,6 +303,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             unrealizedGains={unrealizedGains}
             stats={stats}
             onAddTransactions={handleAddTransactions}
+            onRefresh={() => Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains()])}
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
             onSoftDeleteTransaction={handleSoftDeleteTransaction}
@@ -315,6 +321,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             selectedTickers={selectedTickers}
             setSelectedTickers={setSelectedTickers}
             allKnownBrokerages={allKnownBrokerages}
+            buyingPower={buyingPower}
           />
         </main>
       </div>

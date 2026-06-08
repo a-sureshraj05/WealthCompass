@@ -6,6 +6,7 @@ interface Props {
   onAddTransactions: (t: Transaction[]) => void;
   setLoading: (l: boolean) => void;
   initialTab?: 'manual' | 'connect';
+  onRefresh?: () => void | Promise<unknown>;
 }
 
 const BROKERAGES = [
@@ -42,7 +43,7 @@ const BrokerageLogo: React.FC<{ name: string; domain: string | null; size?: numb
   );
 };
 
-const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initialTab = 'manual' }) => {
+const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initialTab = 'manual', onRefresh }) => {
   const [activeTab, setActiveTab] = useState<'manual' | 'connect'>(initialTab);
 
   // Manual state
@@ -178,6 +179,7 @@ const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initia
       }
       const result = await syncBrokerageTransactions(syncStartDate || undefined, syncEndDate || undefined, accountIds, effectiveTickers.length > 0 ? effectiveTickers : undefined);
       setConnectStatus(result.message);
+      onRefresh?.();
     } catch {
       setConnectStatus('Failed to sync transactions.');
     } finally {

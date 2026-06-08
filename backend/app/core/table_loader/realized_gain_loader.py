@@ -1,3 +1,5 @@
+import re
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 from sqlalchemy.orm import Session
 from backend.app.db.schema import LotAssignment, RealizedGain, Transaction as DBTransaction
@@ -284,8 +286,162 @@ def load(db: Session, brokerage_name: str = None, tracked_tickers: Optional[Set[
             lot_key_ticker = option_symbol if option_symbol else ticker
             open_lots_by_ticker.setdefault((brokerage, lot_key_ticker), []).extend(open)
 
+    _detect_wash_sales(transactions, realized_gains_list, open_lots_by_ticker)
+
     db.add_all(realized_gains_list)
     db.commit()
 
     print(f"[realized_gain_loader] Returning open_lots_by_ticker: {open_lots_by_ticker}")
     return open_lots_by_ticker
+
+
+def _option_type(symbol: str) -> Optional[str]:
+    """Extract 'C' or 'P' from an OCC option symbol like MSFT250117C00400000."""
+    m = re.search(r'\d{6}([CP])', symbol or "")
+    return m.group(1) if m else None
+
+
+def _detect_wash_sales(
+    transactions: List,
+    realized_gains_list: List,
+    open_lots_by_ticker: Dict,
+) -> None:
+    """
+    Detect wash sales per IRS Section 1091 and annotate lots in-place.
+
+    Substantially identical rules:
+      - Equity loss   → equity buy OR call option buy within ±30 days
+      - Call loss     → equity buy OR call option buy within ±30 days
+      - Put loss      → put option buy only within ±30 days
+        (puts are not substantially identical to stock or calls)
+
+    Type 1 — wash sale already triggered (replacement lot still open):
+      Sets wash_sale_adjustment and wash_sale_clear_date on the replacement lot dict.
+    Type 2 — at risk (open lot + qualifying recent buy exists within last 30 days):
+      Sets wash_sale_recent_buy_date on the lot dict; unrealized_gain_loader
+      only sets wash_sale_at_risk=True when unrealizedGain < 0.
+    """
+    WINDOW = timedelta(days=30)
+    today = datetime.now()
+
+    # Equity buy index: underlying ticker → [{date, transaction_id}]
+    equity_buys: Dict[str, List[Dict]] = {}
+    # Option buy index: underlying ticker → [{date, transaction_id, option_type}]
+    option_buys: Dict[str, List[Dict]] = {}
+    # Sell option type lookup: (underlying_ticker, sell_date) → 'C' or 'P'
+    sell_option_type: Dict[tuple, str] = {}
+
+    for t in transactions:
+        sym = getattr(t, "option_symbol", None)
+        if t.action.upper() in BUY_ACTIONS:
+            if not sym:
+                equity_buys.setdefault(t.ticker, []).append(
+                    {"date": t.date, "transaction_id": t.id}
+                )
+            else:
+                ot = _option_type(sym)
+                option_buys.setdefault(t.ticker, []).append(
+                    {"date": t.date, "transaction_id": t.id, "option_type": ot}
+                )
+        elif sym and t.action.upper() in SELL_ACTIONS:
+            ot = _option_type(sym)
+            if ot:
+                sell_option_type[(t.ticker, t.date.date())] = ot
+
+    # transaction_id → open lot for O(1) replacement-lot lookup
+    txn_to_lot: Dict[int, Dict] = {}
+    for lots in open_lots_by_ticker.values():
+        for lot in lots:
+            if lot.get("transaction_id"):
+                txn_to_lot[lot["transaction_id"]] = lot
+
+    def _first_in_window(ticker, sell_dt, *, equity_ok, call_ok, put_ok):
+        """Return the first qualifying replacement buy within ±30 days of sell_dt."""
+        if equity_ok:
+            for buy in equity_buys.get(ticker, []):
+                bd = buy["date"]
+                if bd.date() != sell_dt.date() and sell_dt - WINDOW <= bd <= sell_dt + WINDOW:
+                    return buy
+        if call_ok:
+            for buy in option_buys.get(ticker, []):
+                if buy.get("option_type") == "C":
+                    bd = buy["date"]
+                    if bd.date() != sell_dt.date() and sell_dt - WINDOW <= bd <= sell_dt + WINDOW:
+                        return buy
+        if put_ok:
+            for buy in option_buys.get(ticker, []):
+                if buy.get("option_type") == "P":
+                    bd = buy["date"]
+                    if bd.date() != sell_dt.date() and sell_dt - WINDOW <= bd <= sell_dt + WINDOW:
+                        return buy
+        return None
+
+    # Step 1: detect wash sales from realized losses
+    for rg in realized_gains_list:
+        if rg.gain >= 0:
+            continue
+
+        is_options_loss = (rg.assetType or "").lower() == "options"
+        sell_dt = rg.sellDate
+        ticker = rg.ticker  # always the underlying equity ticker
+
+        if not is_options_loss:
+            # Equity loss: substantially identical = equity buy OR call option buy
+            repl = _first_in_window(ticker, sell_dt, equity_ok=True, call_ok=True, put_ok=False)
+        else:
+            otype = sell_option_type.get((ticker, sell_dt.date()))
+            if otype == "C":
+                # Call loss: equity buy OR call option buy
+                repl = _first_in_window(ticker, sell_dt, equity_ok=True, call_ok=True, put_ok=False)
+            elif otype == "P":
+                # Put loss: only a put option buy qualifies
+                repl = _first_in_window(ticker, sell_dt, equity_ok=False, call_ok=False, put_ok=True)
+            else:
+                # Unknown option type — conservative: check equity buys only
+                repl = _first_in_window(ticker, sell_dt, equity_ok=True, call_ok=False, put_ok=False)
+
+        if repl:
+            rg.is_wash_sale = True
+            rg.wash_sale_disallowed_amount = abs(rg.gain)
+            lot = txn_to_lot.get(repl["transaction_id"])
+            if lot:
+                clear = max(sell_dt, repl["date"]) + WINDOW
+                lot["wash_sale_adjustment"] = lot.get("wash_sale_adjustment", 0.0) + abs(rg.gain)
+                existing = lot.get("wash_sale_clear_date")
+                lot["wash_sale_clear_date"] = max(clear, existing) if existing else clear
+
+    # Step 2: at-risk open lots (Type 2) — qualifying buy within last 30 days
+    for lots in open_lots_by_ticker.values():
+        for lot in lots:
+            ws_clear = lot.get("wash_sale_clear_date")
+            if ws_clear and ws_clear > today:
+                continue  # Type 1 window still active — no need to double-flag
+
+            underlying = lot.get("ticker") or ""
+            lot_sym = lot.get("option_symbol")
+            lot_is_options = (lot.get("assetType") or "").lower() == "options"
+
+            if not lot_is_options:
+                # Equity lot: at risk if equity buy OR call option buy in last 30 days
+                recent = [b for b in equity_buys.get(underlying, []) if b["date"] >= today - WINDOW]
+                if not recent:
+                    recent = [b for b in option_buys.get(underlying, [])
+                              if b.get("option_type") == "C" and b["date"] >= today - WINDOW]
+            else:
+                lot_otype = _option_type(lot_sym) if lot_sym else None
+                if lot_otype == "C":
+                    # Call lot: at risk if equity OR call option buy
+                    recent = [b for b in equity_buys.get(underlying, []) if b["date"] >= today - WINDOW]
+                    if not recent:
+                        recent = [b for b in option_buys.get(underlying, [])
+                                  if b.get("option_type") == "C" and b["date"] >= today - WINDOW]
+                elif lot_otype == "P":
+                    # Put lot: at risk only if put option buy
+                    recent = [b for b in option_buys.get(underlying, [])
+                              if b.get("option_type") == "P" and b["date"] >= today - WINDOW]
+                else:
+                    recent = []
+
+            if recent:
+                trigger = max(recent, key=lambda b: b["date"])
+                lot["wash_sale_recent_buy_date"] = trigger["date"]

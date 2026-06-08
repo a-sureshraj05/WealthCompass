@@ -84,6 +84,8 @@ class RealizedGain(Base):
     gain = Column(Float)
     isLongTerm = Column(Boolean)
     assetType = Column(String)
+    is_wash_sale = Column(Boolean, default=False, nullable=False, server_default="0")
+    wash_sale_disallowed_amount = Column(Float, default=0.0, nullable=False, server_default="0")
 
 
 class UnrealizedGain(Base):
@@ -99,6 +101,12 @@ class UnrealizedGain(Base):
     unrealizedGain = Column(Float)
     isLongTerm = Column(Boolean)
     assetType = Column(String)
+    # Type 1: this lot absorbed a disallowed wash sale loss
+    wash_sale_adjustment = Column(Float, default=0.0, nullable=False, server_default="0")
+    wash_sale_clear_date = Column(Date, nullable=True)   # safe-to-sell-at-loss date
+    # Type 2: selling this lot at a loss today would be disallowed
+    wash_sale_at_risk = Column(Boolean, default=False, nullable=False, server_default="0")
+    wash_sale_risk_trigger_date = Column(Date, nullable=True)  # the recent buy causing the risk
 
 
 class OptionsRetain(Base):

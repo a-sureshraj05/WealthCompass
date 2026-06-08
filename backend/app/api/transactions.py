@@ -34,6 +34,8 @@ class RealizedGain(BaseModel):
     gain: float
     isLongTerm: bool
     assetType: Optional[str] = None
+    is_wash_sale: bool = False
+    wash_sale_disallowed_amount: float = 0.0
 
     class Config:
         from_attributes = True
@@ -51,6 +53,10 @@ class UnrealizedGain(BaseModel):
     unrealizedGain: float
     isLongTerm: bool
     assetType: Optional[str] = None
+    wash_sale_adjustment: float = 0.0
+    wash_sale_clear_date: Optional[datetime.date] = None
+    wash_sale_at_risk: bool = False
+    wash_sale_risk_trigger_date: Optional[datetime.date] = None
 
     class Config:
         from_attributes = True
@@ -532,6 +538,83 @@ def get_cash_balance(db: Session = Depends(get_db)):
         elif t.action.upper() == "SELL":
             balance -= t.totalCost
     return {"balance": round(balance, 2)}
+
+
+@router.get("/buying-power")
+def get_buying_power():
+    """Return net cash per brokerage.
+    Computed as: account total_value (brokerage-reported equity) minus sum of
+    stock/option positions market value. Goes negative when margin is in use.
+    Falls back to the balance cash field if total_value is unavailable.
+    """
+    try:
+        from backend.app.api.snaptrade import get_client, get_accounts
+        from backend.app.core.database import SessionLocal
+        db = SessionLocal()
+        try:
+            client = get_client()
+            from backend.app.api.snaptrade import USER_ID, USER_SECRET
+            accounts = get_accounts(db)
+            result: dict = {}
+            for account in accounts:
+                brokerage = account["brokerage"]
+                try:
+                    resp = client.account_information.get_user_holdings(
+                        query_params={"userId": USER_ID, "userSecret": USER_SECRET},
+                        path_params={"accountId": account["id"]},
+                    )
+                    body = resp.body
+
+                    def _get(obj, key, default=None):
+                        if obj is None:
+                            return default
+                        return obj.get(key, default) if hasattr(obj, "get") else getattr(obj, key, default)
+
+                    # Primary: sum the cash field from USD balance entries (direct brokerage-reported cash)
+                    balances = _get(body, "balances") or []
+                    usd_cash_values = []
+                    for b in balances:
+                        curr = _get(b, "currency")
+                        code = _get(curr, "code", "USD") or "USD"
+                        cash_val = _get(b, "cash")
+                        print(f"[buying-power] {brokerage} balance: currency={code} cash={cash_val} buying_power={_get(b,'buying_power')}")
+                        if code == "USD" and cash_val is not None:
+                            usd_cash_values.append(float(cash_val))
+
+                    if usd_cash_values:
+                        net_cash = sum(usd_cash_values)
+                        print(f"[buying-power] {brokerage}: balance.cash={net_cash:.2f}")
+                        result[brokerage] = round(result.get(brokerage, 0.0) + net_cash, 2)
+                    else:
+                        # Fallback: account total minus positions market value
+                        acct = _get(body, "account")
+                        acct_bal = _get(acct, "balance")
+                        acct_total_raw = _get(acct_bal, "total")
+                        acct_total = _get(acct_total_raw, "amount") if isinstance(acct_total_raw, dict) else acct_total_raw
+                        tv = _get(body, "total_value")
+                        tv_value = _get(tv, "value")
+                        total = acct_total if acct_total is not None else tv_value
+                        positions_value = sum(
+                            float(_get(pos, "units") or 0) * float(_get(pos, "price") or 0)
+                            for pos in (_get(body, "positions") or [])
+                        )
+                        if total is not None:
+                            net_cash = float(total) - positions_value
+                            print(f"[buying-power] {brokerage}: fallback total={float(total):.2f} - positions={positions_value:.2f} → net_cash={net_cash:.2f}")
+                            result[brokerage] = round(result.get(brokerage, 0.0) + net_cash, 2)
+                        else:
+                            print(f"[buying-power] {brokerage}: no cash or total available, skipping")
+                except Exception as e:
+                    import traceback
+                    print(f"[buying-power] error for {brokerage}: {e}")
+                    traceback.print_exc()
+        finally:
+            db.close()
+        print(f"[buying-power] result: {result}")
+        return result
+    except Exception as e:
+        print(f"[buying-power] top-level error: {e}")
+        return {}
 
 
 @router.get("/holdings", response_model=List[Holding])

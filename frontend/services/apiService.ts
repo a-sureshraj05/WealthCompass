@@ -277,6 +277,12 @@ export const fetchCashBalance = async (): Promise<number> => {
   return data.balance;
 };
 
+export const fetchBuyingPower = async (): Promise<Record<string, number>> => {
+  const response = await apiFetch("/api/v1/buying-power");
+  if (!response.ok) return {};
+  return response.json();
+};
+
 export const triggerRealizedGainsProcess = async (): Promise<void> => {
   const response = await apiFetch("/api/v1/realized-gains/process", {
     method: "POST",
