@@ -69,19 +69,26 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {} }) => {
         {showTooltip && Object.keys(cashByBrokerage).length > 0 && (
           <div className="absolute bottom-full left-0 mb-2 w-full z-50">
             <div className="bg-[#1D1D1F] rounded-lg p-3 shadow-xl">
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">By Brokerage</p>
-              {Object.entries(cashByBrokerage).map(([brokerage, amount]) => (
-                <div key={brokerage} className="flex items-center justify-between gap-4 py-1">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                    brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' :
-                    brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' :
-                    'bg-slate-600 text-white'
-                  }`}>{brokerage}</span>
-                  <span className={`text-[11px] font-black tabular-nums ${amount < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                    {fmt(amount)}
-                  </span>
-                </div>
-              ))}
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">By Account</p>
+              {Object.entries(cashByBrokerage).map(([key, amount]) => {
+                const k = key.toLowerCase();
+                const badgeCls = k.includes('robinhood') ? 'bg-[#0F52BA] text-white'
+                  : k.includes('schwab') ? 'bg-[#6E6E73] text-white'
+                  : k.includes('fidelity') ? 'bg-[#417505] text-white'
+                  : 'bg-slate-600 text-white';
+                const [brokeragePart, accountPart] = key.includes(' · ') ? key.split(' · ') : [key, ''];
+                return (
+                  <div key={key} className="flex items-center justify-between gap-4 py-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${badgeCls}`}>{brokeragePart}</span>
+                      {accountPart && <span className="text-[10px] text-slate-400 font-medium truncate">{accountPart}</span>}
+                    </div>
+                    <span className={`text-[11px] font-black tabular-nums shrink-0 ${amount < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {fmt(amount)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
             {/* Arrow */}
             <div className="w-3 h-3 bg-[#1D1D1F] rotate-45 ml-6 -mt-1.5 rounded-sm" />

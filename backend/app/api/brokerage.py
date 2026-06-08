@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.core import process
 from backend.app.api import snaptrade
+from backend.app.db.schema import BrokerageAccount
 
 router = APIRouter()
 
@@ -16,6 +17,10 @@ PROVIDER = os.getenv("BROKERAGE_PROVIDER", "snaptrade")
 
 class ConnectRequest(BaseModel):
     brokerage: str
+
+
+class AccountRenameRequest(BaseModel):
+    name: str
 
 
 @router.get("/connect-url")
@@ -40,21 +45,27 @@ def get_connections(db: Session = Depends(get_db)):
 
 @router.get("/accounts")
 def get_accounts(db: Session = Depends(get_db)):
-    """Return list of all user accounts across connected brokerages."""
-    if PROVIDER == "snaptrade":
-        try:
-            return snaptrade.get_accounts(db)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
-    raise HTTPException(status_code=400, detail=f"Unknown provider: {PROVIDER}")
+    """Return all brokerage accounts from the local reference table."""
+    return db.query(BrokerageAccount).order_by(BrokerageAccount.brokerage, BrokerageAccount.name).all()
 
 
-@router.delete("/accounts/{account_id}")
-def ignore_account(account_id: str, db: Session = Depends(get_db)):
+@router.patch("/accounts/{account_id}")
+def rename_account(account_id: int, req: AccountRenameRequest, db: Session = Depends(get_db)):
+    """Rename a brokerage account. Reflects everywhere without re-processing."""
+    acct = db.query(BrokerageAccount).filter(BrokerageAccount.id == account_id).first()
+    if not acct:
+        raise HTTPException(status_code=404, detail="Account not found")
+    acct.name = req.name.strip()
+    db.commit()
+    return acct
+
+
+@router.delete("/accounts/{snaptrade_account_id}/ignore")
+def ignore_account(snaptrade_account_id: str, db: Session = Depends(get_db)):
     """Hide an account from WealthCompass (does not affect SnapTrade connection)."""
     if PROVIDER == "snaptrade":
         try:
-            snaptrade.ignore_account(account_id, db)
+            snaptrade.ignore_account(snaptrade_account_id, db)
             return {"message": "Account hidden."}
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -68,6 +79,19 @@ def delete_connection(authorization_id: str, db: Session = Depends(get_db)):
         try:
             snaptrade.delete_connection(authorization_id, db)
             return {"message": "Connection removed."}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    raise HTTPException(status_code=400, detail=f"Unknown provider: {PROVIDER}")
+
+
+@router.post("/backfill-account-ids")
+def backfill_account_ids(db: Session = Depends(get_db)):
+    """One-time: read SnapTrade, set account_id on is_backend_verified transactions, then re-process."""
+    if PROVIDER == "snaptrade":
+        try:
+            updated = snaptrade.backfill_verified_account_ids(db)
+            process.process_transactions(db)
+            return {"message": f"Updated account_id on {updated} verified transaction(s) and re-processed."}
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
     raise HTTPException(status_code=400, detail=f"Unknown provider: {PROVIDER}")

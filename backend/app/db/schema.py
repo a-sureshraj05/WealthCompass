@@ -17,6 +17,7 @@ class Transaction(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     brokerage = Column(String)
+    account_id = Column(Integer, nullable=True)
     date = Column(DateTime)
     ticker = Column(String)
     name = Column(String)
@@ -60,6 +61,7 @@ class Holding(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     brokerage = Column(String, index=True)
+    account_id = Column(Integer, nullable=True)
     ticker = Column(String, index=True)
     quantity = Column(Float)
     averageCostPerShare = Column(Float)
@@ -93,6 +95,7 @@ class UnrealizedGain(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     brokerage = Column(String)
+    account_id = Column(Integer, nullable=True)
     ticker = Column(String)
     buyDate = Column(DateTime)
     quantity = Column(Float)
@@ -128,6 +131,16 @@ class TickerReference(Base):
     first_addition_date = Column(Date)
     price = Column(Float)
 
+
+
+class BrokerageAccount(Base):
+    """One row per brokerage account — the authoritative name reference."""
+    __tablename__ = "brokerage_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    snaptrade_account_id = Column(String, unique=True, nullable=False)
+    brokerage = Column(String, nullable=False)
+    name = Column(String, nullable=False)
 
 
 class SnaptradeConnection(Base):
@@ -190,6 +203,7 @@ class SnaptradeTransaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     authorization_id = Column(String, index=True)
     brokerage = Column(String)
+    account_id = Column(Integer, nullable=True)
     date = Column(DateTime)
     ticker = Column(String)
     name = Column(String)

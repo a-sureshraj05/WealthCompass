@@ -4,7 +4,7 @@ from datetime import datetime
 from snaptrade_client import SnapTrade
 from sqlalchemy.orm import Session
 
-from backend.app.db.schema import SnaptradeConnection, SnaptradeIgnoredAccount, SnaptradeTransaction, Transaction as DBTransaction
+from backend.app.db.schema import BrokerageAccount, SnaptradeConnection, SnaptradeIgnoredAccount, SnaptradeTransaction, Transaction as DBTransaction
 from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 
 # --- Snaptrade client setup ---
@@ -193,24 +193,43 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
     )
 
     for account in accounts_resp.body:
-        account_id = account.get("id")
+        snaptrade_account_id = account.get("id")
         account_auth_id = _extract_auth_id(account.get("brokerage_authorization"))
         brokerage_name = auth_brokerage_map.get(account_auth_id, "Unknown")
-        print(f"[SnapTrade Account] id={account_id} brokerage={brokerage_name} name={account.get('name')} auth_id={account_auth_id}")
+        raw_account_name = account.get("name", "") or ""
+        if raw_account_name.upper().startswith(brokerage_name.upper()):
+            raw_account_name = raw_account_name[len(brokerage_name):].strip(" -–:")
+        account_display_name = raw_account_name or brokerage_name
+        print(f"[SnapTrade Account] id={snaptrade_account_id} brokerage={brokerage_name} name={account.get('name')} auth_id={account_auth_id}")
+
+        # Upsert into brokerage_accounts reference table
+        db_acct = db.query(BrokerageAccount).filter(
+            BrokerageAccount.snaptrade_account_id == snaptrade_account_id
+        ).first()
+        if db_acct:
+            db_acct.name = account_display_name
+        else:
+            db_acct = BrokerageAccount(
+                snaptrade_account_id=snaptrade_account_id,
+                brokerage=brokerage_name,
+                name=account_display_name,
+            )
+            db.add(db_acct)
+        db.flush()  # ensure db_acct.id is set
 
         # Skip ignored accounts
-        if account_id in ignored_ids:
+        if snaptrade_account_id in ignored_ids:
             continue
 
         # Skip if caller specified account_ids and this account isn't in the list
-        if account_ids and account_id not in account_ids:
+        if account_ids and snaptrade_account_id not in account_ids:
             continue
 
         try:
             query_params = {
                 "userId": USER_ID,
                 "userSecret": USER_SECRET,
-                "accounts": account_id,
+                "accounts": snaptrade_account_id,
             }
             if start_date:
                 query_params["startDate"] = start_date
@@ -232,9 +251,18 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                 if not txn_id:
                     continue
 
-                if db.query(SnaptradeTransaction).filter(
+                existing_st = db.query(SnaptradeTransaction).filter(
                     SnaptradeTransaction.snaptrade_transaction_id == txn_id
-                ).first():
+                ).first()
+                if existing_st:
+                    if existing_st.account_id is None and db_acct.id:
+                        linked = db.query(DBTransaction).filter(
+                            DBTransaction.raw_id == existing_st.id,
+                            DBTransaction.source == "snaptrade",
+                        ).first()
+                        if linked and not linked.is_backend_verified:
+                            existing_st.account_id = db_acct.id
+                            linked.account_id = db_acct.id
                     continue
 
                 action = str(txn.get("type", "")).upper()
@@ -283,6 +311,7 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                 db_snaptrade = SnaptradeTransaction(
                     authorization_id=str(txn.get("brokerage_authorization", "")),
                     brokerage=brokerage_name,
+                    account_id=db_acct.id,
                     date=date,
                     ticker=ticker,
                     name=name,
@@ -319,6 +348,7 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
 
                 db.add(DBTransaction(
                     brokerage=brokerage_name,
+                    account_id=db_acct.id,
                     date=date,
                     ticker=ticker,
                     name=name,
@@ -339,6 +369,81 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
             db.commit()
         except Exception as e:
             db.rollback()
-            print(f"[snaptrade] Error syncing account {account_id}: {e}")
+            print(f"[snaptrade] Error syncing account {snaptrade_account_id}: {e}")
 
     return total_synced
+
+
+def backfill_verified_account_ids(db: Session) -> int:
+    """One-time: read every account's transactions from SnapTrade and set account_id
+    on is_backend_verified transactions. Never touches any other field."""
+    client = get_client()
+    ignored_ids = {row.account_id for row in db.query(SnaptradeIgnoredAccount).all()}
+    auth_brokerage_map = _build_auth_brokerage_map(client)
+
+    accounts_resp = client.account_information.list_user_accounts(
+        query_params={"userId": USER_ID, "userSecret": USER_SECRET}
+    )
+
+    total_updated = 0
+
+    for account in accounts_resp.body:
+        snaptrade_account_id = account.get("id")
+        if snaptrade_account_id in ignored_ids:
+            continue
+
+        account_auth_id = _extract_auth_id(account.get("brokerage_authorization"))
+        brokerage_name = auth_brokerage_map.get(account_auth_id, "Unknown")
+        raw_name = account.get("name", "") or ""
+        if raw_name.upper().startswith(brokerage_name.upper()):
+            raw_name = raw_name[len(brokerage_name):].strip(" -–:")
+        display_name = raw_name or brokerage_name
+
+        # Upsert into brokerage_accounts
+        db_acct = db.query(BrokerageAccount).filter(
+            BrokerageAccount.snaptrade_account_id == snaptrade_account_id
+        ).first()
+        if db_acct:
+            db_acct.name = display_name
+        else:
+            db_acct = BrokerageAccount(
+                snaptrade_account_id=snaptrade_account_id,
+                brokerage=brokerage_name,
+                name=display_name,
+            )
+            db.add(db_acct)
+        db.flush()
+
+        try:
+            txn_resp = client.transactions_and_reporting.get_activities(
+                query_params={"userId": USER_ID, "userSecret": USER_SECRET, "accounts": snaptrade_account_id}
+            )
+            for txn in txn_resp.body:
+                txn_id = str(txn.get("id", ""))
+                if not txn_id:
+                    continue
+
+                existing_st = db.query(SnaptradeTransaction).filter(
+                    SnaptradeTransaction.snaptrade_transaction_id == txn_id
+                ).first()
+                if not existing_st:
+                    continue
+
+                # Update snaptrade_transactions.account_id regardless
+                if existing_st.account_id is None:
+                    existing_st.account_id = db_acct.id
+
+                # Update linked DBTransaction only if is_backend_verified=True and account_id is null
+                updated = db.query(DBTransaction).filter(
+                    DBTransaction.raw_id == existing_st.id,
+                    DBTransaction.is_backend_verified == True,
+                    DBTransaction.account_id == None,
+                ).update({"account_id": db_acct.id}, synchronize_session=False)
+                total_updated += updated
+
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"[backfill-account-ids] error for {snaptrade_account_id}: {e}")
+
+    return total_updated

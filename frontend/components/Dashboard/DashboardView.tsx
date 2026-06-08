@@ -38,6 +38,7 @@ interface Props {
   setSelectedTickers: (v: string[]) => void;
   allKnownBrokerages: string[];
   buyingPower: Record<string, number>;
+  accounts: import('../../types').BrokerageAccount[];
 }
 
 const DashboardView: React.FC<Props> = ({
@@ -68,6 +69,7 @@ const DashboardView: React.FC<Props> = ({
   setSelectedTickers,
   allKnownBrokerages,
   buyingPower,
+  accounts,
 }) => {
   const [syncMessage, setSyncMessage] = useState('');
   const [focusTicker, setFocusTicker] = useState<string | null>(null);
@@ -110,6 +112,7 @@ const DashboardView: React.FC<Props> = ({
           selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages}
           selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes}
           selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers}
+          accounts={accounts}
         />
         <div className="space-y-2">
           <div className="flex items-start justify-between">
@@ -166,7 +169,7 @@ const DashboardView: React.FC<Props> = ({
             {syncMessage}
           </p>
         )}
-        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} focusTicker={focusTicker} focusDate={focusDate} onClearFocus={() => { setFocusTicker(null); setFocusDate(null); }} allKnownBrokerages={allKnownBrokerages} />
+        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} focusTicker={focusTicker} focusDate={focusDate} onClearFocus={() => { setFocusTicker(null); setFocusDate(null); }} allKnownBrokerages={allKnownBrokerages} accounts={accounts} />
       </div>
     );
   }

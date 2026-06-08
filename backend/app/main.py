@@ -119,6 +119,30 @@ def startup_event():
                 conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_risk_trigger_date DATE"))
                 conn.commit()
 
+    # Migration: account_id column linking to brokerage_accounts reference table
+    if "account_id" not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN account_id INTEGER"))
+            conn.commit()
+    if "holdings" in inspector.get_table_names():
+        holding_columns = [col["name"] for col in inspector.get_columns("holdings")]
+        if "account_id" not in holding_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE holdings ADD COLUMN account_id INTEGER"))
+                conn.commit()
+    if "unrealized_gains" in inspector.get_table_names():
+        ug_columns = [col["name"] for col in inspector.get_columns("unrealized_gains")]
+        if "account_id" not in ug_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN account_id INTEGER"))
+                conn.commit()
+    if "snaptrade_transactions" in inspector.get_table_names():
+        st_columns = [col["name"] for col in inspector.get_columns("snaptrade_transactions")]
+        if "account_id" not in st_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE snaptrade_transactions ADD COLUMN account_id INTEGER"))
+                conn.commit()
+
     # Seed stock_splits with well-known historical splits (safe to run every startup — skips duplicates)
     from backend.app.core.stock_split_seeds import SEED_SPLITS
     from backend.app.db.schema import StockSplit

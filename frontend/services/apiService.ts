@@ -1,4 +1,4 @@
-import { StockHolding, Transaction, RealizedGain, UnrealizedLot } from "../types";
+import { BrokerageAccount, StockHolding, Transaction, RealizedGain, UnrealizedLot } from "../types";
 
 const getToken = () => localStorage.getItem("wc_token");
 
@@ -89,7 +89,7 @@ export const fetchTransactions = async (
 };
 
 export const updateTransaction = async (id: string, updates: {
-  date?: string; brokerage?: string; ticker?: string; name?: string; action?: string;
+  date?: string; brokerage?: string; account_id?: number | null; ticker?: string; name?: string; action?: string;
   quantity?: number; price?: number; costPerShare?: number; totalCost?: number; assetType?: string;
   current_brokerage?: string | null;
 }): Promise<void> => {
@@ -124,6 +124,32 @@ export const softDeleteTransaction = async (id: string, isDeleted: boolean): Pro
   if (!response.ok) {
     throw new Error(`Failed to update transaction: ${response.status} ${response.statusText}`);
   }
+};
+
+export const fetchAccounts = async (): Promise<BrokerageAccount[]> => {
+  const response = await apiFetch('/api/v1/brokerage/accounts');
+  if (!response.ok) throw new Error(`Failed to fetch accounts: ${response.status}`);
+  return response.json();
+};
+
+export const renameAccount = async (id: number, name: string): Promise<BrokerageAccount> => {
+  const response = await apiFetch(`/api/v1/brokerage/accounts/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) throw new Error(`Failed to rename account: ${response.status}`);
+  return response.json();
+};
+
+export const bulkSetAccount = async (brokerage: string, account_id: number, verified_only = true): Promise<{ updated: number }> => {
+  const response = await apiFetch('/api/v1/transactions/account/bulk', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ brokerage, account_id, verified_only }),
+  });
+  if (!response.ok) throw new Error(`Failed to bulk set account: ${response.status}`);
+  return response.json();
 };
 
 export const removeTransaction = async (id: string): Promise<void> => {

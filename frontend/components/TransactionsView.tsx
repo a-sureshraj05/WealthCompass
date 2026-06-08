@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Transaction } from '../types';
+import { BrokerageAccount, Transaction } from '../types';
 import TickerLogo from './TickerLogo';
 import SortIndicator from './SortIndicator';
 import { useClickOutside } from '../hooks/useClickOutside';
@@ -31,9 +31,11 @@ interface Props {
   focusDate?: string | null;
   onClearFocus?: () => void;
   allKnownBrokerages?: string[];
+  accounts?: BrokerageAccount[];
 }
 
-const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert, selectedBrokerages, setSelectedBrokerages, selectedAssetTypes, setSelectedAssetTypes, selectedTickers, setSelectedTickers, focusTicker, focusDate, onClearFocus, allKnownBrokerages }) => {
+const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert, selectedBrokerages, setSelectedBrokerages, selectedAssetTypes, setSelectedAssetTypes, selectedTickers, setSelectedTickers, focusTicker, focusDate, onClearFocus, allKnownBrokerages, accounts = [] }) => {
+  const accountMap = useMemo(() => Object.fromEntries(accounts.map(a => [a.id, a.name])) as Record<number, string>, [accounts]);
   const [dateRangeType, setDateRangeType] = useState<DateRangeType>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -750,22 +752,41 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     {/* Brokerage */}
                     <td className="px-6 py-2">
                       {isEditing ? (
-                        <input className={inputCls} value={editDraft.brokerage || ''}
-                          onChange={e => setEditDraft(d => ({ ...d, brokerage: e.target.value }))} />
+                        <div className="flex flex-col gap-1">
+                          <input className={inputCls} value={editDraft.brokerage || ''}
+                            onChange={e => setEditDraft(d => ({ ...d, brokerage: e.target.value }))} />
+                          {accounts.filter(a => a.brokerage === (editDraft.brokerage || t.brokerage)).length > 0 && (
+                            <select
+                              className={inputCls}
+                              value={editDraft.account_id ?? t.account_id ?? ''}
+                              onChange={e => setEditDraft(d => ({ ...d, account_id: e.target.value ? parseInt(e.target.value) : null }))}
+                            >
+                              <option value="">— No account —</option>
+                              {accounts.filter(a => a.brokerage === (editDraft.brokerage || t.brokerage)).map(a => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
                       ) : (
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight"
-                            style={{ backgroundColor: brokerageColor(t.brokerage) + '22', color: brokerageColor(t.brokerage) }}
-                          >{t.brokerage}</span>
-                          {t.current_brokerage && t.current_brokerage !== t.brokerage && (
-                            <>
-                              <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                              <span
-                                className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight"
-                                style={{ backgroundColor: brokerageColor(t.current_brokerage) + '22', color: brokerageColor(t.current_brokerage) }}
-                              >{t.current_brokerage}</span>
-                            </>
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight"
+                              style={{ backgroundColor: brokerageColor(t.brokerage) + '22', color: brokerageColor(t.brokerage) }}
+                            >{t.brokerage}</span>
+                            {t.current_brokerage && t.current_brokerage !== t.brokerage && (
+                              <>
+                                <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                                <span
+                                  className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight"
+                                  style={{ backgroundColor: brokerageColor(t.current_brokerage) + '22', color: brokerageColor(t.current_brokerage) }}
+                                >{t.current_brokerage}</span>
+                              </>
+                            )}
+                          </div>
+                          {t.account_id != null && accountMap[t.account_id] && (
+                            <span className="text-[10px] text-slate-400 font-medium pl-0.5">{accountMap[t.account_id]}</span>
                           )}
                         </div>
                       )}

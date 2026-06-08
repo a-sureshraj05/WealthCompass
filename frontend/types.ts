@@ -1,6 +1,14 @@
+export interface BrokerageAccount {
+  id: number;
+  snaptrade_account_id: string;
+  brokerage: string;
+  name: string;
+}
+
 export interface StockHolding {
   id: string;
   brokerage: string;
+  account_id?: number | null;
   ticker: string;
   quantity: number;
   averageCostPerShare: number;
@@ -42,6 +50,7 @@ export interface Transaction {
   quantity: number;
   price: number | null;
   brokerage: string;
+  account_id?: number | null;
   ticker: string;
   name: string | null;
   action: string;
@@ -81,6 +90,7 @@ export interface UnrealizedLot {
   gain: number;
   isLongTerm: boolean;
   brokerage: string;
+  account_id?: number | null;
   assetType?: string;
   // Type 1: this lot absorbed a disallowed wash sale loss
   wash_sale_adjustment?: number;

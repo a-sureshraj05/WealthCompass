@@ -90,6 +90,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
 
                 unrealized_gain = UnrealizedGain(
                     brokerage=lot["brokerage"],
+                    account_id=lot.get("account_id"),
                     ticker=underlying_ticker(lot.get("ticker", ticker)),
                     buyDate=buy_date_dt,
                     quantity=lot["quantity"],

@@ -5,7 +5,8 @@ import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LoginPage from './components/LoginPage';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchAnalystData } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchAnalystData, fetchAccounts } from './services/apiService';
+import { BrokerageAccount } from './types';
 import TickerTypeContext from './contexts/TickerTypeContext';
 
 const App: React.FC = () => {
@@ -37,6 +38,7 @@ const App: React.FC = () => {
 };
 
 const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
+  const [accounts, setAccounts] = useState<BrokerageAccount[]>([]);
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
   const [cashBalance, setCashBalance] = useState<number>(0);
   const [buyingPower, setBuyingPower] = useState<Record<string, number>>({});
@@ -71,7 +73,8 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const getHoldings = useCallback(async () => {
     try {
-      const [h, cash, bp] = await Promise.all([fetchHoldings(), fetchCashBalance(), fetchBuyingPower()]);
+      const [h, cash, bp, accts] = await Promise.all([fetchHoldings(), fetchCashBalance(), fetchBuyingPower(), fetchAccounts()]);
+      setAccounts(accts);
       const tickers = [...new Set(h.map(x => x.ticker))];
       const analystData = tickers.length > 0 ? await fetchAnalystData(tickers) : [];
       const sectorMap: Record<string, string> = {};
@@ -322,6 +325,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             setSelectedTickers={setSelectedTickers}
             allKnownBrokerages={allKnownBrokerages}
             buyingPower={buyingPower}
+            accounts={accounts}
           />
         </main>
       </div>

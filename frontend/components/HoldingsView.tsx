@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { StockHolding, UnrealizedLot, RealizedGain } from '../types';
+import { BrokerageAccount, StockHolding, UnrealizedLot, RealizedGain } from '../types';
 import { fetchAnalystData } from '../services/apiService';
 import TickerLogo from './TickerLogo';
 import SortIndicator from './SortIndicator';
@@ -26,6 +26,7 @@ interface Props {
   selectedTickers: string[];
   setSelectedTickers: (v: string[]) => void;
   title?: string;
+  accounts?: BrokerageAccount[];
 }
 
 const HoldingsView: React.FC<Props> = ({
@@ -34,7 +35,11 @@ const HoldingsView: React.FC<Props> = ({
   selectedAssetTypes, setSelectedAssetTypes,
   selectedTickers, setSelectedTickers,
   title,
+  accounts = [],
 }) => {
+  const accountMap = useMemo(() =>
+    Object.fromEntries(accounts.map(a => [a.id, a.name])) as Record<number, string>,
+  [accounts]);
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(
     autoExpand ? new Set([`${autoExpand.ticker}::Equity`]) : new Set()
   );
@@ -51,6 +56,10 @@ const HoldingsView: React.FC<Props> = ({
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [analystMedian, setAnalystMedian] = useState<Record<string, number>>({});
   const [keepPct, setKeepPct] = useState(50);
+  const [viewMode, setViewMode] = useState<'ticker' | 'brokerage'>('ticker');
+  const [expandedBV_L1, setExpandedBV_L1] = useState<Set<string>>(new Set());
+  const [expandedBV_L2, setExpandedBV_L2] = useState<Set<string>>(new Set());
+  const [expandedBV_L3, setExpandedBV_L3] = useState<Set<string>>(new Set());
 
   // Column drag-and-drop state
   const [columnOrder, setColumnOrder] = useState<ColKey[]>(() => {
@@ -164,6 +173,10 @@ const HoldingsView: React.FC<Props> = ({
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
+
+  const toggleBV_L1 = (key: string) => setExpandedBV_L1(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const toggleBV_L2 = (key: string) => setExpandedBV_L2(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const toggleBV_L3 = (key: string) => setExpandedBV_L3(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const allBrokerages = useMemo(() => Array.from(new Set(holdings.map(h => h.brokerage))).sort(), [holdings]);
   const allTickers = useMemo(() => Array.from(new Set(holdings.map(h => h.ticker))).sort(), [holdings]);
@@ -311,6 +324,96 @@ const HoldingsView: React.FC<Props> = ({
 
   type TickerRow = (typeof tickerRows)[0];
   type BrokerageGroup = TickerRow['brokerageGroups'][0];
+
+  const brokerageRows = useMemo(() => {
+    const filtered = holdings.filter(h => {
+      const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(h.brokerage);
+      const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(h.ticker);
+      return matchesBrokerage && matchesTicker;
+    });
+
+    const brokerageMap: Record<string, Record<string, Record<string, StockHolding[]>>> = {};
+    filtered.forEach(h => {
+      const acctKey = h.account_id != null ? String(h.account_id) : '';
+      const tickerKey = `${h.ticker}::${h.assetType || 'Equity'}`;
+      if (!brokerageMap[h.brokerage]) brokerageMap[h.brokerage] = {};
+      if (!brokerageMap[h.brokerage][acctKey]) brokerageMap[h.brokerage][acctKey] = {};
+      if (!brokerageMap[h.brokerage][acctKey][tickerKey]) brokerageMap[h.brokerage][acctKey][tickerKey] = [];
+      brokerageMap[h.brokerage][acctKey][tickerKey].push(h);
+    });
+
+    return Object.keys(brokerageMap).sort().map(brokerage => {
+      const accounts = Object.keys(brokerageMap[brokerage]).sort().map(acctKey => {
+        const account_id = acctKey ? parseInt(acctKey) : null;
+        let tickers = Object.entries(brokerageMap[brokerage][acctKey]).map(([rowKey, tickerHoldings]) => {
+          const ticker = tickerHoldings[0].ticker;
+          const assetType = tickerHoldings[0].assetType || 'Equity';
+          const totalQty = tickerHoldings.reduce((s, h) => s + h.quantity, 0);
+          const totalCost = tickerHoldings.reduce((s, h) => s + h.totalCost, 0);
+          const marketValue = tickerHoldings.reduce((s, h) => s + h.marketValue, 0);
+          const currentPrice = tickerHoldings[0].currentPrice;
+          const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
+          const unrealizedGain = marketValue - totalCost;
+          const r = realizedByTicker[ticker];
+          const afterTaxRealized = r ? (r.gain > 0 ? r.gain * (keepPct / 100) : r.gain) : 0;
+          const lots = unrealizedGains.filter(l =>
+            l.brokerage === brokerage &&
+            l.ticker === ticker &&
+            (l.account_id ?? null) === account_id &&
+            (l.assetType || 'Equity') === assetType
+          ).sort((a, b) => {
+            let diff = 0;
+            switch (lotSortKey) {
+              case 'buyDate':      diff = new Date(a.buyDate).getTime() - new Date(b.buyDate).getTime(); break;
+              case 'quantity':     diff = a.quantity - b.quantity; break;
+              case 'buyPrice':     diff = a.buyPrice - b.buyPrice; break;
+              case 'totalCost':    diff = (a.quantity * a.buyPrice) - (b.quantity * b.buyPrice); break;
+              case 'currentPrice': diff = a.currentPrice - b.currentPrice; break;
+              case 'marketValue':  diff = (a.quantity * a.currentPrice) - (b.quantity * b.currentPrice); break;
+              case 'gain':         diff = a.gain - b.gain; break;
+            }
+            return lotSortDir === 'asc' ? diff : -diff;
+          });
+          return { rowKey, ticker, assetType, totalQty, avgCost, totalCost, currentPrice, marketValue, unrealizedGain, afterTaxRealized, totalGain: unrealizedGain + afterTaxRealized, lots };
+        });
+
+        if (sortKey && sortDirection) {
+          tickers = [...tickers].sort((a, b) => {
+            let valA: any, valB: any;
+            switch (sortKey) {
+              case 'ticker':       valA = a.ticker.toLowerCase(); valB = b.ticker.toLowerCase(); break;
+              case 'quantity':     valA = a.totalQty; valB = b.totalQty; break;
+              case 'totalCost':    valA = a.totalCost; valB = b.totalCost; break;
+              case 'currentPrice': valA = a.currentPrice; valB = b.currentPrice; break;
+              case 'marketValue':  valA = a.marketValue; valB = b.marketValue; break;
+              case 'gain':         valA = a.unrealizedGain; valB = b.unrealizedGain; break;
+              case 'gainPct':      valA = a.avgCost > 0 ? (a.currentPrice - a.avgCost) / a.avgCost : 0; valB = b.avgCost > 0 ? (b.currentPrice - b.avgCost) / b.avgCost : 0; break;
+              case 'analystPrice': valA = analystMedian[a.ticker] ?? -Infinity; valB = analystMedian[b.ticker] ?? -Infinity; break;
+              case 'analystPct':   valA = analystMedian[a.ticker] && a.currentPrice > 0 ? (analystMedian[a.ticker] - a.currentPrice) / a.currentPrice : -Infinity; valB = analystMedian[b.ticker] && b.currentPrice > 0 ? (analystMedian[b.ticker] - b.currentPrice) / b.currentPrice : -Infinity; break;
+              default:             valA = a.ticker.toLowerCase(); valB = b.ticker.toLowerCase();
+            }
+            if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+            if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+          });
+        } else {
+          tickers = [...tickers].sort((a, b) => a.ticker.localeCompare(b.ticker));
+        }
+
+        const acctCost = tickers.reduce((s, t) => s + t.totalCost, 0);
+        const acctMV = tickers.reduce((s, t) => s + t.marketValue, 0);
+        return { account_id, totalCost: acctCost, marketValue: acctMV, unrealizedGain: acctMV - acctCost, tickers };
+      });
+
+      const brkCost = accounts.reduce((s, a) => s + a.totalCost, 0);
+      const brkMV = accounts.reduce((s, a) => s + a.marketValue, 0);
+      return { brokerage, totalCost: brkCost, marketValue: brkMV, unrealizedGain: brkMV - brkCost, accounts };
+    });
+  }, [holdings, unrealizedGains, selectedBrokerages, selectedTickers, realizedByTicker, keepPct, lotSortKey, lotSortDir, sortKey, sortDirection, analystMedian]);
+
+  type BVBrokerageRow = (typeof brokerageRows)[0];
+  type BVAccountRow = BVBrokerageRow['accounts'][0];
+  type BVTickerRow = BVAccountRow['tickers'][0];
 
   // ── Column rendering helpers ──────────────────────────────────────────────
 
@@ -475,6 +578,40 @@ const HoldingsView: React.FC<Props> = ({
     }
   };
 
+  const brokerageBadgeCls = (b: string) =>
+    b.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white'
+    : b.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white'
+    : 'bg-[#E5E5EA] text-[#6E6E73]';
+
+  const renderBVL1 = (col: ColKey, row: BVBrokerageRow) => {
+    const g = row.unrealizedGain;
+    const pct = row.totalCost > 0 ? g / row.totalCost * 100 : 0;
+    const fmt = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    switch (col) {
+      case 'ticker':        return <td key={col} className="px-4 py-2"><span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${brokerageBadgeCls(row.brokerage)}`}>{row.brokerage}</span></td>;
+      case 'totalCost':     return <td key={col} className="px-4 py-2 text-right font-black text-slate-900 text-sm">${fmt(row.totalCost)}</td>;
+      case 'marketValue':   return <td key={col} className="px-4 py-2 text-right font-black text-slate-900 text-sm">${fmt(row.marketValue)}</td>;
+      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-sm font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{g >= 0 ? '+' : '-'}${fmt(Math.abs(g))}</td>;
+      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-sm font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalCost > 0 ? `${g >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—'}</td>;
+      default:              return <td key={col} />;
+    }
+  };
+
+  const renderBVL2 = (col: ColKey, row: BVAccountRow) => {
+    const g = row.unrealizedGain;
+    const pct = row.totalCost > 0 ? g / row.totalCost * 100 : 0;
+    const fmt = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const displayName = row.account_id != null ? (accountMap[row.account_id] ?? `Account ${row.account_id}`) : null;
+    switch (col) {
+      case 'ticker':        return <td key={col} className="px-4 py-2"><span className="text-xs font-semibold text-slate-600">{displayName ?? <span className="text-slate-400 italic">Default</span>}</span></td>;
+      case 'totalCost':     return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">${fmt(row.totalCost)}</td>;
+      case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">${fmt(row.marketValue)}</td>;
+      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{g >= 0 ? '+' : '-'}${fmt(Math.abs(g))}</td>;
+      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalCost > 0 ? `${g >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—'}</td>;
+      default:              return <td key={col} />;
+    }
+  };
+
   if (holdings.length === 0) {
     return (
       <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
@@ -580,13 +717,24 @@ const HoldingsView: React.FC<Props> = ({
           <button onClick={resetFilters} className="text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 shrink-0">
             Reset
           </button>
+
+          <div className="w-px h-8 bg-slate-200 shrink-0" />
+
+          <div className="flex items-center rounded overflow-hidden border border-slate-200 shrink-0">
+            <button onClick={() => setViewMode('ticker')} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors ${viewMode === 'ticker' ? 'bg-[#0F52BA] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
+              By Ticker
+            </button>
+            <button onClick={() => setViewMode('brokerage')} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-l border-slate-200 transition-colors ${viewMode === 'brokerage' ? 'bg-[#0F52BA] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
+              By Brokerage
+            </button>
+          </div>
         </div>
       </div>
 
       {title && <h3 className="font-display text-2xl font-bold text-[#1D1D1F]">{title}</h3>}
 
       {/* Table */}
-      {tickerRows.length === 0 ? (
+      {viewMode === 'ticker' && (tickerRows.length === 0 ? (
         <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
           <div className="max-w-xs mx-auto space-y-4">
             <h4 className="text-slate-900 font-bold">No results found</h4>
@@ -688,7 +836,135 @@ const HoldingsView: React.FC<Props> = ({
             </tbody>
           </table>
         </div>
-      )}
+      ))}
+
+      {/* Brokerage View */}
+      {viewMode === 'brokerage' && (brokerageRows.length === 0 ? (
+        <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
+          <div className="max-w-xs mx-auto space-y-4">
+            <h4 className="text-slate-900 font-bold">No results found</h4>
+            <p className="text-sm text-slate-400">No holdings match these criteria.</p>
+            <button onClick={resetFilters} className="text-[#0F52BA] text-sm font-bold hover:underline">Clear all filters</button>
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white overflow-hidden">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
+                <th className="px-4 py-2 w-8">
+                  <button
+                    onClick={() => { if (expandedBV_L1.size > 0) { setExpandedBV_L1(new Set()); setExpandedBV_L2(new Set()); setExpandedBV_L3(new Set()); } else setExpandedBV_L1(new Set(brokerageRows.map(r => r.brokerage))); }}
+                    className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
+                    title={expandedBV_L1.size > 0 ? 'Collapse all' : 'Expand all'}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {expandedBV_L1.size > 0
+                        ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />}
+                    </svg>
+                  </button>
+                </th>
+                {columnOrder.map(renderTh)}
+              </tr>
+            </thead>
+            <tbody>
+              {brokerageRows.map(bvRow => {
+                const isL1 = expandedBV_L1.has(bvRow.brokerage);
+                return (
+                  <React.Fragment key={bvRow.brokerage}>
+
+                    {/* L1 — Brokerage */}
+                    <tr className={`hover:bg-[#F5F5F7] transition-colors border-t border-[#D2D2D7] ${isL1 ? 'bg-slate-50/70' : ''}`}>
+                      <td className="px-4 py-2">
+                        <button onClick={() => toggleBV_L1(bvRow.brokerage)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all">
+                          <svg className={`w-3.5 h-3.5 transition-transform ${isL1 ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </td>
+                      {columnOrder.map(col => renderBVL1(col, bvRow))}
+                    </tr>
+
+                    {/* L2 — Account (skipped when brokerage has only one unnamed account) */}
+                    {isL1 && (() => {
+                      const skipL2 = bvRow.accounts.length <= 1;
+
+                      const renderTickers = (acct: BVAccountRow, l2Key: string, tickerIndent: string, lotIndent: string) =>
+                        acct.tickers.map((bvTicker: BVTickerRow) => {
+                          const l3Key = `${l2Key}::${bvTicker.rowKey}`;
+                          const isL3 = expandedBV_L3.has(l3Key);
+                          const asTickerRow = { ...bvTicker, brokerageGroups: [], ids: [] } as unknown as TickerRow;
+                          return (
+                            <React.Fragment key={l3Key}>
+                              <tr className={`hover:bg-[#F5F5F7] transition-colors group border-t border-[#D2D2D7] bg-white ${isL3 ? 'bg-slate-50/70' : ''}`}>
+                                <td className={`${tickerIndent} pr-4 py-2`}>
+                                  {bvTicker.lots.length > 0 && (
+                                    <button onClick={() => toggleBV_L3(l3Key)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all">
+                                      <svg className={`w-3.5 h-3.5 transition-transform ${isL3 ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </td>
+                                {columnOrder.map(col => renderL1(col, asTickerRow))}
+                              </tr>
+                              {isL3 && (
+                                <tr className="bg-[#E6EEFB]/30 border-t border-[#D2D2D7]/60">
+                                  <td />
+                                  {columnOrder.map(renderL3Header)}
+                                </tr>
+                              )}
+                              {isL3 && bvTicker.lots.map((lot, idx) => (
+                                <tr
+                                  key={`${l3Key}-lot-${idx}`}
+                                  className={`bg-white border-t border-[#D2D2D7]/40 ${onNavigateToTransactions ? 'cursor-pointer hover:bg-[#E6EEFB]/40 group/lot' : ''}`}
+                                  onClick={() => onNavigateToTransactions?.(bvTicker.ticker, bvRow.brokerage, lot.buyDate)}
+                                >
+                                  <td className={`${lotIndent} py-2`}>
+                                    <div className="flex justify-center pl-4">
+                                      <div className="w-px h-full min-h-[16px] bg-[#D2D2D7]" />
+                                    </div>
+                                  </td>
+                                  {columnOrder.map(col => renderL3(col, asTickerRow, lot))}
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          );
+                        });
+
+                      if (skipL2) {
+                        return renderTickers(bvRow.accounts[0], `${bvRow.brokerage}::${bvRow.accounts[0].account_id ?? ''}::`, 'pl-8', 'pl-12');
+                      }
+
+                      return bvRow.accounts.map(acct => {
+                        const l2Key = `${bvRow.brokerage}::${acct.account_id ?? ''}`;
+                        const isL2 = expandedBV_L2.has(l2Key);
+                        return (
+                          <React.Fragment key={l2Key}>
+                            <tr className={`border-t border-[#D2D2D7] ${isL2 ? 'bg-[#0F52BA]/5' : 'bg-[#F5F5F7]'} hover:bg-[#0F52BA]/5 transition-colors`}>
+                              <td className="pl-8 pr-4 py-2">
+                                <button onClick={() => toggleBV_L2(l2Key)} className="w-5 h-5 flex items-center justify-center rounded-md text-[#D2D2D7] hover:text-[#0F52BA] hover:bg-[#E6EEFB] transition-all">
+                                  <svg className={`w-3 h-3 transition-transform ${isL2 ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </button>
+                              </td>
+                              {columnOrder.map(col => renderBVL2(col, acct))}
+                            </tr>
+                            {isL2 && renderTickers(acct, l2Key, 'pl-12', 'pl-16')}
+                          </React.Fragment>
+                        );
+                      });
+                    })()}
+
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </div>
   );
 };

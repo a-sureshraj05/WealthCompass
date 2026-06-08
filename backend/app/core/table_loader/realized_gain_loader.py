@@ -166,6 +166,7 @@ def load(db: Session, brokerage_name: str = None, tracked_tickers: Optional[Set[
                     "price": t.price,
                     "cost_per_unit": cost_per_unit,
                     "brokerage": t.current_brokerage or t.brokerage,
+                    "account_id": getattr(t, "account_id", None),
                     "ticker": t.ticker,
                     "assetType": t.assetType,
                     "option_symbol": getattr(t, "option_symbol", None),
