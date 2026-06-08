@@ -888,7 +888,7 @@ const HoldingsView: React.FC<Props> = ({
 
                     {/* L2 — Account (skipped when brokerage has only one unnamed account) */}
                     {isL1 && (() => {
-                      const skipL2 = bvRow.accounts.length <= 1;
+                      const skipL2 = bvRow.accounts.every(a => a.account_id === null);
 
                       const renderTickers = (acct: BVAccountRow, l2Key: string, tickerIndent: string, lotIndent: string) =>
                         acct.tickers.map((bvTicker: BVTickerRow) => {
