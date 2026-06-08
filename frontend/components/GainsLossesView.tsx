@@ -223,14 +223,16 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   const yoyData = useMemo(() => {
     if (activeSubTab !== 'realized') return [];
     const years: Record<string, { year: string; shortTerm: number; longTerm: number }> = {};
-    realizedGainsData.forEach(g => {
-      const year = new Date(g.sellDate).getFullYear().toString();
-      if (!years[year]) years[year] = { year, shortTerm: 0, longTerm: 0 };
-      if (g.isLongTerm) years[year].longTerm += g.gain;
-      else years[year].shortTerm += g.gain;
-    });
+    realizedGainsData
+      .filter(g => (selectedBrokerages.length === 0 || selectedBrokerages.includes(g.brokerage)) && (selectedTickers.length === 0 || selectedTickers.includes(g.ticker)))
+      .forEach(g => {
+        const year = new Date(g.sellDate).getFullYear().toString();
+        if (!years[year]) years[year] = { year, shortTerm: 0, longTerm: 0 };
+        if (g.isLongTerm) years[year].longTerm += g.gain;
+        else years[year].shortTerm += g.gain;
+      });
     return Object.values(years).sort((a, b) => a.year.localeCompare(b.year));
-  }, [realizedGainsData, activeSubTab]);
+  }, [realizedGainsData, activeSubTab, selectedBrokerages, selectedTickers]);
 
   const unrealizedBarData = useMemo(() => {
     if (activeSubTab !== 'unrealized') return [];

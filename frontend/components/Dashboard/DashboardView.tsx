@@ -73,6 +73,7 @@ const DashboardView: React.FC<Props> = ({
   const [focusTicker, setFocusTicker] = useState<string | null>(null);
   const [focusDate, setFocusDate] = useState<string | null>(null);
   const [autoExpand, setAutoExpand] = useState<{ ticker: string; brokerage: string } | null>(null);
+  const [optionsTaxRate, setOptionsTaxRate] = useState('40');
 
   useEffect(() => { setSyncMessage(''); }, [activeTab]);
   useEffect(() => { if (activeTab !== 'transactions') { setFocusTicker(null); setFocusDate(null); } }, [activeTab]);
@@ -94,6 +95,7 @@ const DashboardView: React.FC<Props> = ({
           </button>
         </div>
         <HoldingsView
+          title="Equity"
           holdings={holdings.filter(h => (h.assetType || '').toLowerCase() !== 'options')}
           unrealizedGains={unrealizedGains.filter(u => (u.assetType || '').toLowerCase() !== 'options')}
           realizedGains={realizedGains.filter(r => (r.assetType || '').toLowerCase() !== 'options')}
@@ -110,8 +112,23 @@ const DashboardView: React.FC<Props> = ({
           selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers}
         />
         <div className="space-y-2">
-          <h3 className="font-display text-lg font-semibold text-[#1D1D1F]">Options Calculator</h3>
-          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} />
+          <div className="flex items-start justify-between">
+            <h3 className="font-display text-2xl font-bold text-[#1D1D1F]">Options</h3>
+            <div className="text-right">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-500">Tax Rate</span>
+                <input
+                  type="number" min={0} max={100} step={1}
+                  value={optionsTaxRate}
+                  onChange={e => setOptionsTaxRate(e.target.value)}
+                  className="w-12 px-1.5 py-0.5 text-right border border-[#D2D2D7] rounded text-xs focus:outline-none focus:ring-2 focus:ring-[#0F52BA] font-semibold text-[#0A3E8F] bg-[#E6EEFB]/20"
+                />
+                <span className="text-xs font-bold text-slate-500">%</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-0.5">Applied to projected gain from sellable contracts</p>
+            </div>
+          </div>
+          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} taxRateInput={optionsTaxRate} onTaxRateChange={setOptionsTaxRate} />
         </div>
       </div>
     );

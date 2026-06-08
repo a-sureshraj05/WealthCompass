@@ -619,13 +619,13 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
           <table className="w-full text-left">
             <thead>
               <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
-                <th className="px-4 py-4 w-10" title="Hide transaction from calculations">
+                <th className="px-4 py-2 w-10" title="Hide transaction from calculations">
                   <svg className="w-3.5 h-3.5 text-slate-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                   </svg>
                 </th>
                 <th
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
+                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
                   onClick={() => handleSort('date')}
                 >
                   <div className="flex items-center">
@@ -633,7 +633,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
+                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
                   onClick={() => handleSort('brokerage')}
                 >
                   <div className="flex items-center">
@@ -641,7 +641,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
+                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
                   onClick={() => handleSort('assetType')}
                 >
                   <div className="flex items-center">
@@ -649,7 +649,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
+                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
                   onClick={() => handleSort('ticker')}
                 >
                   <div className="flex items-center">
@@ -657,7 +657,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
+                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
                   onClick={() => handleSort('action')}
                 >
                   <div className="flex items-center">
@@ -665,7 +665,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right"
+                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right"
                   onClick={() => handleSort('quantity')}
                 >
                   <div className="flex items-center justify-end">
@@ -673,22 +673,22 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right"
+                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right"
                   onClick={() => handleSort('price')}
                 >
                   <div className="flex items-center justify-end">
                     Price <SI column="price" />
                   </div>
                 </th>
-                <th 
-                  className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right"
+                <th
+                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right whitespace-nowrap w-36"
                   onClick={() => handleSort('amount')}
                 >
                   <div className="flex items-center justify-end">
-                    Total Amount ($) <SI column="amount" />
+                    Amount ($) <SI column="amount" />
                   </div>
                 </th>
-                <th className="px-6 py-4"></th>
+                <th className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Tools</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#D2D2D7]">
@@ -725,7 +725,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                 return (
                   <tr key={`${t.brokerage}-${t.id}`} className={`transition-colors group ${isEditing ? 'bg-[#0F52BA]/5' : t.is_duplicate ? 'bg-orange-50/60 hover:bg-orange-50' : 'hover:bg-[#F5F5F7]'} ${t.is_deleted && !isEditing ? 'opacity-40' : ''}`}>
                     {/* Hide checkbox */}
-                    <td className="px-4 py-4 text-center">
+                    <td className="px-4 py-2 text-center">
                       {!isEditing && (
                         <input
                           type="checkbox"
@@ -738,7 +738,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     </td>
 
                     {/* Date */}
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-2 whitespace-nowrap">
                       {isEditing ? (
                         <input type="date" className={inputCls} value={editDraft.date as string || ''}
                           onChange={e => setEditDraft(d => ({ ...d, date: e.target.value }))} />
@@ -748,7 +748,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     </td>
 
                     {/* Brokerage */}
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-2">
                       {isEditing ? (
                         <input className={inputCls} value={editDraft.brokerage || ''}
                           onChange={e => setEditDraft(d => ({ ...d, brokerage: e.target.value }))} />
@@ -772,7 +772,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     </td>
 
                     {/* Asset Type */}
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-2">
                       {isEditing ? (
                         <input className={inputCls} value={editDraft.assetType || ''}
                           onChange={e => setEditDraft(d => ({ ...d, assetType: e.target.value }))} />
@@ -786,7 +786,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     </td>
 
                     {/* Ticker */}
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-2">
                       {isEditing ? (
                         <input className={inputCls} value={editDraft.ticker || ''}
                           onChange={e => setEditDraft(d => ({ ...d, ticker: e.target.value.toUpperCase() }))} />
@@ -799,7 +799,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     </td>
 
                     {/* Action */}
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-2">
                       {isEditing ? (
                         <input className={inputCls} value={editDraft.action || ''}
                           onChange={e => setEditDraft(d => ({ ...d, action: e.target.value.toUpperCase() }))} />
@@ -811,7 +811,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     </td>
 
                     {/* Quantity */}
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-2 text-right">
                       {isEditing ? (
                         <input type="number" className={inputCls + ' text-right'} value={editDraft.quantity ?? ''}
                           onChange={e => setEditDraft(d => ({ ...d, quantity: parseFloat(e.target.value) }))} />
@@ -821,7 +821,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     </td>
 
                     {/* Price */}
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-2 text-right">
                       {isEditing ? (
                         <input type="number" className={inputCls + ' text-right'} value={editDraft.price ?? ''}
                           onChange={e => setEditDraft(d => ({ ...d, price: parseFloat(e.target.value) }))} />
@@ -831,7 +831,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     </td>
 
                     {/* Total Amount */}
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-2 text-right w-36 whitespace-nowrap">
                       <div className="text-sm font-black text-slate-900">
                         ${(() => {
                           const amount = isEditing
@@ -843,7 +843,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     </td>
 
                     {/* Actions */}
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-2 text-right">
                       {isEditing ? (
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={saveEdit} className="p-1.5 text-white bg-[#0F52BA] hover:bg-[#0A3E8F] rounded transition-all" title="Save">
@@ -970,7 +970,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-6 py-2 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-black text-slate-900">Assign Buy Lots</h3>
                 <p className="text-xs text-slate-400 mt-0.5">
@@ -984,7 +984,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
               </button>
             </div>
 
-            <div className="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
+            <div className="px-6 py-2 space-y-5 max-h-[70vh] overflow-y-auto">
               {lotModalError && (
                 <div className="text-xs text-rose-600 bg-rose-50 rounded-md px-4 py-3 font-medium">{lotModalError}</div>
               )}
@@ -1050,7 +1050,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="px-6 py-2 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
               <p className="text-xs text-slate-400">Remaining quantity falls back to FIFO automatically.</p>
               <div className="flex gap-2">
                 <button onClick={closeLotModal} className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-md transition-colors">Cancel</button>
@@ -1071,7 +1071,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
       {splitTxn && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-6 py-2 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-black text-slate-900">Split Lot</h3>
                 <p className="text-xs text-slate-400 mt-0.5">{splitTxn.ticker} · {splitTxn.brokerage} · {new Date(splitTxn.date).toLocaleDateString('en-CA')}</p>
@@ -1107,7 +1107,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                 {splitError && <p className="text-xs text-rose-500 mt-1.5">{splitError}</p>}
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+            <div className="px-6 py-2 border-t border-slate-100 flex justify-end gap-2">
               <button onClick={closeSplitModal} className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-md transition-colors">Cancel</button>
               <button
                 onClick={confirmSplit}
