@@ -367,8 +367,35 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     const taxEst = stTax + ltTax;
     const total = optTotal + stTotal + ltTotal;
     const ltShare = total !== 0 ? (ltTotal / total) * 100 : 0;
-    return { optTotal, stTotal, ltTotal, taxEst, stTax, ltTax, ltShare };
-  }, [options, shortTerm, longTerm, stTaxRate, ltTaxRate]);
+
+    const isRealized = activeSubTab === 'realized';
+    const sectionMV = (lots: (RealizedGain | UnrealizedLot)[], isOpts: boolean) => {
+      const m = isOpts ? 100 : 1;
+      return lots.reduce((sum, g) => {
+        const price = isRealized ? (g as RealizedGain).sellPrice : (g as UnrealizedLot).currentPrice;
+        return sum + g.quantity * (price ?? 0) * m;
+      }, 0);
+    };
+    const sectionCost = (lots: (RealizedGain | UnrealizedLot)[], isOpts: boolean) => {
+      const m = isOpts ? 100 : 1;
+      return lots.reduce((sum, g) => sum + g.quantity * g.buyPrice * m, 0);
+    };
+
+    const optMV = sectionMV(options, true);
+    const stMV  = sectionMV(shortTerm, false);
+    const ltMV  = sectionMV(longTerm, false);
+    const optCost = sectionCost(options, true);
+    const stCost  = sectionCost(shortTerm, false);
+    const ltCost  = sectionCost(longTerm, false);
+
+    return {
+      optTotal, stTotal, ltTotal, taxEst, stTax, ltTax, ltShare,
+      optMV, stMV, ltMV,
+      optGainPct: optCost > 0 ? (optTotal / optCost) * 100 : 0,
+      stGainPct:  stCost  > 0 ? (stTotal  / stCost)  * 100 : 0,
+      ltGainPct:  ltCost  > 0 ? (ltTotal  / ltCost)  * 100 : 0,
+    };
+  }, [options, shortTerm, longTerm, stTaxRate, ltTaxRate, activeSubTab]);
 
   const toggleTicker = (ticker: string) => setSelectedTickers(selectedTickers.includes(ticker) ? selectedTickers.filter(t => t !== ticker) : [...selectedTickers, ticker]);
   const toggleBrokerage = (broker: string) => setSelectedBrokerages(selectedBrokerages.includes(broker) ? selectedBrokerages.filter(b => b !== broker) : [...selectedBrokerages, broker]);
@@ -757,51 +784,55 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       <div className="bg-white rounded border border-[#D2D2D7] px-6 py-4">
         <div className="flex">
 
-          {/* Col 1 — Total Gain + Tax Est. (blue) */}
+          {/* Col 1 — Total Gain + Tax Est. */}
           <div className="flex-1 flex flex-col justify-between gap-3 pr-6 border-r border-[#E5E5EA]">
-            <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain</p>
-              <p className={`text-2xl font-black ${(stats.optTotal + stats.stTotal + stats.ltTotal) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {(stats.optTotal + stats.stTotal + stats.ltTotal) >= 0 ? '+' : ''}{fmt(stats.optTotal + stats.stTotal + stats.ltTotal)}
-              </p>
-            </div>
-            <div className="bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5">
-              <p className="text-[8px] font-black text-[#0F52BA] uppercase tracking-widest mb-0.5">Tax Est.</p>
-              <p className="text-sm font-black text-[#0F52BA]">{fmt(stats.taxEst)}</p>
+            <div className="flex flex-col gap-3 w-fit">
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain</p>
+                <p className={`text-2xl font-black ${(stats.optTotal + stats.stTotal + stats.ltTotal) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {(stats.optTotal + stats.stTotal + stats.ltTotal) >= 0 ? '+' : ''}{fmt(stats.optTotal + stats.stTotal + stats.ltTotal)}
+                </p>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Tax Est.</p>
+                <p className="text-sm font-black text-slate-500">{fmt(stats.taxEst)}</p>
+              </div>
             </div>
           </div>
 
           {/* Col 2+3 — Options & Short-Term (merged ST Tax box at bottom) */}
           <div className="flex-[2] flex flex-col gap-3 border-r border-[#E5E5EA]">
-            {/* Top: two sub-cols with internal divider */}
-            <div className="flex divide-x divide-[#E5E5EA]">
-              <div className="flex-1 px-6">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Options</p>
-                <p className={`text-2xl font-black ${stats.optTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.optTotal)}</p>
+            <div className="flex flex-col gap-3 w-fit">
+              <div className="flex divide-x divide-[#E5E5EA]">
+                <div className="px-6">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Options</p>
+                  <p className={`text-2xl font-black ${stats.optTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.optTotal)}</p>
+                </div>
+                <div className="pl-6">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Short-Term</p>
+                  <p className={`text-2xl font-black ${stats.stTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.stTotal)}</p>
+                </div>
               </div>
-              <div className="flex-1 px-6">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Short-Term</p>
-                <p className={`text-2xl font-black ${stats.stTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.stTotal)}</p>
-              </div>
-            </div>
-            {/* Bottom: single merged ST Tax box */}
-            <div className="px-6">
-              <div className="bg-yellow-50 border border-yellow-100 rounded px-2.5 py-1.5">
-                <p className="text-[8px] font-black uppercase tracking-widest mb-0.5" style={{ color: '#eab308' }}>ST Tax (Options + ST)</p>
-                <p className="text-sm font-black" style={{ color: '#eab308' }}>{fmt(stats.stTax)}</p>
+              <div className="pl-6">
+                <div className="bg-orange-50 border border-orange-100 rounded px-2.5 py-1.5">
+                  <p className="text-[8px] font-black uppercase tracking-widest mb-0.5" style={{ color: ST_COLOR }}>ST Tax (Options + ST)</p>
+                  <p className="text-sm font-black" style={{ color: ST_COLOR }}>{fmt(stats.stTax)}</p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Col 4 — Long-Term + LT Tax (green) */}
+          {/* Col 4 — Long-Term + LT Tax (blue) */}
           <div className="flex-1 flex flex-col justify-between gap-3 px-6 border-r border-[#E5E5EA]">
-            <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Long-Term</p>
-              <p className={`text-2xl font-black ${stats.ltTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.ltTotal)}</p>
-            </div>
-            <div className="bg-emerald-50 border border-emerald-100 rounded px-2.5 py-1.5">
-              <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-0.5">LT Tax</p>
-              <p className="text-sm font-black text-emerald-700">{fmt(stats.ltTax)}</p>
+            <div className="flex flex-col gap-3 w-fit">
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Long-Term</p>
+                <p className={`text-2xl font-black ${stats.ltTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.ltTotal)}</p>
+              </div>
+              <div className="bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5">
+                <p className="text-[8px] font-black uppercase tracking-widest mb-0.5" style={{ color: LT_COLOR }}>LT Tax</p>
+                <p className="text-sm font-black" style={{ color: LT_COLOR }}>{fmt(stats.ltTax)}</p>
+              </div>
             </div>
           </div>
 
@@ -811,13 +842,13 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-slate-400 w-6">ST</span>
               <input type="number" value={stTaxRate} onChange={e => setStTaxRate(Number(e.target.value))}
-                className="w-12 px-1.5 py-1 bg-yellow-50 border border-yellow-200 rounded text-[11px] font-bold text-center focus:outline-none focus:ring-1 focus:ring-yellow-400" style={{ color: '#eab308' }} title="Short-term rate %" />
+                className="w-12 px-1.5 py-1 bg-orange-50 border border-orange-200 rounded text-[11px] font-bold text-center focus:outline-none focus:ring-1 focus:ring-orange-400" style={{ color: ST_COLOR }} title="Short-term rate %" />
               <span className="text-[10px] text-slate-400">%</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-slate-400 w-6">LT</span>
               <input type="number" value={ltTaxRate} onChange={e => setLtTaxRate(Number(e.target.value))}
-                className="w-12 px-1.5 py-1 bg-emerald-50 border border-emerald-200 rounded text-[11px] font-bold text-emerald-700 text-center focus:outline-none focus:ring-1 focus:ring-emerald-400" title="Long-term rate %" />
+                className="w-12 px-1.5 py-1 bg-blue-50 border border-blue-200 rounded text-[11px] font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-400" style={{ color: LT_COLOR }} title="Long-term rate %" />
               <span className="text-[10px] text-slate-400">%</span>
             </div>
           </div>
@@ -841,16 +872,26 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                 </svg>
                 <div className="text-left">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full inline-block bg-violet-500" />
+                    <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: ST_COLOR }} />
                     <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Options</h4>
                     <span className="text-[10px] text-slate-400 font-medium">· {options.length} lot{options.length !== 1 ? 's' : ''}</span>
-                    <span className="text-[9px] font-black text-violet-400 uppercase tracking-widest border border-violet-200 rounded px-1.5 py-0.5 bg-violet-50">ST rate</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest border rounded px-1.5 py-0.5" style={{ color: ST_COLOR, borderColor: ST_COLOR + '66', backgroundColor: ST_COLOR + '14' }}>ST rate</span>
                   </div>
                 </div>
               </div>
-              <span className={`text-base font-black ${stats.optTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {stats.optTotal >= 0 ? '+' : '-'}${Math.abs(stats.optTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
+              <div className="flex items-center gap-4">
+                <div className="w-36 text-right">
+                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
+                  <p className="text-sm font-black text-slate-700">${stats.optMV.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+                <div className="w-44 text-right">
+                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
+                  <p className={`text-sm font-black ${stats.optTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {stats.optTotal >= 0 ? '+' : '-'}${Math.abs(stats.optTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span className="text-[10px] ml-1 opacity-75">({stats.optGainPct >= 0 ? '+' : ''}{stats.optGainPct.toFixed(2)}%)</span>
+                  </p>
+                </div>
+              </div>
             </button>
             {optExpanded && <GainTableSection title="Options" data={options} prefix="OPT" isOptions={true} />}
           </div>
@@ -868,15 +909,25 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               </svg>
               <div className="text-left">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: '#eab308' }} />
+                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: ST_COLOR }} />
                   <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Short-Term</h4>
                   <span className="text-[10px] text-slate-400 font-medium">· held ≤ 1 year · {shortTerm.length} lot{shortTerm.length !== 1 ? 's' : ''}</span>
                 </div>
               </div>
             </div>
-            <span className={`text-base font-black ${stats.stTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {stats.stTotal >= 0 ? '+' : '-'}${Math.abs(stats.stTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
+            <div className="flex items-center gap-4">
+              <div className="w-36 text-right">
+                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
+                <p className="text-sm font-black text-slate-700">${stats.stMV.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+              <div className="w-44 text-right">
+                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
+                <p className={`text-sm font-black ${stats.stTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {stats.stTotal >= 0 ? '+' : '-'}${Math.abs(stats.stTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <span className="text-[10px] ml-1 opacity-75">({stats.stGainPct >= 0 ? '+' : ''}{stats.stGainPct.toFixed(2)}%)</span>
+                </p>
+              </div>
+            </div>
           </button>
           {stExpanded && <GainTableSection title="Short-Term" data={shortTerm} prefix="ST" isOptions={false} />}
         </div>
@@ -893,15 +944,25 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               </svg>
               <div className="text-left">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: LT_COLOR }} />
                   <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Long-Term</h4>
                   <span className="text-[10px] text-slate-400 font-medium">· held &gt; 1 year · {longTerm.length} lot{longTerm.length !== 1 ? 's' : ''}</span>
                 </div>
               </div>
             </div>
-            <span className={`text-base font-black ${stats.ltTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {stats.ltTotal >= 0 ? '+' : '-'}${Math.abs(stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
+            <div className="flex items-center gap-4">
+              <div className="w-36 text-right">
+                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
+                <p className="text-sm font-black text-slate-700">${stats.ltMV.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+              <div className="w-44 text-right">
+                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
+                <p className={`text-sm font-black ${stats.ltTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {stats.ltTotal >= 0 ? '+' : '-'}${Math.abs(stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <span className="text-[10px] ml-1 opacity-75">({stats.ltGainPct >= 0 ? '+' : ''}{stats.ltGainPct.toFixed(2)}%)</span>
+                </p>
+              </div>
+            </div>
           </button>
           {ltExpanded && <GainTableSection title="Long-Term" data={longTerm} prefix="LT" isOptions={false} />}
         </div>
