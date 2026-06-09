@@ -76,6 +76,7 @@ const DashboardView: React.FC<Props> = ({
   const [focusDate, setFocusDate] = useState<string | null>(null);
   const [autoExpand, setAutoExpand] = useState<{ ticker: string; brokerage: string } | null>(null);
   const [optionsTaxRate, setOptionsTaxRate] = useState('40');
+  const [holdingsViewMode, setHoldingsViewMode] = useState<'ticker' | 'brokerage'>('ticker');
 
   useEffect(() => { setSyncMessage(''); }, [activeTab]);
   useEffect(() => { if (activeTab !== 'transactions') { setFocusTicker(null); setFocusDate(null); } }, [activeTab]);
@@ -113,6 +114,8 @@ const DashboardView: React.FC<Props> = ({
           selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes}
           selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers}
           accounts={accounts}
+          viewMode={holdingsViewMode}
+          onViewModeChange={setHoldingsViewMode}
         />
         <div className="space-y-2">
           <div className="flex items-start justify-between">
@@ -131,7 +134,7 @@ const DashboardView: React.FC<Props> = ({
               <p className="text-[10px] text-slate-400 mt-0.5">Applied to projected gain from sellable contracts</p>
             </div>
           </div>
-          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} taxRateInput={optionsTaxRate} onTaxRateChange={setOptionsTaxRate} accounts={accounts} />
+          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} taxRateInput={optionsTaxRate} onTaxRateChange={setOptionsTaxRate} accounts={accounts} viewMode={holdingsViewMode} />
         </div>
       </div>
     );

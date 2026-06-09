@@ -27,6 +27,8 @@ interface Props {
   setSelectedTickers: (v: string[]) => void;
   title?: string;
   accounts?: BrokerageAccount[];
+  viewMode?: 'ticker' | 'brokerage';
+  onViewModeChange?: (mode: 'ticker' | 'brokerage') => void;
 }
 
 const HoldingsView: React.FC<Props> = ({
@@ -36,6 +38,8 @@ const HoldingsView: React.FC<Props> = ({
   selectedTickers, setSelectedTickers,
   title,
   accounts = [],
+  viewMode = 'ticker',
+  onViewModeChange,
 }) => {
   const accountMap = useMemo(() =>
     Object.fromEntries(accounts.map(a => [a.id, a.name])) as Record<number, string>,
@@ -56,7 +60,6 @@ const HoldingsView: React.FC<Props> = ({
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [analystMedian, setAnalystMedian] = useState<Record<string, number>>({});
   const [keepPct, setKeepPct] = useState(50);
-  const [viewMode, setViewMode] = useState<'ticker' | 'brokerage'>('ticker');
   const [expandedBV_L1, setExpandedBV_L1] = useState<Set<string>>(new Set());
   const [expandedBV_L2, setExpandedBV_L2] = useState<Set<string>>(new Set());
   const [expandedBV_L3, setExpandedBV_L3] = useState<Set<string>>(new Set());
@@ -718,16 +721,15 @@ const HoldingsView: React.FC<Props> = ({
             Reset
           </button>
 
-          <div className="w-px h-8 bg-slate-200 shrink-0" />
-
-          <div className="flex items-center rounded overflow-hidden border border-slate-200 shrink-0">
-            <button onClick={() => setViewMode('ticker')} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors ${viewMode === 'ticker' ? 'bg-[#0F52BA] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
-              By Ticker
-            </button>
-            <button onClick={() => setViewMode('brokerage')} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-l border-slate-200 transition-colors ${viewMode === 'brokerage' ? 'bg-[#0F52BA] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
-              By Brokerage
-            </button>
-          </div>
+          {onViewModeChange && (
+            <>
+              <div className="w-px h-8 bg-slate-200 shrink-0" />
+              <div className="flex items-center rounded overflow-hidden border border-slate-200 shrink-0">
+                <button onClick={() => onViewModeChange('ticker')} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors ${viewMode === 'ticker' ? 'bg-[#0F52BA] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>By Ticker</button>
+                <button onClick={() => onViewModeChange('brokerage')} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-l border-slate-200 transition-colors ${viewMode === 'brokerage' ? 'bg-[#0F52BA] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>By Brokerage</button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

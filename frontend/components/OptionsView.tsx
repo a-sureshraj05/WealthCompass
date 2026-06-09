@@ -54,9 +54,10 @@ interface OptionsViewProps {
   taxRateInput?: string;
   onTaxRateChange?: (v: string) => void;
   accounts?: BrokerageAccount[];
+  viewMode?: 'ticker' | 'brokerage';
 }
 
-const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [], holdings = [], unrealizedGains = [], realizedGains = [], taxRateInput: taxRateInputProp, onTaxRateChange, accounts = [] }) => {
+const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [], holdings = [], unrealizedGains = [], realizedGains = [], taxRateInput: taxRateInputProp, onTaxRateChange, accounts = [], viewMode = 'ticker' }) => {
   const accountMap = useMemo(() => Object.fromEntries(accounts.map(a => [a.id, a.name])) as Record<number, string>, [accounts]);
   const [positions, setPositions] = useState<OptionsPosition[]>([]);
   const [calculator, setCalculator] = useState<OptionsCalculator | null>(null);
@@ -69,7 +70,6 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   const setTaxRateInput = onTaxRateChange ?? setTaxRateInputLocal;
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
   const [expandedBrokerages, setExpandedBrokerages] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<'ticker' | 'brokerage'>('ticker');
   const [expandedBV_L1, setExpandedBV_L1] = useState<Set<string>>(new Set());
   const [expandedBV_L2, setExpandedBV_L2] = useState<Set<string>>(new Set());
   const [expandedBV_L3, setExpandedBV_L3] = useState<Set<string>>(new Set());
@@ -340,7 +340,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
 
   // ── Brokerage view data ───────────────────────────────────────────────────
 
-  const brokerageViewCalcs = useMemo(() => {
+  const brokerageViewCalcs = (() => {
     const bmap: Record<string, Record<string, Record<string, OptionsPosition[]>>> = {};
     filteredPositions.forEach(p => {
       const acctKey = p.account_id != null ? String(p.account_id) : '';
@@ -379,7 +379,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       const brkCost = accts.reduce((s, a) => s + a.totalValue, 0);
       return { brokerage, totalValue: brkCost, marketValue: brkMV, unrealizedGain: brkMV - brkCost, accounts: accts };
     });
-  }, [filteredPositions, calculator, taxRate]);
+  })();
 
   type BVBrokerageRow = (typeof brokerageViewCalcs)[0];
   type BVAccountRow = BVBrokerageRow['accounts'][0];
@@ -491,14 +491,6 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
 
   return (
     <div className="space-y-4">
-
-      {/* View toggle */}
-      <div className="flex justify-end">
-        <div className="flex items-center rounded overflow-hidden border border-slate-200">
-          <button onClick={() => setViewMode('ticker')} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors ${viewMode === 'ticker' ? 'bg-[#0F52BA] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>By Ticker</button>
-          <button onClick={() => setViewMode('brokerage')} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-l border-slate-200 transition-colors ${viewMode === 'brokerage' ? 'bg-[#0F52BA] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>By Brokerage</button>
-        </div>
-      </div>
 
       {/* Ticker View */}
       {viewMode === 'ticker' && <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white shadow-sm overflow-hidden">
