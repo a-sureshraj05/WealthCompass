@@ -432,8 +432,8 @@ const HoldingsView: React.FC<Props> = ({
       case 'ticker':        return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA]')} onClick={() => handleSort('ticker')}><div className="flex items-center gap-0.5">Ticker <SI column="ticker" /></div></th>;
       case 'washSale':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA]')} onClick={() => handleSort('washSale')}><div className="flex items-center gap-0.5">Wash Sale <SI column="washSale" /></div></th>;
       case 'quantity':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('quantity')}><div className="flex items-center justify-end gap-0.5">Quantity <SI column="quantity" /></div></th>;
-      case 'avgCost':       return <th key={col} {...dp} className={thCls(col, 'text-slate-400 text-right')}>Avg Cost</th>;
-      case 'totalCost':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('totalCost')}><div className="flex items-center justify-end gap-0.5">Total Cost <SI column="totalCost" /></div></th>;
+      case 'avgCost':       return <th key={col} {...dp} className={thCls(col, 'text-slate-400 text-right')}>Avg Price</th>;
+      case 'totalCost':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('totalCost')}><div className="flex items-center justify-end gap-0.5">Total Value <SI column="totalCost" /></div></th>;
       case 'currentPrice':  return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('currentPrice')}><div className="flex items-center justify-end gap-0.5">Current Price <SI column="currentPrice" /></div></th>;
       case 'marketValue':   return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('marketValue')}><div className="flex items-center justify-end gap-0.5">Market Value <SI column="marketValue" /></div></th>;
       case 'unrealizedGain':return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('gain')}><div className="flex items-center justify-end gap-0.5">Unrealized $ <SI column="gain" /></div></th>;
@@ -446,14 +446,16 @@ const HoldingsView: React.FC<Props> = ({
     }
   };
 
-  const renderL1 = (col: ColKey, row: TickerRow) => {
+  const renderL1 = (col: ColKey, row: TickerRow, compact = false) => {
+    const sz = compact ? 'text-[11px]' : 'text-sm';
+    const n2 = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     switch (col) {
       case 'ticker': return (
         <td key={col} className="px-4 py-2">
           <div className="flex items-center gap-2">
-            <TickerLogo ticker={row.ticker} size={32} assetType={row.assetType} />
+            <TickerLogo ticker={row.ticker} size={compact ? 24 : 32} assetType={row.assetType} />
             <div>
-              <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{row.ticker}</span>
+              <span className={`${compact ? 'text-[11px]' : 'text-xs'} font-bold text-[#1D1D1F] uppercase tracking-tight`}>{row.ticker}</span>
               {row.assetType?.toLowerCase() === 'options' && <span className="ml-1.5 px-1 py-0.5 rounded bg-violet-100 text-[9px] font-black text-violet-600 uppercase">OPT</span>}
             </div>
           </div>
@@ -474,17 +476,17 @@ const HoldingsView: React.FC<Props> = ({
           })()}
         </td>
       );
-      case 'quantity':      return <td key={col} className="px-4 py-2 text-right font-bold text-slate-800 text-sm">{row.totalQty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
-      case 'avgCost':       return <td key={col} className="px-4 py-2 text-right text-sm text-slate-500 font-medium">${row.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
-      case 'totalCost':     return <td key={col} className="px-4 py-2 text-right font-black text-slate-900 text-sm">${row.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
-      case 'currentPrice':  return <td key={col} className="px-4 py-2 text-right text-sm text-slate-500 font-medium">${row.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
-      case 'marketValue':   return <td key={col} className="px-4 py-2 text-right font-black text-slate-900 text-sm">${row.marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
-      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-sm font-black ${row.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.unrealizedGain >= 0 ? '+' : '-'}${Math.abs(row.unrealizedGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
-      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-sm font-bold ${row.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.avgCost > 0 ? `${row.unrealizedGain >= 0 ? '+' : ''}${((row.currentPrice - row.avgCost) / row.avgCost * 100).toFixed(2)}%` : '—'}</td>;
-      case 'realized':      return <td key={col} className="px-4 py-2 text-right">{row.afterTaxRealized !== 0 ? <div className={`text-sm font-black ${row.afterTaxRealized >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.afterTaxRealized >= 0 ? '+' : '-'}${Math.abs(row.afterTaxRealized).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div> : <div className="text-xs text-slate-300">—</div>}</td>;
-      case 'totalGain':     return <td key={col} className="px-4 py-2 text-right"><div className={`text-sm font-black ${row.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalGain >= 0 ? '+' : '-'}${Math.abs(row.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></td>;
-      case 'analystPrice':  return <td key={col} className="px-4 py-2 text-right text-sm font-bold text-[#0F52BA]">{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-xs text-slate-300">—</span>}</td>;
-      case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && row.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - row.currentPrice) / row.currentPrice) * 100; return <span className={`text-sm font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>; })() : <span className="text-xs text-slate-300">—</span>}</td>;
+      case 'quantity':      return <td key={col} className={`px-4 py-2 text-right font-bold text-slate-800 ${sz}`}>{n2(row.totalQty)}</td>;
+      case 'avgCost':       return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>${n2(row.avgCost)}</td>;
+      case 'totalCost':     return <td key={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>${n2(row.totalCost)}</td>;
+      case 'currentPrice':  return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>${n2(row.currentPrice)}</td>;
+      case 'marketValue':   return <td key={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>${n2(row.marketValue)}</td>;
+      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right ${sz} font-black ${row.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.unrealizedGain >= 0 ? '+' : '-'}${n2(Math.abs(row.unrealizedGain))}</td>;
+      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${row.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.avgCost > 0 ? `${row.unrealizedGain >= 0 ? '+' : ''}${((row.currentPrice - row.avgCost) / row.avgCost * 100).toFixed(2)}%` : '—'}</td>;
+      case 'realized':      return <td key={col} className="px-4 py-2 text-right">{row.afterTaxRealized !== 0 ? <div className={`${sz} font-black ${row.afterTaxRealized >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.afterTaxRealized >= 0 ? '+' : '-'}${n2(Math.abs(row.afterTaxRealized))}</div> : <div className="text-xs text-slate-300">—</div>}</td>;
+      case 'totalGain':     return <td key={col} className="px-4 py-2 text-right"><div className={`${sz} font-black ${row.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalGain >= 0 ? '+' : '-'}${n2(Math.abs(row.totalGain))}</div></td>;
+      case 'analystPrice':  return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold text-[#0F52BA]`}>{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-xs text-slate-300">—</span>}</td>;
+      case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && row.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - row.currentPrice) / row.currentPrice) * 100; return <span className={`${sz} font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>; })() : <span className="text-xs text-slate-300">—</span>}</td>;
       default: return <td key={col} />;
     }
   };
@@ -526,7 +528,7 @@ const HoldingsView: React.FC<Props> = ({
       case 'washSale':      return staticTd('Wash Sale', 'left');
       case 'quantity':      return lotTh('quantity', 'Qty');
       case 'avgCost':       return lotTh('buyPrice', 'Buy Price');
-      case 'totalCost':     return lotTh('totalCost', 'Total Cost');
+      case 'totalCost':     return lotTh('totalCost', 'Total Value');
       case 'currentPrice':  return lotTh('currentPrice', 'Current Price');
       case 'marketValue':   return lotTh('marketValue', 'Market Value');
       case 'unrealizedGain':return lotTh('gain', 'Unrealized $');
@@ -606,11 +608,11 @@ const HoldingsView: React.FC<Props> = ({
     const fmt = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const displayName = row.account_id != null ? (accountMap[row.account_id] ?? `Account ${row.account_id}`) : null;
     switch (col) {
-      case 'ticker':        return <td key={col} className="px-4 py-2"><span className="text-xs font-semibold text-slate-600">{displayName ?? <span className="text-slate-400 italic">Default</span>}</span></td>;
-      case 'totalCost':     return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">${fmt(row.totalCost)}</td>;
-      case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">${fmt(row.marketValue)}</td>;
-      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{g >= 0 ? '+' : '-'}${fmt(Math.abs(g))}</td>;
-      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalCost > 0 ? `${g >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—'}</td>;
+      case 'ticker':        return <td key={col} className="px-4 py-2"><span className="text-sm font-semibold text-slate-700">{displayName ?? <span className="text-slate-400 italic">Default</span>}</span></td>;
+      case 'totalCost':     return <td key={col} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">${fmt(row.totalCost)}</td>;
+      case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">${fmt(row.marketValue)}</td>;
+      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-xs font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{g >= 0 ? '+' : '-'}${fmt(Math.abs(g))}</td>;
+      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-xs font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalCost > 0 ? `${g >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—'}</td>;
       default:              return <td key={col} />;
     }
   };
@@ -909,7 +911,7 @@ const HoldingsView: React.FC<Props> = ({
                                     </button>
                                   )}
                                 </td>
-                                {columnOrder.map(col => renderL1(col, asTickerRow))}
+                                {columnOrder.map(col => renderL1(col, asTickerRow, true))}
                               </tr>
                               {isL3 && (
                                 <tr className="bg-[#E6EEFB]/30 border-t border-[#D2D2D7]/60">

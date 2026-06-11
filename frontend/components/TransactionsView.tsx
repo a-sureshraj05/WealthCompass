@@ -12,6 +12,8 @@ import {
 type DateRangeType = 'all' | '30d' | '90d' | 'ytd' | 'custom';
 type SortKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'action' | 'quantity' | 'price' | 'amount';
 type SortDirection = 'asc' | 'desc' | null;
+type ColKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'action' | 'quantity' | 'price' | 'amount';
+const DEFAULT_COLS: ColKey[] = ['date', 'brokerage', 'assetType', 'ticker', 'action', 'quantity', 'price', 'amount'];
 
 type VisibilityFilter = 'active' | 'hidden' | 'duplicates' | 'all';
 
@@ -50,6 +52,19 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
 
   // Track which sell transaction IDs have at least one lot assignment (for icon highlight)
   const [mappedSellIds, setMappedSellIds] = useState<Set<string>>(new Set());
+
+  const [columnOrder, setColumnOrder] = useState<ColKey[]>(() => {
+    try {
+      const saved = localStorage.getItem('transactions-col-order');
+      if (saved) {
+        const parsed: ColKey[] = JSON.parse(saved);
+        if (parsed.length === DEFAULT_COLS.length && DEFAULT_COLS.every(c => parsed.includes(c))) return parsed;
+      }
+    } catch {}
+    return DEFAULT_COLS;
+  });
+  const [dragCol, setDragCol] = useState<ColKey | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<ColKey | null>(null);
 
   useEffect(() => {
     fetchLotAssignments('').then(all => {
@@ -369,6 +384,141 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
     <SortIndicator column={column} sortKey={sortKey} sortDirection={sortDirection} />
   );
 
+  const reorderCol = (from: ColKey, to: ColKey) => {
+    if (from === to) return;
+    setColumnOrder(prev => {
+      const o = [...prev];
+      const fi = o.indexOf(from), ti = o.indexOf(to);
+      o.splice(fi, 1); o.splice(ti, 0, from);
+      try { localStorage.setItem('transactions-col-order', JSON.stringify(o)); } catch {}
+      return o;
+    });
+  };
+
+  const dragProps = (col: ColKey) => ({
+    draggable: true as const,
+    onDragStart: (e: React.DragEvent) => { e.dataTransfer.effectAllowed = 'move'; setDragCol(col); },
+    onDragOver:  (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverCol(col); },
+    onDrop:      (e: React.DragEvent) => { e.preventDefault(); if (dragCol) reorderCol(dragCol, col); setDragCol(null); setDragOverCol(null); },
+    onDragEnd:   () => { setDragCol(null); setDragOverCol(null); },
+  });
+
+  const thCls = (col: ColKey, extra = '') =>
+    `px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap select-none cursor-grab active:cursor-grabbing transition-colors
+     ${dragOverCol === col ? 'border-l-2 border-[#0F52BA] bg-[#E6EEFB]/40' : ''}
+     ${dragCol === col ? 'opacity-40' : ''}
+     ${extra}`.replace(/\s+/g, ' ').trim();
+
+  const renderTh = (col: ColKey) => {
+    const dp = dragProps(col);
+    const sortable = (label: string, sk: SortKey, right = false) => (
+      <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA]${right ? ' text-right' : ''}`)} onClick={() => handleSort(sk)}>
+        <div className={`flex items-center gap-1${right ? ' justify-end' : ''}`}>{label}<SI column={sk} /></div>
+      </th>
+    );
+    switch (col) {
+      case 'date':      return sortable('Date', 'date');
+      case 'brokerage': return sortable('Brokerage', 'brokerage');
+      case 'assetType': return sortable('Asset Type', 'assetType');
+      case 'ticker':    return sortable('Ticker', 'ticker');
+      case 'action':    return sortable('Action', 'action');
+      case 'quantity':  return sortable('Quantity', 'quantity', true);
+      case 'price':     return sortable('Price', 'price', true);
+      case 'amount':    return sortable('Amount ($)', 'amount', true);
+      default: return <th key={col} />;
+    }
+  };
+
+  const inputCls = "w-full px-2 py-1 text-xs border border-[#0F52BA] rounded bg-white focus:outline-none focus:ring-2 focus:ring-[#0F52BA]";
+
+  const renderCell = (col: ColKey, t: Transaction, isEditing: boolean) => {
+    switch (col) {
+      case 'date': return (
+        <td key={col} className="px-6 py-2 whitespace-nowrap">
+          {isEditing
+            ? <input type="date" className={inputCls} value={editDraft.date as string || ''} onChange={e => setEditDraft(d => ({ ...d, date: e.target.value }))} />
+            : <span className="text-sm text-slate-500 font-medium">{new Date(t.date).toLocaleDateString('en-CA')}</span>}
+        </td>
+      );
+      case 'brokerage': return (
+        <td key={col} className="px-6 py-2">
+          {isEditing ? (
+            <div className="flex flex-col gap-1">
+              <input className={inputCls} value={editDraft.brokerage || ''} onChange={e => setEditDraft(d => ({ ...d, brokerage: e.target.value }))} />
+              {accounts.filter(a => a.brokerage === (editDraft.brokerage || t.brokerage)).length > 0 && (
+                <select className={inputCls} value={editDraft.account_id ?? t.account_id ?? ''} onChange={e => setEditDraft(d => ({ ...d, account_id: e.target.value ? parseInt(e.target.value) : null }))}>
+                  <option value="">— No account —</option>
+                  {accounts.filter(a => a.brokerage === (editDraft.brokerage || t.brokerage)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight" style={{ backgroundColor: brokerageColor(t.brokerage) + '22', color: brokerageColor(t.brokerage) }}>{t.brokerage}</span>
+                {t.current_brokerage && t.current_brokerage !== t.brokerage && (
+                  <>
+                    <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                    <span className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight" style={{ backgroundColor: brokerageColor(t.current_brokerage) + '22', color: brokerageColor(t.current_brokerage) }}>{t.current_brokerage}</span>
+                  </>
+                )}
+              </div>
+              {t.account_id != null && accountMap[t.account_id] && <span className="text-[10px] text-slate-400 font-medium pl-0.5">{accountMap[t.account_id]}</span>}
+            </div>
+          )}
+        </td>
+      );
+      case 'assetType': return (
+        <td key={col} className="px-6 py-2">
+          {isEditing
+            ? <input className={inputCls} value={editDraft.assetType || ''} onChange={e => setEditDraft(d => ({ ...d, assetType: e.target.value }))} />
+            : <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${(t.assetType || '').toLowerCase() === 'options' ? 'bg-purple-100 text-purple-700' : (t.assetType || '').toLowerCase() === 'equity' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{formatAssetType(t.assetType || '')}</span>}
+        </td>
+      );
+      case 'ticker': return (
+        <td key={col} className="px-6 py-2">
+          {isEditing
+            ? <input className={inputCls} value={editDraft.ticker || ''} onChange={e => setEditDraft(d => ({ ...d, ticker: e.target.value.toUpperCase() }))} />
+            : <div className="flex items-center gap-1.5"><TickerLogo ticker={t.ticker} size={24} assetType={t.assetType} /><span className="text-[11px] font-bold text-[#1D1D1F] uppercase tracking-tight">{t.ticker}</span></div>}
+        </td>
+      );
+      case 'action': return (
+        <td key={col} className="px-6 py-2">
+          {isEditing
+            ? <input className={inputCls} value={editDraft.action || ''} onChange={e => setEditDraft(d => ({ ...d, action: e.target.value.toUpperCase() }))} />
+            : <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${['BUY','BTO','DEPOSIT','REI','DIV','DIVIDEND'].includes(t.action.toUpperCase()) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{t.action}</span>}
+        </td>
+      );
+      case 'quantity': return (
+        <td key={col} className="px-6 py-2 text-right whitespace-nowrap">
+          {isEditing
+            ? <input type="number" className={inputCls + ' text-right'} value={editDraft.quantity ?? ''} onChange={e => setEditDraft(d => ({ ...d, quantity: parseFloat(e.target.value) }))} />
+            : <span className="text-sm text-slate-700 font-bold">{t.quantity}</span>}
+        </td>
+      );
+      case 'price': return (
+        <td key={col} className="px-6 py-2 text-right whitespace-nowrap">
+          {isEditing
+            ? <input type="number" className={inputCls + ' text-right'} value={editDraft.price ?? ''} onChange={e => setEditDraft(d => ({ ...d, price: parseFloat(e.target.value) }))} />
+            : <span className="text-sm text-slate-500 font-medium">${(t.price ?? 0).toFixed(2)}</span>}
+        </td>
+      );
+      case 'amount': return (
+        <td key={col} className="px-6 py-2 text-right whitespace-nowrap">
+          <div className="text-sm font-black text-slate-900">
+            ${(() => {
+              const amount = isEditing
+                ? ((editDraft.quantity ?? t.quantity) * (editDraft.price ?? t.price ?? 0)) || t.totalCost || 0
+                : t.totalCost || (t.quantity * (t.price ?? 0));
+              return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            })()}
+          </div>
+        </td>
+      );
+      default: return <td key={col} />;
+    }
+  };
+
   return (
     <div className="space-y-4">
       {focusTicker && (
@@ -626,77 +776,13 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                   </svg>
                 </th>
-                <th
-                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
-                  onClick={() => handleSort('date')}
-                >
-                  <div className="flex items-center">
-                    Date <SI column="date" />
-                  </div>
-                </th>
-                <th 
-                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
-                  onClick={() => handleSort('brokerage')}
-                >
-                  <div className="flex items-center">
-                    Brokerage <SI column="brokerage" />
-                  </div>
-                </th>
-                <th 
-                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
-                  onClick={() => handleSort('assetType')}
-                >
-                  <div className="flex items-center">
-                    Asset Type <SI column="assetType" />
-                  </div>
-                </th>
-                <th 
-                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
-                  onClick={() => handleSort('ticker')}
-                >
-                  <div className="flex items-center">
-                    Ticker <SI column="ticker" />
-                  </div>
-                </th>
-                <th 
-                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header"
-                  onClick={() => handleSort('action')}
-                >
-                  <div className="flex items-center">
-                    Action <SI column="action" />
-                  </div>
-                </th>
-                <th 
-                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right"
-                  onClick={() => handleSort('quantity')}
-                >
-                  <div className="flex items-center justify-end">
-                    Quantity <SI column="quantity" />
-                  </div>
-                </th>
-                <th 
-                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right"
-                  onClick={() => handleSort('price')}
-                >
-                  <div className="flex items-center justify-end">
-                    Price <SI column="price" />
-                  </div>
-                </th>
-                <th
-                  className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:text-[#0F52BA] transition-colors group/header text-right whitespace-nowrap w-36"
-                  onClick={() => handleSort('amount')}
-                >
-                  <div className="flex items-center justify-end">
-                    Amount ($) <SI column="amount" />
-                  </div>
-                </th>
+                {columnOrder.map(renderTh)}
                 <th className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Tools</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#D2D2D7]">
               {filteredTransactions.map((t) => {
                 const isEditing = editingId === t.id;
-                const inputCls = "w-full px-2 py-1 text-xs border border-[#0F52BA] rounded bg-white focus:outline-none focus:ring-2 focus:ring-[#0F52BA]";
 
                 const startEdit = () => {
                   setEditingId(t.id);
@@ -739,129 +825,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                       )}
                     </td>
 
-                    {/* Date */}
-                    <td className="px-6 py-2 whitespace-nowrap">
-                      {isEditing ? (
-                        <input type="date" className={inputCls} value={editDraft.date as string || ''}
-                          onChange={e => setEditDraft(d => ({ ...d, date: e.target.value }))} />
-                      ) : (
-                        <span className="text-sm text-slate-500 font-medium">{new Date(t.date).toLocaleDateString('en-CA')}</span>
-                      )}
-                    </td>
-
-                    {/* Brokerage */}
-                    <td className="px-6 py-2">
-                      {isEditing ? (
-                        <div className="flex flex-col gap-1">
-                          <input className={inputCls} value={editDraft.brokerage || ''}
-                            onChange={e => setEditDraft(d => ({ ...d, brokerage: e.target.value }))} />
-                          {accounts.filter(a => a.brokerage === (editDraft.brokerage || t.brokerage)).length > 0 && (
-                            <select
-                              className={inputCls}
-                              value={editDraft.account_id ?? t.account_id ?? ''}
-                              onChange={e => setEditDraft(d => ({ ...d, account_id: e.target.value ? parseInt(e.target.value) : null }))}
-                            >
-                              <option value="">— No account —</option>
-                              {accounts.filter(a => a.brokerage === (editDraft.brokerage || t.brokerage)).map(a => (
-                                <option key={a.id} value={a.id}>{a.name}</option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight"
-                              style={{ backgroundColor: brokerageColor(t.brokerage) + '22', color: brokerageColor(t.brokerage) }}
-                            >{t.brokerage}</span>
-                            {t.current_brokerage && t.current_brokerage !== t.brokerage && (
-                              <>
-                                <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                                <span
-                                  className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight"
-                                  style={{ backgroundColor: brokerageColor(t.current_brokerage) + '22', color: brokerageColor(t.current_brokerage) }}
-                                >{t.current_brokerage}</span>
-                              </>
-                            )}
-                          </div>
-                          {t.account_id != null && accountMap[t.account_id] && (
-                            <span className="text-[10px] text-slate-400 font-medium pl-0.5">{accountMap[t.account_id]}</span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Asset Type */}
-                    <td className="px-6 py-2">
-                      {isEditing ? (
-                        <input className={inputCls} value={editDraft.assetType || ''}
-                          onChange={e => setEditDraft(d => ({ ...d, assetType: e.target.value }))} />
-                      ) : (
-                        <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
-                          (t.assetType || '').toLowerCase() === 'options' ? 'bg-purple-100 text-purple-700' :
-                          (t.assetType || '').toLowerCase() === 'equity' ? 'bg-blue-100 text-blue-700' :
-                          'bg-slate-100 text-slate-600'
-                        }`}>{formatAssetType(t.assetType || '')}</span>
-                      )}
-                    </td>
-
-                    {/* Ticker */}
-                    <td className="px-6 py-2">
-                      {isEditing ? (
-                        <input className={inputCls} value={editDraft.ticker || ''}
-                          onChange={e => setEditDraft(d => ({ ...d, ticker: e.target.value.toUpperCase() }))} />
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <TickerLogo ticker={t.ticker} size={32} assetType={t.assetType} />
-                          <span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{t.ticker}</span>
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Action */}
-                    <td className="px-6 py-2">
-                      {isEditing ? (
-                        <input className={inputCls} value={editDraft.action || ''}
-                          onChange={e => setEditDraft(d => ({ ...d, action: e.target.value.toUpperCase() }))} />
-                      ) : (
-                        <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${
-                          ['BUY', 'BTO', 'DEPOSIT', 'REI', 'DIV', 'DIVIDEND'].includes(t.action.toUpperCase()) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                        }`}>{t.action}</span>
-                      )}
-                    </td>
-
-                    {/* Quantity */}
-                    <td className="px-6 py-2 text-right">
-                      {isEditing ? (
-                        <input type="number" className={inputCls + ' text-right'} value={editDraft.quantity ?? ''}
-                          onChange={e => setEditDraft(d => ({ ...d, quantity: parseFloat(e.target.value) }))} />
-                      ) : (
-                        <span className="text-sm text-slate-700 font-bold">{t.quantity}</span>
-                      )}
-                    </td>
-
-                    {/* Price */}
-                    <td className="px-6 py-2 text-right">
-                      {isEditing ? (
-                        <input type="number" className={inputCls + ' text-right'} value={editDraft.price ?? ''}
-                          onChange={e => setEditDraft(d => ({ ...d, price: parseFloat(e.target.value) }))} />
-                      ) : (
-                        <span className="text-sm text-slate-500 font-medium">${(t.price ?? 0).toFixed(2)}</span>
-                      )}
-                    </td>
-
-                    {/* Total Amount */}
-                    <td className="px-6 py-2 text-right w-36 whitespace-nowrap">
-                      <div className="text-sm font-black text-slate-900">
-                        ${(() => {
-                          const amount = isEditing
-                            ? ((editDraft.quantity ?? t.quantity) * (editDraft.price ?? t.price ?? 0)) || t.totalCost || 0
-                            : t.totalCost || (t.quantity * (t.price ?? 0));
-                          return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        })()}
-                      </div>
-                    </td>
+                    {columnOrder.map(col => renderCell(col, t, isEditing))}
 
                     {/* Actions */}
                     <td className="px-6 py-2 text-right">

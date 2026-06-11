@@ -77,8 +77,8 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   const toggleBV_L2 = (k: string) => setExpandedBV_L2(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const toggleBV_L3 = (k: string) => setExpandedBV_L3(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
   type SortKey = 'ticker' | 'washSale' | 'totalQty' | 'avgBuyPrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'targetPrice';
-  type ColKey = 'ticker' | 'washSale' | 'totalQty' | 'avgBuyPrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'gainToSell' | 'targetPrice';
-  const DEFAULT_COLS: ColKey[] = ['ticker','washSale','totalQty','avgBuyPrice','totalValue','avgCurrentPrice','marketValue','unrealizedGain','unrealizedPct','retainQty','sellableQty','gainToSell','targetPrice'];
+  type ColKey = 'ticker' | 'washSale' | 'totalQty' | 'avgBuyPrice' | 'strikePrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'gainToSell' | 'targetPrice';
+  const DEFAULT_COLS: ColKey[] = ['ticker','washSale','totalQty','avgBuyPrice','strikePrice','totalValue','avgCurrentPrice','marketValue','unrealizedGain','unrealizedPct','retainQty','sellableQty','gainToSell','targetPrice'];
   const [columnOrder, setColumnOrder] = useState<ColKey[]>(() => {
     try {
       const saved = localStorage.getItem('options-col-order');
@@ -390,6 +390,12 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     : b.toLowerCase().includes('fidelity') ? 'bg-[#417505] text-white'
     : 'bg-[#E5E5EA] text-[#6E6E73]';
 
+  const parseOCCStrike = (symbol?: string | null): number | null => {
+    if (!symbol || symbol.length < 15) return null;
+    const n = parseInt(symbol.slice(-8), 10);
+    return isNaN(n) ? null : n / 1000;
+  };
+
   // ── Column render helpers ─────────────────────────────────────────────────
 
   const renderTh = (col: ColKey) => {
@@ -399,6 +405,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       case 'washSale':      return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] ${sortKey==='washSale'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('washSale')}>Wash Sale <SI col="washSale" /></th>;
       case 'totalQty':      return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='totalQty'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('totalQty')}><div className="flex items-center justify-end">Contracts <SI col="totalQty" /></div></th>;
       case 'avgBuyPrice':   return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='avgBuyPrice'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('avgBuyPrice')}><div className="flex items-center justify-end">Avg Price <SI col="avgBuyPrice" /></div></th>;
+      case 'strikePrice':   return <th key={col} {...dp} className={thCls(col, 'text-slate-400 text-right')}>Strike</th>;
       case 'totalValue':    return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='totalValue'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('totalValue')}><div className="flex items-center justify-end">Total Value <SI col="totalValue" /></div></th>;
       case 'avgCurrentPrice':return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='avgCurrentPrice'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('avgCurrentPrice')}><div className="flex items-center justify-end">Current Price <SI col="avgCurrentPrice" /></div></th>;
       case 'marketValue':   return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='marketValue'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('marketValue')}><div className="flex items-center justify-end">Market Value <SI col="marketValue" /></div></th>;
@@ -412,21 +419,23 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     }
   };
 
-  const renderL1 = (col: ColKey, tc: TickerCalc) => {
+  const renderL1 = (col: ColKey, tc: TickerCalc, compact = false) => {
+    const sz = compact ? 'text-[11px]' : 'text-sm';
     switch (col) {
-      case 'ticker': return <td key={col} className="px-4 py-2"><div className="flex items-center gap-2"><TickerLogo ticker={tc.ticker} size={32} assetType={assetTypeByTicker[tc.ticker]} /><span className="text-xs font-bold text-[#1D1D1F] uppercase tracking-tight">{tc.ticker}</span></div></td>;
+      case 'ticker': return <td key={col} className="px-4 py-2"><div className="flex items-center gap-2"><TickerLogo ticker={tc.ticker} size={compact ? 24 : 32} assetType={assetTypeByTicker[tc.ticker]} /><span className={`${compact ? 'text-[11px]' : 'text-xs'} font-bold text-[#1D1D1F] uppercase tracking-tight`}>{tc.ticker}</span></div></td>;
       case 'washSale': return <td key={col} className="px-4 py-2">{(() => { const ws = washSaleByTicker[tc.ticker]; const isRed = ws && ((ws.lastLossDaysAgo !== null && ws.lastLossDaysAgo <= 30) || ws.type1Count > 0); const isYellow = !isRed && ws && ws.type2Count > 0; if (isRed) { const detail = ws.type1Count > 0 && ws.minDays !== Infinity ? `${ws.minDays}d to go` : ws.lastLossDaysAgo !== null ? `loss ${ws.lastLossDaysAgo}d ago` : ''; return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" /><div><p className="text-[10px] font-black text-rose-600">Active</p>{detail && <p className="text-[9px] text-rose-400">{detail}</p>}</div></div>; } if (isYellow) return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" /><div><p className="text-[10px] font-black text-amber-600">Caution</p><p className="text-[9px] text-amber-400">don't sell at loss</p></div></div>; return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" /><p className="text-[10px] font-medium text-emerald-600">Clear</p></div>; })()}</td>;
-      case 'totalQty':      return <td key={col} className="px-4 py-2 text-right font-bold text-slate-800 text-sm">{fmt(tc.totalQty, 0)}</td>;
-      case 'avgBuyPrice':   return <td key={col} className="px-4 py-2 text-right text-sm text-slate-500 font-medium">{fmtCurrency(tc.avgBuyPrice)}</td>;
-      case 'totalValue':    return <td key={col} className="px-4 py-2 text-right font-black text-slate-900 text-sm">{fmtCurrency(tc.totalValue)}</td>;
-      case 'avgCurrentPrice':return <td key={col} className="px-4 py-2 text-right text-sm text-slate-500 font-medium">{fmtCurrency(tc.avgCurrentPrice)}</td>;
-      case 'marketValue':   return <td key={col} className="px-4 py-2 text-right font-black text-slate-900 text-sm">{fmtCurrency(tc.marketValue)}</td>;
-      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-sm font-black ${tc.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.unrealizedGain >= 0 ? '+' : '-'}{fmtCurrency(tc.unrealizedGain)}</td>;
-      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-sm font-bold ${tc.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.avgBuyPrice > 0 ? `${tc.unrealizedGain >= 0 ? '+' : ''}${((tc.avgCurrentPrice - tc.avgBuyPrice) / tc.avgBuyPrice * 100).toFixed(2)}%` : '—'}</td>;
-      case 'retainQty':     return <td key={col} className="px-4 py-2 text-right font-medium text-slate-600 text-sm">{fmt(tc.retainQty, 0)}</td>;
-      case 'sellableQty':   return <td key={col} className="px-4 py-2 text-right font-medium text-slate-600 text-sm">{fmt(tc.sellableQty, 0)}</td>;
-      case 'gainToSell':    return <td key={col} className="px-4 py-2 text-right">{tc.projectedGainPct !== null ? <span className={`font-bold text-sm ${tc.isCovered ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.isCovered ? '✓ Covered' : `+${fmt(tc.projectedGainPct)}%`}</span> : <span className="text-xs text-slate-400">No sellable</span>}</td>;
-      case 'targetPrice':   return <td key={col} className="px-4 py-2 text-right">{tc.targetPrice !== null && !tc.isCovered ? <span className="font-bold text-[#0A3E8F] text-sm">{fmtCurrency(tc.targetPrice)}</span> : <span className="text-xs text-slate-300">—</span>}</td>;
+      case 'totalQty':       return <td key={col} className={`px-4 py-2 text-right font-bold text-slate-800 ${sz}`}>{fmt(tc.totalQty, 0)}</td>;
+      case 'avgBuyPrice':    return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>{fmtCurrency(tc.avgBuyPrice)}</td>;
+      case 'strikePrice':    return <td key={col} />;
+      case 'totalValue':     return <td key={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>{fmtCurrency(tc.totalValue)}</td>;
+      case 'avgCurrentPrice':return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>{fmtCurrency(tc.avgCurrentPrice)}</td>;
+      case 'marketValue':    return <td key={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>{fmtCurrency(tc.marketValue)}</td>;
+      case 'unrealizedGain': return <td key={col} className={`px-4 py-2 text-right ${sz} font-black ${tc.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.unrealizedGain >= 0 ? '+' : '-'}{fmtCurrency(tc.unrealizedGain)}</td>;
+      case 'unrealizedPct':  return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${tc.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.avgBuyPrice > 0 ? `${tc.unrealizedGain >= 0 ? '+' : ''}${((tc.avgCurrentPrice - tc.avgBuyPrice) / tc.avgBuyPrice * 100).toFixed(2)}%` : '—'}</td>;
+      case 'retainQty':      return <td key={col} className={`px-4 py-2 text-right font-medium text-slate-600 ${sz}`}>{fmt(tc.retainQty, 0)}</td>;
+      case 'sellableQty':    return <td key={col} className={`px-4 py-2 text-right font-medium text-slate-600 ${sz}`}>{fmt(tc.sellableQty, 0)}</td>;
+      case 'gainToSell':     return <td key={col} className="px-4 py-2 text-right">{tc.projectedGainPct !== null ? <span className={`font-bold ${sz} ${tc.isCovered ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.isCovered ? '✓ Covered' : `+${fmt(tc.projectedGainPct)}%`}</span> : <span className="text-xs text-slate-400">No sellable</span>}</td>;
+      case 'targetPrice':    return <td key={col} className="px-4 py-2 text-right">{tc.targetPrice !== null && !tc.isCovered ? <span className={`font-bold text-[#0A3E8F] ${sz}`}>{fmtCurrency(tc.targetPrice)}</span> : <span className="text-xs text-slate-300">—</span>}</td>;
       default: return <td key={col} />;
     }
   };
@@ -437,6 +446,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       case 'washSale':      return <td key={col} />;
       case 'totalQty':      return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{fmt(bg.totalQty, 0)}</td>;
       case 'avgBuyPrice':   return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(bg.avgBuyPrice)}</td>;
+      case 'strikePrice':   return <td key={col} />;
       case 'totalValue':    return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{fmtCurrency(bg.totalValue)}</td>;
       case 'avgCurrentPrice':return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(bg.avgCurrentPrice)}</td>;
       case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{fmtCurrency(bg.marketValue)}</td>;
@@ -457,6 +467,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       case 'washSale':      return s('Wash Sale', 'left');
       case 'totalQty':      return s('Qty');
       case 'avgBuyPrice':   return s('Avg Price');
+      case 'strikePrice':   return s('Strike');
       case 'totalValue':    return s('Total Value');
       case 'avgCurrentPrice':return s('Current Price');
       case 'marketValue':   return s('Market Value');
@@ -476,6 +487,10 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       case 'washSale': return <td key={col} className="px-4 py-2">{(() => { const key = `${pos.ticker}::${pos.brokerage}::${pos.buyDate.slice(0,10)}`; const ws = washSaleByPosition[key]; if (ws?.daysToGo > 0) return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" /><div><p className="text-[9px] font-black text-rose-600">Active</p><p className="text-[9px] text-rose-400">{ws.daysToGo}d to go</p></div></div>; if (ws?.atRisk && ws.riskDaysAgo <= 30) return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" /><div><p className="text-[9px] font-black text-amber-600">Caution</p><p className="text-[9px] text-amber-400">new buy · {ws.riskDaysAgo}d ago</p></div></div>; return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" /><p className="text-[9px] font-medium text-emerald-600">Clear</p></div>; })()}</td>;
       case 'totalQty':      return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{fmt(pos.quantity, 0)}</td>;
       case 'avgBuyPrice':   return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(pos.buyPrice)}</td>;
+      case 'strikePrice': {
+        const strike = parseOCCStrike(pos.option_symbol);
+        return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{strike != null ? `$${fmt(strike)}` : <span className="text-slate-300">—</span>}</td>;
+      }
       case 'totalValue':    return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(posTotalValue)}</td>;
       case 'avgCurrentPrice':return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(pos.currentPrice)}</td>;
       case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(posMarketValue)}</td>;
@@ -648,7 +663,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                                     <svg className={`w-3.5 h-3.5 transition-transform ${isL3 ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                                   </button>}
                                 </td>
-                                {columnOrder.map(col => renderL1(col, tc))}
+                                {columnOrder.map(col => renderL1(col, tc, true))}
                               </tr>
                               {isL3 && tc.positions.map((pos, idx) => (
                                 <tr key={`${l3Key}-${idx}`} className="bg-white border-t border-[#D2D2D7]/40">
@@ -674,11 +689,11 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                                   <svg className={`w-3 h-3 transition-transform ${isL2 ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                                 </button>
                               </td>
-                              <td className="px-4 py-2"><span className="text-xs font-semibold text-slate-600">{displayName ?? <span className="text-slate-400 italic">Default</span>}</span></td>
+                              <td className="px-4 py-2"><span className="text-sm font-semibold text-slate-700">{displayName ?? <span className="text-slate-400 italic">Default</span>}</span></td>
                               {columnOrder.filter(c => c !== 'ticker').map(c => {
-                                if (c === 'totalValue') return <td key={c} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{fmtVal(acct.totalValue)}</td>;
-                                if (c === 'marketValue') return <td key={c} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{fmtVal(acct.marketValue)}</td>;
-                                if (c === 'unrealizedGain') return <td key={c} className={`px-4 py-2 text-right text-[11px] font-bold ${acct.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{acct.unrealizedGain >= 0 ? '+' : '-'}{fmtVal(acct.unrealizedGain)}</td>;
+                                if (c === 'totalValue') return <td key={c} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">{fmtVal(acct.totalValue)}</td>;
+                                if (c === 'marketValue') return <td key={c} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">{fmtVal(acct.marketValue)}</td>;
+                                if (c === 'unrealizedGain') return <td key={c} className={`px-4 py-2 text-right text-xs font-bold ${acct.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{acct.unrealizedGain >= 0 ? '+' : '-'}{fmtVal(acct.unrealizedGain)}</td>;
                                 return <td key={c} />;
                               })}
                             </tr>

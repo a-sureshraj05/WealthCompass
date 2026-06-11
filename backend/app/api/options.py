@@ -55,6 +55,7 @@ def get_open_options(db: Session = Depends(get_db)):
             "currentPrice": lot.currentPrice,
             "unrealizedGain": lot.unrealizedGain,
             "isLongTerm": lot.isLongTerm,
+            "option_symbol": lot.option_symbol,
         })
     return result
 
