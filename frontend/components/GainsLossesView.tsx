@@ -515,12 +515,12 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">{tEntry.brokerages.map(b => badge(b))}</div>
                     </td>
-                    <td className="px-4 py-3 text-right text-[11px] text-slate-900 font-bold">
+                    <td className="px-4 py-3 text-right text-sm text-slate-900 font-bold">
                       {tEntry.totalQty % 1 === 0 ? tEntry.totalQty.toFixed(0) : tEntry.totalQty.toFixed(4)}
                     </td>
-                    <td className="px-4 py-3 text-right text-[11px] text-slate-700 font-semibold">{fmt(tEntry.totalProceeds)}</td>
-                    <td className="px-4 py-3 text-right text-[11px] text-slate-500">{fmt(tEntry.totalCost)}</td>
-                    <td className={`px-4 py-3 text-right text-[11px] font-black ${tEntry.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    <td className="px-4 py-3 text-right text-sm text-slate-700 font-semibold">{fmt(tEntry.totalProceeds)}</td>
+                    <td className="px-4 py-3 text-right text-sm text-slate-500">{fmt(tEntry.totalCost)}</td>
+                    <td className={`px-4 py-3 text-right text-sm font-black ${tEntry.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {tEntry.totalGain >= 0 ? '+' : '-'}${Math.abs(tEntry.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
@@ -536,7 +536,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                     return (
                       <tr key={g.id} className={`bg-[#FAFAFA] hover:bg-[#F2F2F7] transition-colors ${isLast ? 'border-b border-[#D2D2D7]' : 'border-b border-[#EBEBEB]'}`}>
                         <td className="px-4 py-2 pl-14">
-                          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
+                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
                             <span className="text-slate-300 text-xs">↳</span>
                             <span>Opened {fmtDate(g.buyDate)}</span>
                             {activeSubTab === 'realized' && (
@@ -545,12 +545,12 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                           </div>
                         </td>
                         <td className="px-4 py-2">{badge(g.brokerage)}</td>
-                        <td className="px-4 py-2 text-right text-[10px] text-slate-700 font-medium">
+                        <td className="px-4 py-2 text-right text-[11px] text-slate-700 font-medium">
                           {g.quantity.toFixed(g.quantity % 1 === 0 ? 0 : 4)}
                         </td>
-                        <td className="px-4 py-2 text-right text-[10px] text-slate-600">{fmt(proc)}</td>
-                        <td className="px-4 py-2 text-right text-[10px] text-slate-400">{fmt(cost)}</td>
-                        <td className={`px-4 py-2 text-right text-[10px] font-bold ${g.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        <td className="px-4 py-2 text-right text-[11px] text-slate-600">{fmt(proc)}</td>
+                        <td className="px-4 py-2 text-right text-[11px] text-slate-400">{fmt(cost)}</td>
+                        <td className={`px-4 py-2 text-right text-[11px] font-bold ${g.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {g.gain >= 0 ? '+' : '-'}${Math.abs(g.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>

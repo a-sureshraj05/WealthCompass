@@ -45,6 +45,7 @@ class RealizedGain(BaseModel):
 class UnrealizedGain(BaseModel):
     id: int
     brokerage: str
+    account_id: Optional[int] = None
     ticker: str
     buyDate: datetime.datetime
     quantity: float
@@ -57,6 +58,7 @@ class UnrealizedGain(BaseModel):
     wash_sale_clear_date: Optional[datetime.date] = None
     wash_sale_at_risk: bool = False
     wash_sale_risk_trigger_date: Optional[datetime.date] = None
+    option_symbol: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -66,6 +68,7 @@ class UnrealizedGain(BaseModel):
 class Holding(BaseModel):
     id: int
     brokerage: str
+    account_id: Optional[int] = None
     ticker: str
     quantity: float
     averageCostPerShare: float
@@ -105,6 +108,7 @@ class Transaction(BaseModel):
 class TransactionUpdate(BaseModel):
     date: Optional[str] = None
     brokerage: Optional[str] = None
+    account_id: Optional[int] = None
     ticker: Optional[str] = None
     name: Optional[str] = None
     action: Optional[str] = None
@@ -116,8 +120,19 @@ class TransactionUpdate(BaseModel):
     current_brokerage: Optional[str] = None
 
 
+class BulkAccountRequest(BaseModel):
+    brokerage: str
+    account_id: int
+    verified_only: bool = True
+
+
 class SplitRequest(BaseModel):
     quantity: float
+
+
+def _assert_mutable(transaction):
+    if transaction.is_backend_verified:
+        raise HTTPException(status_code=403, detail="Transaction is backend-verified and immutable.")
 
 
 @router.get("/transactions", response_model=List[Transaction])
@@ -161,6 +176,7 @@ def update_transaction(transaction_id: int, updates: TransactionUpdate, db: Sess
     transaction = db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    _assert_mutable(transaction)
     # Snapshot original values only on the first edit
     if not transaction.is_override:
         transaction.original_values = json.dumps({
@@ -197,6 +213,8 @@ def update_transaction(transaction_id: int, updates: TransactionUpdate, db: Sess
         transaction.assetType = updates.assetType
     if updates.current_brokerage is not None:
         transaction.current_brokerage = updates.current_brokerage
+    if updates.account_id is not None:
+        transaction.account_id = updates.account_id
     transaction.is_override = True
     db.commit()
     db.refresh(transaction)
@@ -208,6 +226,7 @@ def revert_transaction(transaction_id: int, db: Session = Depends(get_db)):
     transaction = db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    _assert_mutable(transaction)
     if not transaction.is_override:
         raise HTTPException(status_code=400, detail="Transaction has no override to revert")
 
@@ -269,6 +288,7 @@ def split_transaction(transaction_id: int, body: SplitRequest, db: Session = Dep
     transaction = db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    _assert_mutable(transaction)
     if body.quantity <= 0 or body.quantity >= transaction.quantity:
         raise HTTPException(status_code=400, detail=f"Split quantity must be between 0 and {transaction.quantity}")
 
@@ -304,6 +324,19 @@ def split_transaction(transaction_id: int, body: SplitRequest, db: Session = Dep
     return {"original_id": transaction.id, "split_id": split_txn.id}
 
 
+@router.patch("/transactions/account/bulk")
+def bulk_set_account(req: BulkAccountRequest, db: Session = Depends(get_db)):
+    """Set account_id on all transactions for a brokerage. Defaults to verified-only."""
+    query = db.query(DBTransaction).filter(DBTransaction.brokerage == req.brokerage)
+    if req.verified_only:
+        query = query.filter(DBTransaction.is_backend_verified == True)
+    updated = query.update({"account_id": req.account_id}, synchronize_session=False)
+    db.commit()
+    from backend.app.core.process import process_transactions
+    process_transactions(db, brokerage_name=req.brokerage)
+    return {"updated": updated}
+
+
 @router.patch("/transactions/{transaction_id}/verify")
 def set_transaction_verified(transaction_id: int, is_backend_verified: bool, db: Session = Depends(get_db)):
     """Manually mark a transaction as backend-verified. Only called explicitly by the user.
@@ -323,6 +356,7 @@ def set_transaction_hidden(transaction_id: int, is_deleted: bool, db: Session = 
     )
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    _assert_mutable(transaction)
     transaction.is_deleted = is_deleted
     db.commit()
     return {"message": "Transaction updated successfully"}
@@ -358,6 +392,7 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
     )
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    _assert_mutable(transaction)
     db.delete(transaction)
     db.commit()
     return {"message": "Transaction deleted successfully"}
@@ -399,6 +434,7 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
                 "is_duplicate": t.is_duplicate,
                 "current_brokerage": t.current_brokerage,
                 "original_values": t.original_values,
+                "account_id": t.account_id,
                 "date": t.date,
                 "brokerage": t.brokerage,
                 "ticker": t.ticker,
@@ -476,6 +512,7 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
         is_dup = key_counts[key] > 1
         db.add(DBTransaction(
             brokerage=raw.brokerage,
+            account_id=raw.account_id,
             date=raw.date,
             ticker=raw.ticker,
             name=raw.name,
@@ -504,6 +541,8 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
             t.is_duplicate = ov["is_duplicate"]
             t.is_backend_verified = ov["is_backend_verified"]
             t.current_brokerage = ov["current_brokerage"]
+            if ov.get("account_id") is not None:
+                t.account_id = ov["account_id"]
             if ov["is_override"]:
                 t.is_override = True
                 t.original_values = ov["original_values"]
@@ -558,6 +597,8 @@ def get_buying_power():
             result: dict = {}
             for account in accounts:
                 brokerage = account["brokerage"]
+                account_name = account.get("name") or ""
+                result_key = f"{brokerage} · {account_name}" if account_name else brokerage
                 try:
                     resp = client.account_information.get_user_holdings(
                         query_params={"userId": USER_ID, "userSecret": USER_SECRET},
@@ -577,14 +618,14 @@ def get_buying_power():
                         curr = _get(b, "currency")
                         code = _get(curr, "code", "USD") or "USD"
                         cash_val = _get(b, "cash")
-                        print(f"[buying-power] {brokerage} balance: currency={code} cash={cash_val} buying_power={_get(b,'buying_power')}")
+                        print(f"[buying-power] {result_key} balance: currency={code} cash={cash_val} buying_power={_get(b,'buying_power')}")
                         if code == "USD" and cash_val is not None:
                             usd_cash_values.append(float(cash_val))
 
                     if usd_cash_values:
                         net_cash = sum(usd_cash_values)
-                        print(f"[buying-power] {brokerage}: balance.cash={net_cash:.2f}")
-                        result[brokerage] = round(result.get(brokerage, 0.0) + net_cash, 2)
+                        print(f"[buying-power] {result_key}: balance.cash={net_cash:.2f}")
+                        result[result_key] = round(result.get(result_key, 0.0) + net_cash, 2)
                     else:
                         # Fallback: account total minus positions market value
                         acct = _get(body, "account")
@@ -600,13 +641,13 @@ def get_buying_power():
                         )
                         if total is not None:
                             net_cash = float(total) - positions_value
-                            print(f"[buying-power] {brokerage}: fallback total={float(total):.2f} - positions={positions_value:.2f} → net_cash={net_cash:.2f}")
-                            result[brokerage] = round(result.get(brokerage, 0.0) + net_cash, 2)
+                            print(f"[buying-power] {result_key}: fallback total={float(total):.2f} - positions={positions_value:.2f} → net_cash={net_cash:.2f}")
+                            result[result_key] = round(result.get(result_key, 0.0) + net_cash, 2)
                         else:
-                            print(f"[buying-power] {brokerage}: no cash or total available, skipping")
+                            print(f"[buying-power] {result_key}: no cash or total available, skipping")
                 except Exception as e:
                     import traceback
-                    print(f"[buying-power] error for {brokerage}: {e}")
+                    print(f"[buying-power] error for {result_key}: {e}")
                     traceback.print_exc()
         finally:
             db.close()

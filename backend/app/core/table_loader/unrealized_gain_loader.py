@@ -90,6 +90,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
 
                 unrealized_gain = UnrealizedGain(
                     brokerage=lot["brokerage"],
+                    account_id=lot.get("account_id"),
                     ticker=underlying_ticker(lot.get("ticker", ticker)),
                     buyDate=buy_date_dt,
                     quantity=lot["quantity"],
@@ -102,6 +103,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
                     wash_sale_clear_date=ws_clear_date,
                     wash_sale_at_risk=ws_at_risk,
                     wash_sale_risk_trigger_date=ws_risk_trigger if ws_at_risk else None,
+                    option_symbol=option_symbol,
                 )
                 unrealized_gains_list.append(unrealized_gain)
             except Exception as e:

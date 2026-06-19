@@ -36,10 +36,11 @@ def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, fl
         if row.quantity < 1e-6:
             continue
 
-        key = (row.brokerage, row.ticker, (row.assetType or "equity").lower())
+        key = (row.brokerage, row.account_id, row.ticker, (row.assetType or "equity").lower())
         if key not in aggregated:
             aggregated[key] = {
                 "brokerage": row.brokerage,
+                "account_id": row.account_id,
                 "ticker": row.ticker,
                 "quantity": 0.0,
                 "totalCost": 0.0,
@@ -62,6 +63,7 @@ def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, fl
         prev_close = (prev_close_cache or {}).get(ticker, current_price)
         holding = Holding(
             brokerage=agg["brokerage"],
+            account_id=agg.get("account_id"),
             ticker=ticker,
             quantity=total_quantity,
             averageCostPerShare=total_cost / total_quantity if total_quantity > 0 else 0.0,
