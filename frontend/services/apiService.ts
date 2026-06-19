@@ -391,6 +391,7 @@ export interface OptionsPosition {
   currentPrice: number;
   unrealizedGain: number;
   isLongTerm: boolean;
+  option_symbol?: string | null;
 }
 
 export interface OptionsCalculator {

@@ -58,6 +58,7 @@ class UnrealizedGain(BaseModel):
     wash_sale_clear_date: Optional[datetime.date] = None
     wash_sale_at_risk: bool = False
     wash_sale_risk_trigger_date: Optional[datetime.date] = None
+    option_symbol: Optional[str] = None
 
     class Config:
         from_attributes = True

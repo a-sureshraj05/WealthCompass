@@ -98,4 +98,5 @@ export interface UnrealizedLot {
   // Type 2: selling at a loss today would be disallowed (recent same-ticker buy exists)
   wash_sale_at_risk?: boolean;
   wash_sale_risk_trigger_date?: string | null;
+  option_symbol?: string | null;
 }

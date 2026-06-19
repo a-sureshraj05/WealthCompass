@@ -143,6 +143,13 @@ def startup_event():
                 conn.execute(text("ALTER TABLE snaptrade_transactions ADD COLUMN account_id INTEGER"))
                 conn.commit()
 
+    if "unrealized_gains" in inspector.get_table_names():
+        ug_columns = [col["name"] for col in inspector.get_columns("unrealized_gains")]
+        if "option_symbol" not in ug_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN option_symbol TEXT"))
+                conn.commit()
+
     # Seed stock_splits with well-known historical splits (safe to run every startup — skips duplicates)
     from backend.app.core.stock_split_seeds import SEED_SPLITS
     from backend.app.db.schema import StockSplit

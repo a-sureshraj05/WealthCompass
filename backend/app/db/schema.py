@@ -110,6 +110,7 @@ class UnrealizedGain(Base):
     # Type 2: selling this lot at a loss today would be disallowed
     wash_sale_at_risk = Column(Boolean, default=False, nullable=False, server_default="0")
     wash_sale_risk_trigger_date = Column(Date, nullable=True)  # the recent buy causing the risk
+    option_symbol = Column(String, nullable=True)
 
 
 class OptionsRetain(Base):

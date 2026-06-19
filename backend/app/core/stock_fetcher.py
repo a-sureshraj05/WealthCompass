@@ -55,22 +55,34 @@ def _get_option_price(occ_symbol: str) -> Union[float, None]:
 
 def get_stock_quote(ticker_symbol: str) -> tuple:
     """Return (current_price, previous_close) for an equity ticker.
+    Uses fast_info.last_price as the current price (reflects intraday),
+    with history(period='5d') for the previous close.
     Falls back to (current, current) if only one day of data is available.
     Returns (None, None) on failure. Does not handle OCC option symbols."""
     if _OCC_RE.match(ticker_symbol):
         price = _get_option_price(ticker_symbol)
         return (price, price)
     try:
-        hist = yf.Ticker(ticker_symbol).history(period='1mo')
-        # history() only returns trading days, so iloc[-1] = last close, iloc[-2] = prev trading day close
-        # Drop NaN rows — yfinance sometimes returns NaN for the most recent row mid-day
-        hist = hist.dropna(subset=['Close'])
+        t = yf.Ticker(ticker_symbol)
+        # fast_info.last_price reflects current intraday price (or last close outside hours)
+        live_price = None
+        try:
+            live_price = t.fast_info.last_price
+        except Exception:
+            pass
+
+        hist = t.history(period='5d').dropna(subset=['Close'])
         if len(hist) >= 2:
-            return float(hist['Close'].iloc[-1]), float(hist['Close'].iloc[-2])
+            prev_close = float(hist['Close'].iloc[-2])
         elif len(hist) == 1:
-            current = float(hist['Close'].iloc[-1])
-            return current, current
-        return None, None
+            prev_close = float(hist['Close'].iloc[-1])
+        else:
+            prev_close = live_price
+
+        current = live_price if live_price else (float(hist['Close'].iloc[-1]) if len(hist) else None)
+        if current is None:
+            return None, None
+        return float(current), float(prev_close) if prev_close else float(current)
     except Exception as e:
         print(f"Error fetching quote for {ticker_symbol}: {e}")
         return None, None
