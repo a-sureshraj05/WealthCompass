@@ -53,6 +53,7 @@ def get_open_options(db: Session = Depends(get_db)):
             "sellableQuantity": sellable_qty,
             "buyPrice": lot.buyPrice,
             "currentPrice": lot.currentPrice,
+            "prevClose": lot.prevClose,
             "unrealizedGain": lot.unrealizedGain,
             "isLongTerm": lot.isLongTerm,
             "option_symbol": lot.option_symbol,

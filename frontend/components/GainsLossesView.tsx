@@ -168,6 +168,122 @@ const GainHeatmap: React.FC<{ data: HeatItem[] }> = ({ data }) => {
   );
 };
 
+type DailyItem = { name: string; size: number; dailyGain: number; dailyPct: number; marketValue: number; prevClose: number | null };
+type DailyCell = DailyItem & { x: number; y: number; w: number; h: number };
+
+function binaryLayoutDaily(items: DailyItem[], x: number, y: number, w: number, h: number, horiz: boolean): DailyCell[] {
+  if (items.length === 0) return [];
+  if (items.length === 1) return [{ ...items[0], x, y, w, h }];
+  const total = items.reduce((s, d) => s + d.size, 0);
+  let cum = 0, split = 1;
+  for (let i = 0; i < items.length - 1; i++) {
+    cum += items[i].size;
+    if (cum >= total / 2) { split = i + 1; break; }
+  }
+  const ratio = items.slice(0, split).reduce((s, d) => s + d.size, 0) / total;
+  if (horiz) {
+    const sw = w * ratio;
+    return [...binaryLayoutDaily(items.slice(0, split), x, y, sw, h, !horiz),
+            ...binaryLayoutDaily(items.slice(split), x + sw, y, w - sw, h, !horiz)];
+  }
+  const sh = h * ratio;
+  return [...binaryLayoutDaily(items.slice(0, split), x, y, w, sh, !horiz),
+          ...binaryLayoutDaily(items.slice(split), x, y + sh, w, h - sh, !horiz)];
+}
+
+const DailyHeatmap: React.FC<{ data: DailyItem[] }> = ({ data }) => {
+  const GAP = 2;
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [tip, setTip] = React.useState<{ cell: DailyCell; x: number; y: number } | null>(null);
+  const [dims, setDims] = React.useState({ w: 700, h: 256 });
+
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) setDims({ w: Math.round(width), h: Math.round(height) });
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const cells = binaryLayoutDaily(data, 0, 0, dims.w, dims.h, dims.w > dims.h);
+
+  return (
+    <div ref={containerRef} className="relative w-full h-full">
+      <svg width="100%" height="100%" viewBox={`0 0 ${dims.w} ${dims.h}`} preserveAspectRatio="none"
+        onMouseLeave={() => setTip(null)}>
+        {cells.map(cell => {
+          const x = cell.x + GAP / 2, y = cell.y + GAP / 2;
+          const w = cell.w - GAP, h = cell.h - GAP;
+          if (w < 1 || h < 1) return null;
+          const isPos = cell.dailyGain >= 0;
+          const fill = isPos ? '#10b981' : '#f43f5e';
+          const abs = Math.abs(cell.dailyGain);
+          const lbl = abs >= 1000 ? `${isPos ? '+' : '-'}$${(abs / 1000).toFixed(1)}k` : `${isPos ? '+' : ''}$${cell.dailyGain.toFixed(0)}`;
+          const pctLbl = `${cell.dailyPct >= 0 ? '+' : ''}${cell.dailyPct.toFixed(2)}%`;
+          const minDim = Math.min(w, h);
+          const fs = Math.min(24, Math.max(9, Math.min(w / Math.max(cell.name.length, 1) * 1.5, minDim * 0.26)));
+          const subFs = Math.min(14, Math.max(9, minDim * 0.11));
+          const showName = w > 28 && h > 20;
+          const showGain = w > 38 && h > 36;
+          const showPct  = w > 38 && h > 52;
+          const lineH = subFs + 4;
+          const lineCount = (showName ? 1 : 0) + (showGain ? 1 : 0) + (showPct ? 1 : 0);
+          const blockTop = h / 2 - ((lineCount - 1) * lineH) / 2;
+          let lineY = y + blockTop;
+          return (
+            <g key={cell.name} style={{ cursor: 'default' }}
+              onMouseMove={e => {
+                if (!containerRef.current) return;
+                const r = containerRef.current.getBoundingClientRect();
+                setTip({ cell, x: e.clientX - r.left, y: e.clientY - r.top });
+              }}
+              onMouseLeave={() => setTip(null)}>
+              <rect x={x} y={y} width={w} height={h} fill={fill} fillOpacity={0.83} rx={3} />
+              {showName && (() => { const ty = lineY; lineY += lineH; return (
+                <text x={x + w / 2} y={ty} textAnchor="middle" fill="#fff" fontSize={fs} fontWeight="700">{cell.name}</text>
+              ); })()}
+              {showGain && (() => { const ty = lineY; lineY += lineH; return (
+                <text x={x + w / 2} y={ty} textAnchor="middle" fill="#fff" fontSize={subFs} fontWeight="600" fillOpacity={0.9}>{lbl}</text>
+              ); })()}
+              {showPct && (() => { const ty = lineY; lineY += lineH; return (
+                <text x={x + w / 2} y={ty} textAnchor="middle" fill="#fff" fontSize={subFs} fontWeight="600" fillOpacity={0.75}>{pctLbl}</text>
+              ); })()}
+            </g>
+          );
+        })}
+      </svg>
+
+      {tip && (
+        <div className="absolute z-50 pointer-events-none"
+          style={{
+            left: Math.min(tip.x + 14, (containerRef.current?.offsetWidth ?? 9999) - 160),
+            top: Math.max(tip.y - 80, 4),
+          }}>
+          <div className="bg-[#1D1D1F] rounded-lg px-3 py-2.5 shadow-xl text-xs min-w-[172px]">
+            <p className="font-black text-white mb-2">{tip.cell.name}</p>
+            <div className="space-y-1.5">
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-400">Day P&amp;L</span>
+                <div className="text-right">
+                  <span className={`font-bold block ${tip.cell.dailyGain >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrency(tip.cell.dailyGain)}</span>
+                  <span className={`text-[10px] ${tip.cell.dailyPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{tip.cell.dailyPct >= 0 ? '+' : ''}{tip.cell.dailyPct.toFixed(2)}%</span>
+                </div>
+              </div>
+              <div className="flex justify-between gap-3 pt-1 border-t border-slate-700">
+                <span className="text-slate-400">Market Value</span>
+                <span className="text-slate-200 font-semibold">{formatCurrency(tip.cell.marketValue)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface Props {
   realizedGains: RealizedGain[];
   unrealizedGains: UnrealizedLot[];
@@ -175,12 +291,17 @@ interface Props {
   setSelectedBrokerages: (v: string[]) => void;
   selectedTickers: string[];
   setSelectedTickers: (v: string[]) => void;
+  stTaxRate: number;
+  setStTaxRate: (v: number) => void;
+  ltTaxRate: number;
+  setLtTaxRate: (v: number) => void;
+  numbersVisible?: boolean;
 }
 
 const fmt = formatCurrency;
 const fmtDate = formatDate;
 
-const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, unrealizedGains: unrealizedGainsData, selectedBrokerages, setSelectedBrokerages, selectedTickers, setSelectedTickers }) => {
+const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, unrealizedGains: unrealizedGainsData, selectedBrokerages, setSelectedBrokerages, selectedTickers, setSelectedTickers, stTaxRate, setStTaxRate, ltTaxRate, setLtTaxRate, numbersVisible = true }) => {
   const [activeSubTab, setActiveSubTab] = useState<'realized' | 'unrealized'>('unrealized');
   const [selectedYear, setSelectedYear] = useState<string>('Overall');
 
@@ -191,17 +312,23 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     setSelectedYear(latest);
   }, [realizedGainsData]);
 
-  const [stTaxRate, setStTaxRate] = useState<number>(37);
-  const [ltTaxRate, setLtTaxRate] = useState<number>(20);
 
   const [isTickerMenuOpen, setIsTickerMenuOpen] = useState(false);
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
 
+  const [heatmapMode, setHeatmapMode] = useState<'overall' | 'daily'>('daily');
+
   const [sortKey, setSortKey] = useState<GainSortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
-  const [optExpanded, setOptExpanded] = useState(false);
-  const [stExpanded, setStExpanded] = useState(false);
-  const [ltExpanded, setLtExpanded] = useState(false);
+  // Keys: 'ST'/'LT' (term level) and 'ST-EQ'/'ST-OPT'/'LT-EQ'/'LT-OPT' (sub level)
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const toggleSection = (key: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
 
   const toggleTickerExpand = (key: string) => {
@@ -318,9 +445,12 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   }, [realizedGainsData, unrealizedGainsData, selectedTickers, selectedBrokerages, selectedYear, activeSubTab, sortKey, sortDirection]);
 
   const isOpt = (g: RealizedGain | UnrealizedLot) => (g.assetType || '').toLowerCase() === 'options';
-  const options   = filteredData.filter(g => isOpt(g));
-  const shortTerm = filteredData.filter(g => !isOpt(g) && !g.isLongTerm);
-  const longTerm  = filteredData.filter(g => !isOpt(g) && g.isLongTerm);
+  // Top-level split is Short-Term vs Long-Term; each term is further split into
+  // Equity and Options. Options now follow the same >365-day rule as equities.
+  const stEquity  = filteredData.filter(g => !isOpt(g) && !g.isLongTerm);
+  const stOptions = filteredData.filter(g =>  isOpt(g) && !g.isLongTerm);
+  const ltEquity  = filteredData.filter(g => !isOpt(g) &&  g.isLongTerm);
+  const ltOptions = filteredData.filter(g =>  isOpt(g) &&  g.isLongTerm);
 
   const treemapData = useMemo(() => {
     if (activeSubTab !== 'unrealized') return [];
@@ -349,12 +479,43 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       .sort((a, b) => b.size - a.size);
   }, [filteredData, activeSubTab]);
 
+  const dailyHeatmapData = useMemo(() => {
+    if (activeSubTab !== 'unrealized') return [];
+    const map: Record<string, { dailyGain: number; marketValue: number; prevClose: number | null }> = {};
+    filteredData.forEach(lot => {
+      const l = lot as UnrealizedLot;
+      // Skip options — prevClose for options is the option price itself, not useful as a daily equity move
+      if ((l.assetType || '').toLowerCase() === 'options') return;
+      if (l.prevClose == null) return;
+      if (!map[l.ticker]) map[l.ticker] = { dailyGain: 0, marketValue: 0, prevClose: l.prevClose };
+      const dailyMove = (l.currentPrice - l.prevClose) * l.quantity;
+      map[l.ticker].dailyGain += dailyMove;
+      map[l.ticker].marketValue += l.currentPrice * l.quantity;
+    });
+    return Object.entries(map)
+      .map(([name, { dailyGain, marketValue, prevClose }]) => ({
+        name,
+        dailyGain,
+        marketValue,
+        dailyPct: marketValue > 0 ? ((dailyGain / (marketValue - dailyGain)) * 100) : 0,
+        size: Math.abs(dailyGain),
+        prevClose,
+      }))
+      .filter(d => d.size > 0.005)
+      .sort((a, b) => b.size - a.size);
+  }, [filteredData, activeSubTab]);
+
   const stats = useMemo(() => {
-    const optTotal = options.reduce((sum, g) => sum + g.gain, 0);
-    const stTotal  = shortTerm.reduce((sum, g) => sum + g.gain, 0);
-    const ltTotal  = longTerm.reduce((sum, g) => sum + g.gain, 0);
-    // Options are always short-term; net them together before cross-bucket offsetting.
-    const netST = optTotal + stTotal;
+    const sumGain = (lots: (RealizedGain | UnrealizedLot)[]) => lots.reduce((s, g) => s + g.gain, 0);
+    const stEqTotal  = sumGain(stEquity);
+    const stOptTotal = sumGain(stOptions);
+    const ltEqTotal  = sumGain(ltEquity);
+    const ltOptTotal = sumGain(ltOptions);
+    const stTotal = stEqTotal + stOptTotal;
+    const ltTotal = ltEqTotal + ltOptTotal;
+
+    // Cross-bucket offsetting between the two term totals.
+    const netST = stTotal;
     const netLT = ltTotal;
     let stTax = 0;
     let ltTax = 0;
@@ -367,8 +528,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       stTax = Math.max(0, netST + netLT) * (stTaxRate / 100);
     }
     const taxEst = stTax + ltTax;
-    const total = optTotal + stTotal + ltTotal;
-    const ltShare = total !== 0 ? (ltTotal / total) * 100 : 0;
+    const total = stTotal + ltTotal;
 
     const isRealized = activeSubTab === 'realized';
     const sectionMV = (lots: (RealizedGain | UnrealizedLot)[], isOpts: boolean) => {
@@ -382,22 +542,24 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       const m = isOpts ? 100 : 1;
       return lots.reduce((sum, g) => sum + g.quantity * g.buyPrice * m, 0);
     };
+    const pct = (gain: number, cost: number) => (cost > 0 ? (gain / cost) * 100 : 0);
 
-    const optMV = sectionMV(options, true);
-    const stMV  = sectionMV(shortTerm, false);
-    const ltMV  = sectionMV(longTerm, false);
-    const optCost = sectionCost(options, true);
-    const stCost  = sectionCost(shortTerm, false);
-    const ltCost  = sectionCost(longTerm, false);
+    const stEqMV  = sectionMV(stEquity, false),  stOptMV = sectionMV(stOptions, true);
+    const ltEqMV  = sectionMV(ltEquity, false),  ltOptMV = sectionMV(ltOptions, true);
+    const stEqCost  = sectionCost(stEquity, false),  stOptCost = sectionCost(stOptions, true);
+    const ltEqCost  = sectionCost(ltEquity, false),  ltOptCost = sectionCost(ltOptions, true);
 
     return {
-      optTotal, stTotal, ltTotal, taxEst, stTax, ltTax, ltShare,
-      optMV, stMV, ltMV,
-      optGainPct: optCost > 0 ? (optTotal / optCost) * 100 : 0,
-      stGainPct:  stCost  > 0 ? (stTotal  / stCost)  * 100 : 0,
-      ltGainPct:  ltCost  > 0 ? (ltTotal  / ltCost)  * 100 : 0,
+      stEqTotal, stOptTotal, ltEqTotal, ltOptTotal,
+      stTotal, ltTotal, total, taxEst, stTax, ltTax,
+      stMV: stEqMV + stOptMV, ltMV: ltEqMV + ltOptMV,
+      stEqMV, stOptMV, ltEqMV, ltOptMV,
+      stEqPct:  pct(stEqTotal, stEqCost),   stOptPct: pct(stOptTotal, stOptCost),
+      ltEqPct:  pct(ltEqTotal, ltEqCost),   ltOptPct: pct(ltOptTotal, ltOptCost),
+      stPct: pct(stTotal, stEqCost + stOptCost),
+      ltPct: pct(ltTotal, ltEqCost + ltOptCost),
     };
-  }, [options, shortTerm, longTerm, stTaxRate, ltTaxRate, activeSubTab]);
+  }, [stEquity, stOptions, ltEquity, ltOptions, stTaxRate, ltTaxRate, activeSubTab]);
 
   const toggleTicker = (ticker: string) => setSelectedTickers(selectedTickers.includes(ticker) ? selectedTickers.filter(t => t !== ticker) : [...selectedTickers, ticker]);
   const toggleBrokerage = (broker: string) => setSelectedBrokerages(selectedBrokerages.includes(broker) ? selectedBrokerages.filter(b => b !== broker) : [...selectedBrokerages, broker]);
@@ -565,6 +727,103 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     );
   };
 
+  // Equity / Options sub-section inside a term. Returns null when empty.
+  const renderSubSection = (
+    key: string, label: string, data: (RealizedGain | UnrealizedLot)[],
+    isOptions: boolean, mv: number, gain: number, gainPct: number,
+  ) => {
+    if (data.length === 0) return null;
+    const expanded = expandedSections.has(key);
+    return (
+      <div className="space-y-2">
+        <button
+          onClick={() => toggleSection(key)}
+          className="w-full pl-4 pr-4 py-2.5 bg-[#FAFAFA] rounded border border-[#E5E5EA] flex items-center justify-between hover:bg-[#F0F0F2] transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+            </svg>
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</span>
+            <span className="text-[10px] text-slate-400 font-medium">· {data.length} lot{data.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="w-32 text-right">
+              <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
+              <p className="text-xs font-black text-slate-700">${mv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
+            <div className="w-40 text-right">
+              <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
+              <p className={`text-xs font-black ${gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {gain >= 0 ? '+' : '-'}${Math.abs(gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <span className="text-[9px] ml-1 opacity-75">({gainPct >= 0 ? '+' : ''}{gainPct.toFixed(2)}%)</span>
+              </p>
+            </div>
+          </div>
+        </button>
+        {expanded && <GainTableSection title={label} data={data} prefix={key} isOptions={isOptions} />}
+      </div>
+    );
+  };
+
+  // Top-level Short-Term / Long-Term term section wrapping the two sub-sections.
+  const renderTerm = (cfg: {
+    key: string; label: string; heldText: string; color: string;
+    eqData: (RealizedGain | UnrealizedLot)[]; optData: (RealizedGain | UnrealizedLot)[];
+    mv: number; gain: number; gainPct: number;
+    eqMV: number; eqGain: number; eqPct: number;
+    optMV: number; optGain: number; optPct: number;
+  }) => {
+    const expanded = expandedSections.has(cfg.key);
+    const lotCount = cfg.eqData.length + cfg.optData.length;
+    return (
+      <div className="space-y-3">
+        <button
+          onClick={() => toggleSection(cfg.key)}
+          className="w-full p-4 bg-white rounded border border-[#D2D2D7] flex items-center justify-between hover:bg-[#F5F5F7] transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <svg className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+            </svg>
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: cfg.color }} />
+                <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">{cfg.label}</h4>
+                <span className="text-[10px] text-slate-400 font-medium">· {cfg.heldText} · {lotCount} lot{lotCount !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="w-36 text-right">
+              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
+              <p className="text-sm font-black text-slate-700">${cfg.mv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
+            <div className="w-44 text-right">
+              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
+              <p className={`text-sm font-black ${cfg.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {cfg.gain >= 0 ? '+' : '-'}${Math.abs(cfg.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <span className="text-[10px] ml-1 opacity-75">({cfg.gainPct >= 0 ? '+' : ''}{cfg.gainPct.toFixed(2)}%)</span>
+              </p>
+            </div>
+          </div>
+        </button>
+        {expanded && (
+          lotCount === 0 ? (
+            <div className="ml-3 rounded border border-[#E5E5EA] bg-white px-6 py-8 text-center text-slate-400 text-xs italic">
+              No {cfg.label.toLowerCase()} entries for the current filter.
+            </div>
+          ) : (
+            <div className="ml-3 space-y-2">
+              {renderSubSection(`${cfg.key}-EQ`, 'Equity', cfg.eqData, false, cfg.eqMV, cfg.eqGain, cfg.eqPct)}
+              {renderSubSection(`${cfg.key}-OPT`, 'Options', cfg.optData, true, cfg.optMV, cfg.optGain, cfg.optPct)}
+            </div>
+          )
+        )}
+      </div>
+    );
+  };
+
   const FilterDropdown = ({ label, refEl, isOpen, onToggle, count, onClear, children }: {
     label: string; refEl: React.RefObject<HTMLDivElement>; isOpen: boolean; onToggle: () => void;
     count: number; onClear: () => void; children: React.ReactNode;
@@ -614,34 +873,62 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         ))}
       </div>
 
-      {/* Chart — full width */}
+      {/* Chart + table — blurred when numbers hidden */}
+      <div className={`space-y-4 ${!numbersVisible ? 'blur-sm select-none pointer-events-none' : ''}`}>
       <div>
         <div className="bg-white p-6 rounded border border-[#D2D2D7]">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5">
-            {activeSubTab === 'realized' ? 'Yearly Realized Profit Split' : 'Unrealized Gain · Ticker Heatmap'}
-          </p>
+          <div className="flex items-center justify-between mb-5">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              {activeSubTab === 'realized' ? 'Yearly Realized Profit Split' : 'Unrealized Gain · Ticker Heatmap'}
+            </p>
+            {activeSubTab === 'unrealized' && (
+              <div className="flex rounded overflow-hidden border border-[#D2D2D7] text-[10px] font-bold">
+                {(['daily', 'overall'] as const).map(mode => (
+                  <button key={mode} onClick={() => setHeatmapMode(mode)}
+                    className={`px-3 py-1 uppercase tracking-widest transition-colors ${heatmapMode === mode ? 'bg-[#1D1D1F] text-white' : 'bg-white text-slate-400 hover:text-slate-600'}`}>
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="h-[393px]">
             {activeSubTab === 'unrealized' ? (
-              treemapData.length > 0 ? (
-                <div className="h-full flex flex-col gap-1">
-                  <div className="flex-1 min-h-0">
-                    <GainHeatmap data={treemapData} />
-                  </div>
-                  {/* Legend */}
-                  <div className="flex items-center gap-4 px-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-6 h-2 rounded-sm inline-block" style={{ backgroundColor: ST_COLOR }} />
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Short-Term</span>
+              heatmapMode === 'overall' ? (
+                treemapData.length > 0 ? (
+                  <div className="h-full flex flex-col gap-1">
+                    <div className="flex-1 min-h-0">
+                      <GainHeatmap data={treemapData} />
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-6 h-2 rounded-sm inline-block" style={{ backgroundColor: LT_COLOR }} />
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Long-Term</span>
+                    {/* Legend */}
+                    <div className="flex items-center gap-4 px-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-6 h-2 rounded-sm inline-block" style={{ backgroundColor: ST_COLOR }} />
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Short-Term</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-6 h-2 rounded-sm inline-block" style={{ backgroundColor: LT_COLOR }} />
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Long-Term</span>
+                      </div>
+                      <span className="text-[9px] text-slate-300 italic ml-1">stripe at tile base</span>
                     </div>
-                    <span className="text-[9px] text-slate-300 italic ml-1">stripe at tile base</span>
                   </div>
-                </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-slate-400 text-xs italic">No data to visualize</div>
+                )
               ) : (
-                <div className="h-full flex items-center justify-center text-slate-400 text-xs italic">No data to visualize</div>
+                dailyHeatmapData.length > 0 ? (
+                  <div className="h-full flex flex-col gap-1">
+                    <div className="flex-1 min-h-0">
+                      <DailyHeatmap data={dailyHeatmapData} />
+                    </div>
+                    <div className="flex items-center gap-1 px-1">
+                      <span className="text-[9px] text-slate-300 italic">sized by |day P&amp;L|  ·  equities only  ·  prev close → current price</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-slate-400 text-xs italic">No daily data available — sync to refresh prices</div>
+                )
               )
             ) : (
               waterfallData.length > 1 ? (
@@ -791,8 +1078,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             <div className="flex flex-col gap-3 w-fit">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain</p>
-                <p className={`text-2xl font-black ${(stats.optTotal + stats.stTotal + stats.ltTotal) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {(stats.optTotal + stats.stTotal + stats.ltTotal) >= 0 ? '+' : ''}{fmt(stats.optTotal + stats.stTotal + stats.ltTotal)}
+                <p className={`text-2xl font-black ${stats.total >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {stats.total >= 0 ? '+' : ''}{fmt(stats.total)}
                 </p>
               </div>
               <div className="bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5">
@@ -802,34 +1089,28 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             </div>
           </div>
 
-          {/* Col 2+3 — Options & Short-Term (merged ST Tax box at bottom) */}
-          <div className="flex-[2] flex flex-col gap-3 border-r border-[#E5E5EA]">
+          {/* Col 2 — Short-Term (equity + options) + ST Tax (orange) */}
+          <div className="flex-1 flex flex-col justify-between gap-3 px-6 border-r border-[#E5E5EA]">
             <div className="flex flex-col gap-3 w-fit">
-              <div className="flex divide-x divide-[#E5E5EA]">
-                <div className="px-6">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Options</p>
-                  <p className={`text-2xl font-black ${stats.optTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.optTotal)}</p>
-                </div>
-                <div className="pl-6">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Short-Term</p>
-                  <p className={`text-2xl font-black ${stats.stTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.stTotal)}</p>
-                </div>
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Short-Term</p>
+                <p className={`text-2xl font-black ${stats.stTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.stTotal)}</p>
+                <p className="text-[9px] text-slate-400 font-medium mt-0.5">eq {fmt(stats.stEqTotal)} · opt {fmt(stats.stOptTotal)}</p>
               </div>
-              <div className="pl-6">
-                <div className="bg-orange-50 border border-orange-100 rounded px-2.5 py-1.5">
-                  <p className="text-[8px] font-black uppercase tracking-widest mb-0.5" style={{ color: ST_COLOR }}>ST Tax (Options + ST)</p>
-                  <p className="text-sm font-black" style={{ color: ST_COLOR }}>{fmt(stats.stTax)}</p>
-                </div>
+              <div className="bg-orange-50 border border-orange-100 rounded px-2.5 py-1.5">
+                <p className="text-[8px] font-black uppercase tracking-widest mb-0.5" style={{ color: ST_COLOR }}>ST Tax</p>
+                <p className="text-sm font-black" style={{ color: ST_COLOR }}>{fmt(stats.stTax)}</p>
               </div>
             </div>
           </div>
 
-          {/* Col 4 — Long-Term + LT Tax (blue) */}
+          {/* Col 3 — Long-Term (equity + options) + LT Tax (blue) */}
           <div className="flex-1 flex flex-col justify-between gap-3 px-6 border-r border-[#E5E5EA]">
             <div className="flex flex-col gap-3 w-fit">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Long-Term</p>
                 <p className={`text-2xl font-black ${stats.ltTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.ltTotal)}</p>
+                <p className="text-[9px] text-slate-400 font-medium mt-0.5">eq {fmt(stats.ltEqTotal)} · opt {fmt(stats.ltOptTotal)}</p>
               </div>
               <div className="bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5">
                 <p className="text-[8px] font-black uppercase tracking-widest mb-0.5" style={{ color: LT_COLOR }}>LT Tax</p>
@@ -858,117 +1139,23 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         </div>
       </div>
 
-      {/* Options / ST / LT Sections */}
+      {/* Short-Term / Long-Term sections — each split into Equity + Options */}
       <div className="space-y-4">
-
-        {/* Options */}
-        {options.length > 0 && (
-          <div className="space-y-3">
-            <button
-              onClick={() => setOptExpanded(v => !v)}
-              className="w-full p-4 bg-white rounded border border-[#D2D2D7] flex items-center justify-between hover:bg-[#F5F5F7] transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <svg className={`w-4 h-4 text-slate-400 transition-transform ${optExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                </svg>
-                <div className="text-left">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: ST_COLOR }} />
-                    <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Options</h4>
-                    <span className="text-[10px] text-slate-400 font-medium">· {options.length} lot{options.length !== 1 ? 's' : ''}</span>
-                    <span className="text-[9px] font-black uppercase tracking-widest border rounded px-1.5 py-0.5" style={{ color: ST_COLOR, borderColor: ST_COLOR + '66', backgroundColor: ST_COLOR + '14' }}>ST rate</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="w-36 text-right">
-                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
-                  <p className="text-sm font-black text-slate-700">${stats.optMV.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                </div>
-                <div className="w-44 text-right">
-                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
-                  <p className={`text-sm font-black ${stats.optTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {stats.optTotal >= 0 ? '+' : '-'}${Math.abs(stats.optTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    <span className="text-[10px] ml-1 opacity-75">({stats.optGainPct >= 0 ? '+' : ''}{stats.optGainPct.toFixed(2)}%)</span>
-                  </p>
-                </div>
-              </div>
-            </button>
-            {optExpanded && <GainTableSection title="Options" data={options} prefix="OPT" isOptions={true} />}
-          </div>
-        )}
-
-        {/* Short Term */}
-        <div className="space-y-3">
-          <button
-            onClick={() => setStExpanded(v => !v)}
-            className="w-full p-4 bg-white rounded border border-[#D2D2D7] flex items-center justify-between hover:bg-[#F5F5F7] transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <svg className={`w-4 h-4 text-slate-400 transition-transform ${stExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-              </svg>
-              <div className="text-left">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: ST_COLOR }} />
-                  <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Short-Term</h4>
-                  <span className="text-[10px] text-slate-400 font-medium">· held ≤ 1 year · {shortTerm.length} lot{shortTerm.length !== 1 ? 's' : ''}</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="w-36 text-right">
-                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
-                <p className="text-sm font-black text-slate-700">${stats.stMV.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              </div>
-              <div className="w-44 text-right">
-                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
-                <p className={`text-sm font-black ${stats.stTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {stats.stTotal >= 0 ? '+' : '-'}${Math.abs(stats.stTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  <span className="text-[10px] ml-1 opacity-75">({stats.stGainPct >= 0 ? '+' : ''}{stats.stGainPct.toFixed(2)}%)</span>
-                </p>
-              </div>
-            </div>
-          </button>
-          {stExpanded && <GainTableSection title="Short-Term" data={shortTerm} prefix="ST" isOptions={false} />}
-        </div>
-
-        {/* Long Term */}
-        <div className="space-y-3">
-          <button
-            onClick={() => setLtExpanded(v => !v)}
-            className="w-full p-4 bg-white rounded border border-[#D2D2D7] flex items-center justify-between hover:bg-[#F5F5F7] transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <svg className={`w-4 h-4 text-slate-400 transition-transform ${ltExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-              </svg>
-              <div className="text-left">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: LT_COLOR }} />
-                  <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Long-Term</h4>
-                  <span className="text-[10px] text-slate-400 font-medium">· held &gt; 1 year · {longTerm.length} lot{longTerm.length !== 1 ? 's' : ''}</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="w-36 text-right">
-                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
-                <p className="text-sm font-black text-slate-700">${stats.ltMV.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              </div>
-              <div className="w-44 text-right">
-                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
-                <p className={`text-sm font-black ${stats.ltTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {stats.ltTotal >= 0 ? '+' : '-'}${Math.abs(stats.ltTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  <span className="text-[10px] ml-1 opacity-75">({stats.ltGainPct >= 0 ? '+' : ''}{stats.ltGainPct.toFixed(2)}%)</span>
-                </p>
-              </div>
-            </div>
-          </button>
-          {ltExpanded && <GainTableSection title="Long-Term" data={longTerm} prefix="LT" isOptions={false} />}
-        </div>
-
+        {renderTerm({
+          key: 'ST', label: 'Short-Term', heldText: 'held ≤ 1 year', color: ST_COLOR,
+          eqData: stEquity, optData: stOptions,
+          mv: stats.stMV, gain: stats.stTotal, gainPct: stats.stPct,
+          eqMV: stats.stEqMV, eqGain: stats.stEqTotal, eqPct: stats.stEqPct,
+          optMV: stats.stOptMV, optGain: stats.stOptTotal, optPct: stats.stOptPct,
+        })}
+        {renderTerm({
+          key: 'LT', label: 'Long-Term', heldText: 'held > 1 year', color: LT_COLOR,
+          eqData: ltEquity, optData: ltOptions,
+          mv: stats.ltMV, gain: stats.ltTotal, gainPct: stats.ltPct,
+          eqMV: stats.ltEqMV, eqGain: stats.ltEqTotal, eqPct: stats.ltEqPct,
+          optMV: stats.ltOptMV, optGain: stats.ltOptTotal, optPct: stats.ltOptPct,
+        })}
+      </div>
       </div>
 
     </div>

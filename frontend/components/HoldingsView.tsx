@@ -6,11 +6,38 @@ import SortIndicator from './SortIndicator';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { optionsMultiplier } from '../utils/finance';
 
-type SortKey = 'ticker' | 'washSale' | 'quantity' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain' | 'gainPct' | 'analystPrice' | 'analystPct';
+type SortKey = 'ticker' | 'washSale' | 'termType' | 'quantity' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain' | 'gainPct' | 'dailyGain' | 'dailyPct' | 'realized' | 'totalGain' | 'analystPrice' | 'analystPct';
 type SortDirection = 'asc' | 'desc' | null;
 
-type ColKey = 'ticker' | 'washSale' | 'quantity' | 'avgCost' | 'totalCost' | 'currentPrice' | 'marketValue' | 'unrealizedGain' | 'unrealizedPct' | 'realized' | 'totalGain' | 'analystPrice' | 'analystPct';
-const DEFAULT_COLS: ColKey[] = ['ticker','washSale','quantity','avgCost','totalCost','currentPrice','marketValue','unrealizedGain','unrealizedPct','realized','totalGain','analystPrice','analystPct'];
+type ColKey = 'ticker' | 'washSale' | 'termType' | 'quantity' | 'avgCost' | 'totalCost' | 'currentPrice' | 'marketValue' | 'dailyGain' | 'dailyPct' | 'unrealizedGain' | 'unrealizedPct' | 'realized' | 'totalGain' | 'analystPrice' | 'analystPct';
+const DEFAULT_COLS: ColKey[] = ['ticker','washSale','termType','quantity','avgCost','totalCost','currentPrice','marketValue','dailyGain','dailyPct','unrealizedGain','unrealizedPct','realized','totalGain','analystPrice','analystPct'];
+
+type TermType = 'Long' | 'Short' | 'Mixed' | null;
+// Term type for a set of lots — Long if held > 1 year, Short if held ≤ 1 year
+// (uses the backend isLongTerm flag, which encodes the >365-day rule). Aggregated
+// rows containing both long- and short-term lots return 'Mixed'.
+const lotsTermType = (lots: UnrealizedLot[]): TermType => {
+  if (lots.length === 0) return null;
+  const hasLong = lots.some(l => l.isLongTerm);
+  const hasShort = lots.some(l => !l.isLongTerm);
+  return hasLong && hasShort ? 'Mixed' : hasLong ? 'Long' : 'Short';
+};
+const termRank = (t: TermType) => (t === 'Long' ? 2 : t === 'Mixed' ? 1 : t === 'Short' ? 0 : -1);
+
+// Aggregate a set of lots into row-level totals (used when the term filter is active,
+// so row cost/value reflect only the matching lots). Applies the options 100x multiplier.
+const aggFromLots = (lots: UnrealizedLot[], assetType: string, fallbackPrice: number) => {
+  const m = optionsMultiplier(assetType);
+  const totalQty = lots.reduce((s, l) => s + l.quantity, 0);
+  const totalCost = lots.reduce((s, l) => s + l.quantity * l.buyPrice * m, 0);
+  const marketValue = lots.reduce((s, l) => s + l.quantity * l.currentPrice * m, 0);
+  return {
+    totalQty, totalCost, marketValue,
+    currentPrice: lots[0]?.currentPrice ?? fallbackPrice,
+    avgCost: totalQty > 0 ? totalCost / totalQty : 0,
+    unrealizedGain: marketValue - totalCost,
+  };
+};
 
 interface Props {
   holdings: StockHolding[];
@@ -25,10 +52,13 @@ interface Props {
   setSelectedAssetTypes: (v: string[]) => void;
   selectedTickers: string[];
   setSelectedTickers: (v: string[]) => void;
+  selectedTerms: ('long' | 'short')[];
+  setSelectedTerms: (v: ('long' | 'short')[]) => void;
   title?: string;
   accounts?: BrokerageAccount[];
   viewMode?: 'ticker' | 'brokerage';
   onViewModeChange?: (mode: 'ticker' | 'brokerage') => void;
+  numbersVisible?: boolean;
 }
 
 const HoldingsView: React.FC<Props> = ({
@@ -36,10 +66,12 @@ const HoldingsView: React.FC<Props> = ({
   selectedBrokerages, setSelectedBrokerages,
   selectedAssetTypes, setSelectedAssetTypes,
   selectedTickers, setSelectedTickers,
+  selectedTerms, setSelectedTerms,
   title,
   accounts = [],
   viewMode = 'ticker',
   onViewModeChange,
+  numbersVisible = true,
 }) => {
   const accountMap = useMemo(() =>
     Object.fromEntries(accounts.map(a => [a.id, a.name])) as Record<number, string>,
@@ -58,8 +90,13 @@ const HoldingsView: React.FC<Props> = ({
   const tickerMenuRef = useRef<HTMLDivElement>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [isTermMenuOpen, setIsTermMenuOpen] = useState(false);
+  const termMenuRef = useRef<HTMLDivElement>(null);
+  const toggleTerm = (t: 'long' | 'short') =>
+    setSelectedTerms(selectedTerms.includes(t) ? selectedTerms.filter(x => x !== t) : [...selectedTerms, t]);
+  const lotMatchesTerm = (l: UnrealizedLot) =>
+    selectedTerms.length === 0 || selectedTerms.includes(l.isLongTerm ? 'long' : 'short');
   const [analystMedian, setAnalystMedian] = useState<Record<string, number>>({});
-  const [keepPct, setKeepPct] = useState(50);
   const [expandedBV_L1, setExpandedBV_L1] = useState<Set<string>>(new Set());
   const [expandedBV_L2, setExpandedBV_L2] = useState<Set<string>>(new Set());
   const [expandedBV_L3, setExpandedBV_L3] = useState<Set<string>>(new Set());
@@ -111,8 +148,8 @@ const HoldingsView: React.FC<Props> = ({
   }, [holdings]);
 
   useClickOutside(
-    [brokerageMenuRef, tickerMenuRef],
-    [setIsBrokerageMenuOpen, setIsTickerMenuOpen],
+    [brokerageMenuRef, tickerMenuRef, termMenuRef],
+    [setIsBrokerageMenuOpen, setIsTickerMenuOpen, setIsTermMenuOpen],
   );
 
   const washSaleByTicker = useMemo(() => {
@@ -193,6 +230,7 @@ const HoldingsView: React.FC<Props> = ({
     setSelectedTickers([]);
     setSortKey(null);
     setSortDirection(null);
+    setSelectedTerms([]);
   };
 
   const handleSort = (key: SortKey) => {
@@ -224,6 +262,14 @@ const HoldingsView: React.FC<Props> = ({
     <SortIndicator column={column} sortKey={sortKey} sortDirection={sortDirection} />
   );
 
+  const termBadge = (t: TermType) => {
+    if (!t) return <span className="text-slate-300 text-xs">—</span>;
+    const cls = t === 'Long' ? 'bg-[#E6EEFB] text-[#0A3E8F]'
+      : t === 'Short' ? 'bg-[#E5E5EA] text-[#6E6E73]'
+      : 'bg-amber-50 text-amber-700';
+    return <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${cls}`}>{t}</span>;
+  };
+
   const tickerRows = useMemo(() => {
     const filtered = holdings.filter(h => {
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(h.brokerage);
@@ -238,40 +284,54 @@ const HoldingsView: React.FC<Props> = ({
       grouped[key].push(h);
     });
 
+    const termActive = selectedTerms.length > 0;
+
     let rows = Object.entries(grouped).map(([rowKey, tickerHoldings]) => {
       const ticker = tickerHoldings[0].ticker;
       const assetType = tickerHoldings[0].assetType || 'Equity';
-      const totalQty = tickerHoldings.reduce((s, h) => s + h.quantity, 0);
-      const totalCost = tickerHoldings.reduce((s, h) => s + h.totalCost, 0);
-      const marketValue = tickerHoldings.reduce((s, h) => s + h.marketValue, 0);
-      const currentPrice = tickerHoldings[0].currentPrice;
-      const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
-      const unrealizedGain = marketValue - totalCost;
-      const r = realizedByTicker[ticker];
-      const afterTaxRealized = r ? (r.gain > 0 ? r.gain * (keepPct / 100) : r.gain) : 0;
-      const totalGain = unrealizedGain + afterTaxRealized;
 
       const holdingsByBrokerage: Record<string, StockHolding[]> = {};
       tickerHoldings.forEach(h => {
         if (!holdingsByBrokerage[h.brokerage]) holdingsByBrokerage[h.brokerage] = [];
         holdingsByBrokerage[h.brokerage].push(h);
       });
-      const allLots = (lotsByTicker[rowKey] || []).filter(l =>
-        selectedBrokerages.length === 0 || selectedBrokerages.includes(l.brokerage)
-      );
+      const allLots = (lotsByTicker[rowKey] || [])
+        .filter(l => selectedBrokerages.length === 0 || selectedBrokerages.includes(l.brokerage))
+        .filter(lotMatchesTerm);
       const lotsByBrokerage: Record<string, UnrealizedLot[]> = {};
       allLots.forEach(l => {
         if (!lotsByBrokerage[l.brokerage]) lotsByBrokerage[l.brokerage] = [];
         lotsByBrokerage[l.brokerage].push(l);
       });
+
+      // With a term filter active, row totals come from only the matching lots; otherwise
+      // from the precomputed StockHolding aggregates (unchanged default behavior).
+      const agg = termActive ? aggFromLots(allLots, assetType, tickerHoldings[0].currentPrice) : null;
+      const totalQty = agg ? agg.totalQty : tickerHoldings.reduce((s, h) => s + h.quantity, 0);
+      const totalCost = agg ? agg.totalCost : tickerHoldings.reduce((s, h) => s + h.totalCost, 0);
+      const marketValue = agg ? agg.marketValue : tickerHoldings.reduce((s, h) => s + h.marketValue, 0);
+      const currentPrice = agg ? agg.currentPrice : tickerHoldings[0].currentPrice;
+      const avgCost = agg ? agg.avgCost : (totalQty > 0 ? totalCost / totalQty : 0);
+      const unrealizedGain = agg ? agg.unrealizedGain : marketValue - totalCost;
+      const r = realizedByTicker[ticker];
+      const realized = r ? r.gain : 0;
+      const totalGain = unrealizedGain + realized;
+
+      const _lotM = (l: UnrealizedLot) => (l.assetType || '').toLowerCase() === 'options' ? 100 : 1;
+      const _lotDaily = (l: UnrealizedLot) => l.prevClose != null ? (l.currentPrice - l.prevClose) * l.quantity * _lotM(l) : 0;
+      const _lotPrevMV = (l: UnrealizedLot) => l.prevClose != null ? l.prevClose * l.quantity * _lotM(l) : 0;
+      const dailyGain = allLots.reduce((s, l) => s + _lotDaily(l), 0);
+      const dailyPrevMV = allLots.reduce((s, l) => s + _lotPrevMV(l), 0);
       const brokerageGroups = Object.keys(holdingsByBrokerage)
         .sort((a, b) => a.localeCompare(b))
         .map(brokerage => {
           const bHoldings = holdingsByBrokerage[brokerage];
-          const bQty = bHoldings.reduce((s, h) => s + h.quantity, 0);
-          const bCost = bHoldings.reduce((s, h) => s + h.totalCost, 0);
-          const bMarket = bHoldings.reduce((s, h) => s + h.marketValue, 0);
-          const lots = (lotsByBrokerage[brokerage] || []).sort((a, b) => {
+          const bLots = lotsByBrokerage[brokerage] || [];
+          const bAgg = termActive ? aggFromLots(bLots, assetType, currentPrice) : null;
+          const bQty = bAgg ? bAgg.totalQty : bHoldings.reduce((s, h) => s + h.quantity, 0);
+          const bCost = bAgg ? bAgg.totalCost : bHoldings.reduce((s, h) => s + h.totalCost, 0);
+          const bMarket = bAgg ? bAgg.marketValue : bHoldings.reduce((s, h) => s + h.marketValue, 0);
+          const lots = bLots.sort((a, b) => {
             let diff = 0;
             switch (lotSortKey) {
               case 'buyDate':      diff = new Date(a.buyDate).getTime() - new Date(b.buyDate).getTime(); break;
@@ -284,11 +344,18 @@ const HoldingsView: React.FC<Props> = ({
             }
             return lotSortDir === 'asc' ? diff : -diff;
           });
-          return { brokerage, totalQty: bQty, avgCost: bQty > 0 ? bCost / bQty : 0, totalCost: bCost, currentPrice, marketValue: bMarket, unrealizedGain: bMarket - bCost, lots, assetType };
-        });
+          const bDailyGain = lots.reduce((s, l) => s + _lotDaily(l), 0);
+          const bDailyPrevMV = lots.reduce((s, l) => s + _lotPrevMV(l), 0);
+          return { brokerage, totalQty: bQty, avgCost: bQty > 0 ? bCost / bQty : 0, totalCost: bCost, currentPrice, marketValue: bMarket, unrealizedGain: bMarket - bCost, dailyGain: bDailyGain, dailyPrevMV: bDailyPrevMV, lots, assetType, termType: lotsTermType(lots) };
+        })
+        // Drop brokerages with no matching lots when a term filter is active.
+        .filter(bg => !termActive || bg.lots.length > 0);
 
-      return { rowKey, ticker, totalQty, totalCost, avgCost, currentPrice, assetType, marketValue, unrealizedGain, afterTaxRealized, totalGain, brokerageGroups, ids: tickerHoldings.map(h => h.id) };
+      return { rowKey, ticker, totalQty, totalCost, avgCost, currentPrice, assetType, marketValue, unrealizedGain, dailyGain, dailyPrevMV, realized, totalGain, brokerageGroups, termType: lotsTermType(allLots), ids: tickerHoldings.map(h => h.id) };
     });
+
+    // Hide tickers with no matching lots when a term filter is active.
+    if (termActive) rows = rows.filter(r => r.brokerageGroups.length > 0);
 
     if (sortKey && sortDirection) {
       rows = [...rows].sort((a, b) => {
@@ -304,12 +371,17 @@ const HoldingsView: React.FC<Props> = ({
             };
             valA = wsPri(a); valB = wsPri(b); break;
           }
+          case 'termType':     valA = termRank(a.termType); valB = termRank(b.termType); break;
           case 'quantity':     valA = a.totalQty; valB = b.totalQty; break;
           case 'totalCost':    valA = a.totalCost; valB = b.totalCost; break;
           case 'currentPrice': valA = a.currentPrice; valB = b.currentPrice; break;
           case 'marketValue':  valA = a.marketValue; valB = b.marketValue; break;
           case 'gain':         valA = a.unrealizedGain; valB = b.unrealizedGain; break;
           case 'gainPct':      valA = a.avgCost > 0 ? (a.currentPrice - a.avgCost) / a.avgCost : 0; valB = b.avgCost > 0 ? (b.currentPrice - b.avgCost) / b.avgCost : 0; break;
+          case 'dailyGain':    valA = a.dailyGain; valB = b.dailyGain; break;
+          case 'dailyPct':     valA = a.dailyPrevMV > 0 ? a.dailyGain / a.dailyPrevMV : 0; valB = b.dailyPrevMV > 0 ? b.dailyGain / b.dailyPrevMV : 0; break;
+          case 'realized':     valA = a.realized; valB = b.realized; break;
+          case 'totalGain':    valA = a.totalGain; valB = b.totalGain; break;
           case 'analystPrice': valA = analystMedian[a.ticker] ?? -Infinity; valB = analystMedian[b.ticker] ?? -Infinity; break;
           case 'analystPct':   valA = analystMedian[a.ticker] && a.currentPrice > 0 ? (analystMedian[a.ticker] - a.currentPrice) / a.currentPrice : -Infinity; valB = analystMedian[b.ticker] && b.currentPrice > 0 ? (analystMedian[b.ticker] - b.currentPrice) / b.currentPrice : -Infinity; break;
           default: return 0;
@@ -323,12 +395,13 @@ const HoldingsView: React.FC<Props> = ({
     }
 
     return rows;
-  }, [holdings, unrealizedGains, realizedByTicker, lotsByTicker, selectedBrokerages, selectedTickers, sortKey, sortDirection, keepPct, lotSortKey, lotSortDir]);
+  }, [holdings, unrealizedGains, realizedByTicker, lotsByTicker, selectedBrokerages, selectedTickers, sortKey, sortDirection, lotSortKey, lotSortDir, selectedTerms]);
 
   type TickerRow = (typeof tickerRows)[0];
   type BrokerageGroup = TickerRow['brokerageGroups'][0];
 
   const brokerageRows = useMemo(() => {
+    const termActive = selectedTerms.length > 0;
     const filtered = holdings.filter(h => {
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(h.brokerage);
       const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(h.ticker);
@@ -351,19 +424,12 @@ const HoldingsView: React.FC<Props> = ({
         let tickers = Object.entries(brokerageMap[brokerage][acctKey]).map(([rowKey, tickerHoldings]) => {
           const ticker = tickerHoldings[0].ticker;
           const assetType = tickerHoldings[0].assetType || 'Equity';
-          const totalQty = tickerHoldings.reduce((s, h) => s + h.quantity, 0);
-          const totalCost = tickerHoldings.reduce((s, h) => s + h.totalCost, 0);
-          const marketValue = tickerHoldings.reduce((s, h) => s + h.marketValue, 0);
-          const currentPrice = tickerHoldings[0].currentPrice;
-          const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
-          const unrealizedGain = marketValue - totalCost;
-          const r = realizedByTicker[ticker];
-          const afterTaxRealized = r ? (r.gain > 0 ? r.gain * (keepPct / 100) : r.gain) : 0;
           const lots = unrealizedGains.filter(l =>
             l.brokerage === brokerage &&
             l.ticker === ticker &&
             (l.account_id ?? null) === account_id &&
-            (l.assetType || 'Equity') === assetType
+            (l.assetType || 'Equity') === assetType &&
+            lotMatchesTerm(l)
           ).sort((a, b) => {
             let diff = 0;
             switch (lotSortKey) {
@@ -377,20 +443,34 @@ const HoldingsView: React.FC<Props> = ({
             }
             return lotSortDir === 'asc' ? diff : -diff;
           });
-          return { rowKey, ticker, assetType, totalQty, avgCost, totalCost, currentPrice, marketValue, unrealizedGain, afterTaxRealized, totalGain: unrealizedGain + afterTaxRealized, lots };
+          // Term filter active → aggregates from matching lots; otherwise from StockHolding.
+          const agg = termActive ? aggFromLots(lots, assetType, tickerHoldings[0].currentPrice) : null;
+          const totalQty = agg ? agg.totalQty : tickerHoldings.reduce((s, h) => s + h.quantity, 0);
+          const totalCost = agg ? agg.totalCost : tickerHoldings.reduce((s, h) => s + h.totalCost, 0);
+          const marketValue = agg ? agg.marketValue : tickerHoldings.reduce((s, h) => s + h.marketValue, 0);
+          const currentPrice = agg ? agg.currentPrice : tickerHoldings[0].currentPrice;
+          const avgCost = agg ? agg.avgCost : (totalQty > 0 ? totalCost / totalQty : 0);
+          const unrealizedGain = agg ? agg.unrealizedGain : marketValue - totalCost;
+          const r = realizedByTicker[ticker];
+          const realized = r ? r.gain : 0;
+          return { rowKey, ticker, assetType, totalQty, avgCost, totalCost, currentPrice, marketValue, unrealizedGain, realized, totalGain: unrealizedGain + realized, lots, termType: lotsTermType(lots) };
         });
+        if (termActive) tickers = tickers.filter(t => t.lots.length > 0);
 
         if (sortKey && sortDirection) {
           tickers = [...tickers].sort((a, b) => {
             let valA: any, valB: any;
             switch (sortKey) {
               case 'ticker':       valA = a.ticker.toLowerCase(); valB = b.ticker.toLowerCase(); break;
+              case 'termType':     valA = termRank(a.termType); valB = termRank(b.termType); break;
               case 'quantity':     valA = a.totalQty; valB = b.totalQty; break;
               case 'totalCost':    valA = a.totalCost; valB = b.totalCost; break;
               case 'currentPrice': valA = a.currentPrice; valB = b.currentPrice; break;
               case 'marketValue':  valA = a.marketValue; valB = b.marketValue; break;
               case 'gain':         valA = a.unrealizedGain; valB = b.unrealizedGain; break;
               case 'gainPct':      valA = a.avgCost > 0 ? (a.currentPrice - a.avgCost) / a.avgCost : 0; valB = b.avgCost > 0 ? (b.currentPrice - b.avgCost) / b.avgCost : 0; break;
+              case 'realized':     valA = a.realized; valB = b.realized; break;
+              case 'totalGain':    valA = a.totalGain; valB = b.totalGain; break;
               case 'analystPrice': valA = analystMedian[a.ticker] ?? -Infinity; valB = analystMedian[b.ticker] ?? -Infinity; break;
               case 'analystPct':   valA = analystMedian[a.ticker] && a.currentPrice > 0 ? (analystMedian[a.ticker] - a.currentPrice) / a.currentPrice : -Infinity; valB = analystMedian[b.ticker] && b.currentPrice > 0 ? (analystMedian[b.ticker] - b.currentPrice) / b.currentPrice : -Infinity; break;
               default:             valA = a.ticker.toLowerCase(); valB = b.ticker.toLowerCase();
@@ -406,13 +486,13 @@ const HoldingsView: React.FC<Props> = ({
         const acctCost = tickers.reduce((s, t) => s + t.totalCost, 0);
         const acctMV = tickers.reduce((s, t) => s + t.marketValue, 0);
         return { account_id, totalCost: acctCost, marketValue: acctMV, unrealizedGain: acctMV - acctCost, tickers };
-      });
+      }).filter(a => !termActive || a.tickers.length > 0);
 
       const brkCost = accounts.reduce((s, a) => s + a.totalCost, 0);
       const brkMV = accounts.reduce((s, a) => s + a.marketValue, 0);
       return { brokerage, totalCost: brkCost, marketValue: brkMV, unrealizedGain: brkMV - brkCost, accounts };
-    });
-  }, [holdings, unrealizedGains, selectedBrokerages, selectedTickers, realizedByTicker, keepPct, lotSortKey, lotSortDir, sortKey, sortDirection, analystMedian]);
+    }).filter(b => !termActive || b.accounts.length > 0);
+  }, [holdings, unrealizedGains, selectedBrokerages, selectedTickers, realizedByTicker, lotSortKey, lotSortDir, sortKey, sortDirection, analystMedian, selectedTerms]);
 
   type BVBrokerageRow = (typeof brokerageRows)[0];
   type BVAccountRow = BVBrokerageRow['accounts'][0];
@@ -431,15 +511,18 @@ const HoldingsView: React.FC<Props> = ({
     switch (col) {
       case 'ticker':        return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA]')} onClick={() => handleSort('ticker')}><div className="flex items-center gap-0.5">Ticker <SI column="ticker" /></div></th>;
       case 'washSale':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA]')} onClick={() => handleSort('washSale')}><div className="flex items-center gap-0.5">Wash Sale <SI column="washSale" /></div></th>;
+      case 'termType':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA]')} onClick={() => handleSort('termType')}><div className="flex items-center gap-0.5">Term Type <SI column="termType" /></div></th>;
       case 'quantity':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('quantity')}><div className="flex items-center justify-end gap-0.5">Quantity <SI column="quantity" /></div></th>;
       case 'avgCost':       return <th key={col} {...dp} className={thCls(col, 'text-slate-400 text-right')}>Avg Price</th>;
       case 'totalCost':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('totalCost')}><div className="flex items-center justify-end gap-0.5">Total Value <SI column="totalCost" /></div></th>;
       case 'currentPrice':  return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('currentPrice')}><div className="flex items-center justify-end gap-0.5">Current Price <SI column="currentPrice" /></div></th>;
       case 'marketValue':   return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('marketValue')}><div className="flex items-center justify-end gap-0.5">Market Value <SI column="marketValue" /></div></th>;
-      case 'unrealizedGain':return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('gain')}><div className="flex items-center justify-end gap-0.5">Unrealized $ <SI column="gain" /></div></th>;
-      case 'unrealizedPct': return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('gainPct')}><div className="flex items-center justify-end gap-0.5">Unrealized % <SI column="gainPct" /></div></th>;
-      case 'realized':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 text-right')}>Realized</th>;
-      case 'totalGain':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 text-right')}>Total Gain</th>;
+      case 'dailyGain':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('dailyGain')}><div className="flex items-center justify-end gap-0.5">Daily $ <SI column="dailyGain" /></div></th>;
+      case 'dailyPct':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('dailyPct')}><div className="flex items-center justify-end gap-0.5">Daily % <SI column="dailyPct" /></div></th>;
+      case 'unrealizedGain':return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('gain')}><div className="flex items-center justify-end gap-0.5">Overall $ <SI column="gain" /></div></th>;
+      case 'unrealizedPct': return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('gainPct')}><div className="flex items-center justify-end gap-0.5">Overall % <SI column="gainPct" /></div></th>;
+      case 'realized':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('realized')}><div className="flex items-center justify-end gap-0.5">Realized <SI column="realized" /></div></th>;
+      case 'totalGain':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('totalGain')}><div className="flex items-center justify-end gap-0.5">Total Gain <SI column="totalGain" /></div></th>;
       case 'analystPrice':  return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('analystPrice')}><div className="flex items-center justify-end gap-0.5">Analyst $ <SI column="analystPrice" /></div></th>;
       case 'analystPct':    return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('analystPct')}><div className="flex items-center justify-end gap-0.5">Analyst % <SI column="analystPct" /></div></th>;
       default: return <th key={col} />;
@@ -476,14 +559,24 @@ const HoldingsView: React.FC<Props> = ({
           })()}
         </td>
       );
+      case 'termType':      return <td key={col} className="px-4 py-2">{termBadge(row.termType)}</td>;
       case 'quantity':      return <td key={col} className={`px-4 py-2 text-right font-bold text-slate-800 ${sz}`}>{n2(row.totalQty)}</td>;
       case 'avgCost':       return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>${n2(row.avgCost)}</td>;
       case 'totalCost':     return <td key={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>${n2(row.totalCost)}</td>;
       case 'currentPrice':  return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>${n2(row.currentPrice)}</td>;
       case 'marketValue':   return <td key={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>${n2(row.marketValue)}</td>;
+      case 'dailyGain': {
+        if (row.dailyPrevMV === 0) return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-300`}>—</td>;
+        const dg = row.dailyGain;
+        return <td key={col} className={`px-4 py-2 text-right ${sz} font-black ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}${n2(Math.abs(dg))}</td>;
+      }
+      case 'dailyPct': {
+        const dp2 = row.dailyPrevMV > 0 ? (row.dailyGain / row.dailyPrevMV) * 100 : null;
+        return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${dp2 != null ? dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600' : 'text-slate-300'}`}>{dp2 != null ? `${dp2 >= 0 ? '+' : ''}${dp2.toFixed(2)}%` : '—'}</td>;
+      }
       case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right ${sz} font-black ${row.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.unrealizedGain >= 0 ? '+' : '-'}${n2(Math.abs(row.unrealizedGain))}</td>;
       case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${row.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.avgCost > 0 ? `${row.unrealizedGain >= 0 ? '+' : ''}${((row.currentPrice - row.avgCost) / row.avgCost * 100).toFixed(2)}%` : '—'}</td>;
-      case 'realized':      return <td key={col} className="px-4 py-2 text-right">{row.afterTaxRealized !== 0 ? <div className={`${sz} font-black ${row.afterTaxRealized >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.afterTaxRealized >= 0 ? '+' : '-'}${n2(Math.abs(row.afterTaxRealized))}</div> : <div className="text-xs text-slate-300">—</div>}</td>;
+      case 'realized':      return <td key={col} className="px-4 py-2 text-right">{row.realized !== 0 ? <div className={`${sz} font-black ${row.realized >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.realized >= 0 ? '+' : '-'}${n2(Math.abs(row.realized))}</div> : <div className="text-xs text-slate-300">—</div>}</td>;
       case 'totalGain':     return <td key={col} className="px-4 py-2 text-right"><div className={`${sz} font-black ${row.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalGain >= 0 ? '+' : '-'}${n2(Math.abs(row.totalGain))}</div></td>;
       case 'analystPrice':  return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold text-[#0F52BA]`}>{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-xs text-slate-300">—</span>}</td>;
       case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && row.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - row.currentPrice) / row.currentPrice) * 100; return <span className={`${sz} font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>; })() : <span className="text-xs text-slate-300">—</span>}</td>;
@@ -499,11 +592,21 @@ const HoldingsView: React.FC<Props> = ({
         </td>
       );
       case 'washSale':      return <td key={col} />;
+      case 'termType':      return <td key={col} className="px-4 py-2">{termBadge(bg.termType)}</td>;
       case 'quantity':      return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{bg.totalQty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
       case 'avgCost':       return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">${bg.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
       case 'totalCost':     return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">${bg.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
       case 'currentPrice':  return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">${bg.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
       case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">${bg.marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
+      case 'dailyGain': {
+        if (bg.dailyPrevMV === 0) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
+        const dg = bg.dailyGain;
+        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}${Math.abs(dg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
+      }
+      case 'dailyPct': {
+        const dp2 = bg.dailyPrevMV > 0 ? (bg.dailyGain / bg.dailyPrevMV) * 100 : null;
+        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 != null ? dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600' : 'text-slate-300'}`}>{dp2 != null ? `${dp2 >= 0 ? '+' : ''}${dp2.toFixed(2)}%` : '—'}</td>;
+      }
       case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${bg.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{bg.unrealizedGain >= 0 ? '+' : '-'}${Math.abs(bg.unrealizedGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
       case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${bg.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{bg.totalCost > 0 ? `${bg.unrealizedGain >= 0 ? '+' : ''}${(bg.unrealizedGain / bg.totalCost * 100).toFixed(2)}%` : '—'}</td>;
       case 'realized':      return <td key={col} />;
@@ -526,14 +629,17 @@ const HoldingsView: React.FC<Props> = ({
     switch (col) {
       case 'ticker':        return <td key={col} className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap cursor-pointer select-none hover:text-[#0F52BA] transition-colors" style={{ color: lotSortKey === 'buyDate' ? '#0F52BA' : undefined }} onClick={() => handleLotSort('buyDate')}><div className="flex items-center gap-0.5">Buy Date<LotSortIndicator col="buyDate" /></div></td>;
       case 'washSale':      return staticTd('Wash Sale', 'left');
+      case 'termType':      return staticTd('Term Type', 'left');
       case 'quantity':      return lotTh('quantity', 'Qty');
       case 'avgCost':       return lotTh('buyPrice', 'Buy Price');
       case 'totalCost':     return lotTh('totalCost', 'Total Value');
       case 'currentPrice':  return lotTh('currentPrice', 'Current Price');
       case 'marketValue':   return lotTh('marketValue', 'Market Value');
-      case 'unrealizedGain':return lotTh('gain', 'Unrealized $');
-      case 'unrealizedPct': return staticTd('Unrealized %');
-      case 'realized':      return staticTd('Term');
+      case 'dailyGain':     return staticTd('Daily $');
+      case 'dailyPct':      return staticTd('Daily %');
+      case 'unrealizedGain':return lotTh('gain', 'Overall $');
+      case 'unrealizedPct': return staticTd('Overall %');
+      case 'realized':      return <td key={col} />;
       case 'totalGain':     return <td key={col} />;
       case 'analystPrice':  return staticTd('Analyst $');
       case 'analystPct':    return staticTd('Analyst %');
@@ -568,14 +674,26 @@ const HoldingsView: React.FC<Props> = ({
           })()}
         </td>
       );
+      case 'termType':      return <td key={col} className="px-4 py-2">{termBadge(lot.isLongTerm ? 'Long' : 'Short')}</td>;
       case 'quantity':      return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-600 font-medium">{lot.quantity.toFixed(2)}</td>;
       case 'avgCost':       return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">${lot.buyPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
       case 'totalCost':     return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">${lotCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
       case 'currentPrice':  return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">${lot.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
       case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">${lotMarket.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
+      case 'dailyGain': {
+        if (lot.prevClose == null) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
+        const m = (lot.assetType || '').toLowerCase() === 'options' ? 100 : 1;
+        const dg = (lot.currentPrice - lot.prevClose) * lot.quantity * m;
+        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}${Math.abs(dg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
+      }
+      case 'dailyPct': {
+        if (lot.prevClose == null || lot.prevClose === 0) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
+        const dp2 = ((lot.currentPrice - lot.prevClose) / lot.prevClose) * 100;
+        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dp2 >= 0 ? '+' : ''}{dp2.toFixed(2)}%</td>;
+      }
       case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-[11px] font-black ${lot.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{lot.gain >= 0 ? '+' : '-'}${Math.abs(lot.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
       case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${lot.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{lot.buyPrice > 0 ? `${lot.gain >= 0 ? '+' : ''}${((lot.currentPrice - lot.buyPrice) / lot.buyPrice * 100).toFixed(2)}%` : '—'}</td>;
-      case 'realized':      return <td key={col} className="px-4 py-2 text-right"><span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${lot.isLongTerm ? 'bg-[#E6EEFB] text-[#0A3E8F]' : 'bg-[#E5E5EA] text-[#6E6E73]'}`}>{lot.isLongTerm ? 'LT' : 'ST'}</span></td>;
+      case 'realized':      return <td key={col} />;
       case 'totalGain':     return <td key={col} />;
       case 'analystPrice':  return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold text-[#0F52BA]">{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-[10px] text-slate-300">—</span>}</td>;
       case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && lot.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - lot.currentPrice) / lot.currentPrice) * 100; return <span className={`text-[11px] font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>; })() : <span className="text-[10px] text-slate-300">—</span>}</td>;
@@ -596,6 +714,8 @@ const HoldingsView: React.FC<Props> = ({
       case 'ticker':        return <td key={col} className="px-4 py-2"><span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${brokerageBadgeCls(row.brokerage)}`}>{row.brokerage}</span></td>;
       case 'totalCost':     return <td key={col} className="px-4 py-2 text-right font-black text-slate-900 text-sm">${fmt(row.totalCost)}</td>;
       case 'marketValue':   return <td key={col} className="px-4 py-2 text-right font-black text-slate-900 text-sm">${fmt(row.marketValue)}</td>;
+      case 'dailyGain':     return <td key={col} />;
+      case 'dailyPct':      return <td key={col} />;
       case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-sm font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{g >= 0 ? '+' : '-'}${fmt(Math.abs(g))}</td>;
       case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-sm font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalCost > 0 ? `${g >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—'}</td>;
       default:              return <td key={col} />;
@@ -611,6 +731,8 @@ const HoldingsView: React.FC<Props> = ({
       case 'ticker':        return <td key={col} className="px-4 py-2"><span className="text-sm font-semibold text-slate-700">{displayName ?? <span className="text-slate-400 italic">Default</span>}</span></td>;
       case 'totalCost':     return <td key={col} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">${fmt(row.totalCost)}</td>;
       case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">${fmt(row.marketValue)}</td>;
+      case 'dailyGain':     return <td key={col} />;
+      case 'dailyPct':      return <td key={col} />;
       case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-xs font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{g >= 0 ? '+' : '-'}${fmt(Math.abs(g))}</td>;
       case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-xs font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalCost > 0 ? `${g >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—'}</td>;
       default:              return <td key={col} />;
@@ -696,28 +818,34 @@ const HoldingsView: React.FC<Props> = ({
                 </div>
               )}
             </div>
+
+            {/* Term Type Filter — lot-level; row totals reflect only matching lots */}
+            <div className="relative" ref={termMenuRef}>
+              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Term Type</label>
+              <button onClick={() => setIsTermMenuOpen(!isTermMenuOpen)} className="flex items-center justify-between pl-3 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left">
+                <span className="truncate max-w-[100px] capitalize">{selectedTerms.length === 0 ? 'All Terms' : selectedTerms.length === 1 ? selectedTerms[0] : 'Long & Short'}</span>
+                <svg className={`w-4 h-4 text-slate-400 transition-transform ${isTermMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              {isTermMenuOpen && (
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50">
+                  <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Term Type</span>
+                    {selectedTerms.length > 0 && <button onClick={() => setSelectedTerms([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
+                  </div>
+                  <div className="max-h-60 overflow-y-auto p-2 space-y-1">
+                    {(['long', 'short'] as const).map(t => (
+                      <label key={t} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
+                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedTerms.includes(t)} onChange={() => toggleTerm(t)} />
+                        <span className="ml-3 text-sm font-bold text-slate-700 capitalize">{t}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="w-px h-8 bg-slate-200 shrink-0" />
-
-          {/* After-Tax Keep slider */}
-          <div className="relative shrink-0">
-            <div className="absolute -top-2 left-2 bg-white px-1 z-10 flex items-center gap-1">
-              <span className="text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter">After-Tax Keep</span>
-              <div className="relative group">
-                <svg className="w-3 h-3 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div className="absolute left-0 bottom-5 w-56 bg-slate-900 text-white text-[11px] font-normal normal-case tracking-normal rounded-md px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed">
-                  Applied to <span className="text-emerald-400 font-bold">profits only</span>. Losses are always counted at <span className="text-rose-400 font-bold">100%</span>.
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 pl-3 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md">
-              <input type="range" min={0} max={100} step={5} value={keepPct} onChange={e => setKeepPct(Number(e.target.value))} className="w-28 accent-[#0F52BA]00 cursor-pointer" />
-              <span className="text-sm font-bold text-[#0F52BA] w-8 text-right">{keepPct}%</span>
-            </div>
-          </div>
 
           <button onClick={resetFilters} className="text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 shrink-0">
             Reset
@@ -738,6 +866,7 @@ const HoldingsView: React.FC<Props> = ({
       {title && <h3 className="font-display text-2xl font-bold text-[#1D1D1F]">{title}</h3>}
 
       {/* Table */}
+      <div className={!numbersVisible ? 'blur-sm select-none pointer-events-none' : ''}>
       {viewMode === 'ticker' && (tickerRows.length === 0 ? (
         <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
           <div className="max-w-xs mx-auto space-y-4">
@@ -969,6 +1098,7 @@ const HoldingsView: React.FC<Props> = ({
           </table>
         </div>
       ))}
+      </div>
     </div>
   );
 };

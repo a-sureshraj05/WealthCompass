@@ -30,6 +30,8 @@ interface Props {
   onSyncTransactions: () => Promise<string>;
   onProcessGains: () => void;
   setLoading: (l: boolean) => void;
+  numbersVisible?: boolean;
+  onToggleNumbers?: () => void;
   selectedBrokerages: string[];
   setSelectedBrokerages: (v: string[]) => void;
   selectedAssetTypes: string[];
@@ -61,6 +63,8 @@ const DashboardView: React.FC<Props> = ({
   onSyncTransactions,
   onProcessGains,
   setLoading,
+  numbersVisible = true,
+  onToggleNumbers,
   selectedBrokerages,
   setSelectedBrokerages,
   selectedAssetTypes,
@@ -75,8 +79,13 @@ const DashboardView: React.FC<Props> = ({
   const [focusTicker, setFocusTicker] = useState<string | null>(null);
   const [focusDate, setFocusDate] = useState<string | null>(null);
   const [autoExpand, setAutoExpand] = useState<{ ticker: string; brokerage: string } | null>(null);
-  const [optionsTaxRate, setOptionsTaxRate] = useState('40');
   const [holdingsViewMode, setHoldingsViewMode] = useState<'ticker' | 'brokerage'>('ticker');
+  // Short-/long-term tax rates edited in the Gains & Losses tab, shared with the
+  // Options table's Gain-to-Sell calculation (long positions taxed at the LT rate).
+  const [stTaxRate, setStTaxRate] = useState<number>(37);
+  const [ltTaxRate, setLtTaxRate] = useState<number>(20);
+  // Term Type filter shared by the Equity (HoldingsView) and Options tables.
+  const [selectedTerms, setSelectedTerms] = useState<('long' | 'short')[]>([]);
 
   useEffect(() => { setSyncMessage(''); }, [activeTab]);
   useEffect(() => { if (activeTab !== 'transactions') { setFocusTicker(null); setFocusDate(null); } }, [activeTab]);
@@ -99,6 +108,7 @@ const DashboardView: React.FC<Props> = ({
         </div>
         <HoldingsView
           title="Equity"
+          numbersVisible={numbersVisible}
           holdings={holdings.filter(h => (h.assetType || '').toLowerCase() !== 'options')}
           unrealizedGains={unrealizedGains.filter(u => (u.assetType || '').toLowerCase() !== 'options')}
           realizedGains={realizedGains.filter(r => (r.assetType || '').toLowerCase() !== 'options')}
@@ -113,6 +123,7 @@ const DashboardView: React.FC<Props> = ({
           selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages}
           selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes}
           selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers}
+          selectedTerms={selectedTerms} setSelectedTerms={setSelectedTerms}
           accounts={accounts}
           viewMode={holdingsViewMode}
           onViewModeChange={setHoldingsViewMode}
@@ -120,21 +131,9 @@ const DashboardView: React.FC<Props> = ({
         <div className="space-y-2">
           <div className="flex items-start justify-between">
             <h3 className="font-display text-2xl font-bold text-[#1D1D1F]">Options</h3>
-            <div className="text-right">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-500">Tax Rate</span>
-                <input
-                  type="number" min={0} max={100} step={1}
-                  value={optionsTaxRate}
-                  onChange={e => setOptionsTaxRate(e.target.value)}
-                  className="w-12 px-1.5 py-0.5 text-right border border-[#D2D2D7] rounded text-xs focus:outline-none focus:ring-2 focus:ring-[#0F52BA] font-semibold text-[#0A3E8F] bg-[#E6EEFB]/20"
-                />
-                <span className="text-xs font-bold text-slate-500">%</span>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-0.5">Applied to projected gain from sellable contracts</p>
-            </div>
+            <p className="text-[10px] text-slate-400 mt-1 text-right">Gain to Sell uses ST {stTaxRate}% / LT {ltTaxRate}% rates<br />from the Gains &amp; Losses tab</p>
           </div>
-          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} taxRateInput={optionsTaxRate} onTaxRateChange={setOptionsTaxRate} accounts={accounts} viewMode={holdingsViewMode} />
+          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} selectedTerms={selectedTerms} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} stTaxRate={stTaxRate} ltTaxRate={ltTaxRate} accounts={accounts} viewMode={holdingsViewMode} numbersVisible={numbersVisible} />
         </div>
       </div>
     );
@@ -172,7 +171,7 @@ const DashboardView: React.FC<Props> = ({
             {syncMessage}
           </p>
         )}
-        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} focusTicker={focusTicker} focusDate={focusDate} onClearFocus={() => { setFocusTicker(null); setFocusDate(null); }} allKnownBrokerages={allKnownBrokerages} accounts={accounts} />
+        <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} focusTicker={focusTicker} focusDate={focusDate} onClearFocus={() => { setFocusTicker(null); setFocusDate(null); }} allKnownBrokerages={allKnownBrokerages} accounts={accounts} numbersVisible={numbersVisible} />
       </div>
     );
   }
@@ -189,7 +188,7 @@ const DashboardView: React.FC<Props> = ({
             Refresh Data
           </button>
         </div>
-        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} />
+        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} stTaxRate={stTaxRate} setStTaxRate={setStTaxRate} ltTaxRate={ltTaxRate} setLtTaxRate={setLtTaxRate} numbersVisible={numbersVisible} />
       </div>
     );
   }
@@ -201,11 +200,11 @@ const DashboardView: React.FC<Props> = ({
         <div className="mt-1 w-8 h-0.5 bg-[#0F52BA]" />
       </div>
 
-      <SummaryCards stats={stats} cashByBrokerage={buyingPower} />
+      <SummaryCards stats={stats} cashByBrokerage={buyingPower} numbersVisible={numbersVisible} onToggleNumbers={onToggleNumbers} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 h-full">
-          <PortfolioVisuals holdings={holdings} cashByBrokerage={buyingPower} />
+          <PortfolioVisuals holdings={holdings} cashByBrokerage={buyingPower} numbersVisible={numbersVisible} onToggleNumbers={onToggleNumbers} />
         </div>
 
         <div>

@@ -69,8 +69,10 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
 
             try:
                 diff_days = (today - buy_date_dt).days
-                is_options = (lot.get("assetType") or "").lower() == "options"
-                is_long_term = False if is_options else diff_days > 365
+                # Long (bought-to-open) options and equities qualify as long-term
+                # after 365 days; short (written) options are always short-term.
+                is_short_position = lot.get("is_short_position", False)
+                is_long_term = (not is_short_position) and diff_days > 365
 
                 m = _multiplier(lot.get("assetType"))
                 # For equity, use cost_per_unit as the effective buy price so that
@@ -96,6 +98,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
                     quantity=lot["quantity"],
                     buyPrice=buy_price,
                     currentPrice=current_price,
+                    prevClose=prev_close,
                     unrealizedGain=unrealized_gain_value,
                     isLongTerm=is_long_term,
                     assetType=lot.get("assetType"),

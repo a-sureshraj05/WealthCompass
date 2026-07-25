@@ -5,7 +5,7 @@ import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LoginPage from './components/LoginPage';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchAnalystData, fetchAccounts } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchBuyingPowerCached, fetchAnalystData, fetchAnalystDataCached, fetchAccounts } from './services/apiService';
 import { BrokerageAccount } from './types';
 import TickerTypeContext from './contexts/TickerTypeContext';
 
@@ -46,6 +46,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [realizedGains, setRealizedGains] = useState<RealizedGain[]>([]);
   const [unrealizedGains, setUnrealizedGains] = useState<UnrealizedLot[]>([]);
   const [loading, setLoading] = useState(false);
+  const [numbersVisible, setNumbersVisible] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses'>('dashboardView');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const transactionsDirty = React.useRef(false);
@@ -73,17 +74,46 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const getHoldings = useCallback(async () => {
     try {
-      const [h, cash, bp, accts] = await Promise.all([fetchHoldings(), fetchCashBalance(), fetchBuyingPower(), fetchAccounts()]);
+      const [h, accts, cash, cachedBP, cachedAnalyst] = await Promise.all([
+        fetchHoldings(), fetchAccounts(), fetchCashBalance(), fetchBuyingPowerCached(), fetchAnalystDataCached(),
+      ]);
       setAccounts(accts);
-      const tickers = [...new Set(h.map(x => x.ticker))];
-      const analystData = tickers.length > 0 ? await fetchAnalystData(tickers) : [];
-      const sectorMap: Record<string, string> = {};
-      analystData.forEach(a => { if (a.sector) sectorMap[a.ticker] = a.sector; });
-      setHoldings(h.map(x => ({ ...x, sector: sectorMap[x.ticker] })));
       setCashBalance(cash);
-      setBuyingPower(bp);
+      setBuyingPower(cachedBP);
+      if (cachedAnalyst.length > 0) {
+        const sectorMap: Record<string, string> = {};
+        cachedAnalyst.forEach((a: any) => { if (a.sector) sectorMap[a.ticker] = a.sector; });
+        setHoldings(h.map((x: any) => ({ ...x, sector: sectorMap[x.ticker] })));
+      } else {
+        setHoldings(h);
+      }
     } catch (error) {
       console.error("Failed to fetch holdings:", error);
+    }
+  }, []);
+
+  // Hits SnapTrade live — only called on explicit sync/refresh, result cached in DB
+  const getBuyingPower = useCallback(async () => {
+    try {
+      setBuyingPower(await fetchBuyingPower());
+    } catch (error) {
+      console.error("Failed to fetch buying power:", error);
+    }
+  }, []);
+
+  // Hits yfinance for all tickers — fires in background after main refresh, result cached in DB
+  // Fetches fresh holdings to get current tickers (avoids stale closure on holdings state)
+  const refreshAnalystData = useCallback(async () => {
+    try {
+      const h = await fetchHoldings();
+      const tickers = [...new Set(h.map(x => x.ticker))];
+      if (tickers.length === 0) return;
+      const analystData = await fetchAnalystData(tickers);
+      const sectorMap: Record<string, string> = {};
+      analystData.forEach((a: any) => { if (a.sector) sectorMap[a.ticker] = a.sector; });
+      setHoldings(h.map(x => ({ ...x, sector: sectorMap[x.ticker] })));
+    } catch (error) {
+      console.error("Failed to refresh analyst data:", error);
     }
   }, []);
 
@@ -107,15 +137,14 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     getHoldings();
     getRealizedGains();
     getUnrealizedGains();
-  }, [getHoldings, getRealizedGains, getUnrealizedGains]);
+    refreshAnalystData(); // background — renders from cache above, then patches when yfinance returns
+  }, [getHoldings, getRealizedGains, getUnrealizedGains, refreshAnalystData]);
 
   // Fetch transactions from backend with filters
-  const getTransactions = useCallback(async () => { // Wrapped in useCallback
-    setLoading(true);
+  const getTransactions = useCallback(async () => {
     let finalStartDate: string | null = startDate;
     let finalEndDate: string | null = endDate;
 
-    // Calculate start and end dates based on dateRangeType
     const now = new Date();
     if (dateRangeType === '30d') {
       const d = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
@@ -132,7 +161,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     } else if (dateRangeType === 'all') {
       finalStartDate = null;
       finalEndDate = null;
-    } // 'custom' range uses existing startDate/endDate states
+    }
 
     try {
       const fetchedTransactions = await fetchTransactions(
@@ -144,10 +173,8 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       setTransactions(fetchedTransactions);
     } catch (error) {
       console.error("Failed to fetch transactions:", error);
-    } finally {
-      setLoading(false);
     }
-  }, [setTransactions, setLoading, selectedBrokerages, selectedTickers, startDate, endDate, dateRangeType]); // Added dependencies
+  }, [setTransactions, selectedBrokerages, selectedTickers, startDate, endDate, dateRangeType]); // Added dependencies
 
   useEffect(() => {
     getTransactions();
@@ -228,7 +255,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     setLoading(true);
     try {
       await resetTransactions(brokerage);
-      await Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains()]);
+      await Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower()]); refreshAnalystData();
     } catch (error) {
       console.error('Failed to reset data:', error);
     } finally {
@@ -257,7 +284,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     setLoading(true);
     try {
       await resetTransactions();
-      await Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains()]);
+      await Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower()]); refreshAnalystData();
       return 'Transactions reprocessed from raw data.';
     } catch (error) {
       console.error('Failed to reprocess transactions:', error);
@@ -272,7 +299,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     setLoading(true);
     try {
       await triggerRealizedGainsProcess();
-      await Promise.all([getHoldings(), getRealizedGains(), getUnrealizedGains()]);
+      await Promise.all([getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower()]); refreshAnalystData();
       transactionsDirty.current = false;
     } catch (error) {
       console.error("Failed to process gains:", error);
@@ -294,19 +321,21 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} />
+        <Navbar stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} numbersVisible={numbersVisible} onToggleNumbers={() => setNumbersVisible(v => !v)} />
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <DashboardView
             activeTab={activeTab}
             setActiveTab={handleSetActiveTab}
+            numbersVisible={numbersVisible}
+            onToggleNumbers={() => setNumbersVisible(v => !v)}
             holdings={holdings}
             transactions={transactions}
             realizedGains={realizedGains}
             unrealizedGains={unrealizedGains}
             stats={stats}
             onAddTransactions={handleAddTransactions}
-            onRefresh={() => Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains()])}
+            onRefresh={() => { Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower()]); refreshAnalystData(); }}
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
             onSoftDeleteTransaction={handleSoftDeleteTransaction}

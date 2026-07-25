@@ -101,6 +101,7 @@ class UnrealizedGain(Base):
     quantity = Column(Float)
     buyPrice = Column(Float)
     currentPrice = Column(Float)
+    prevClose = Column(Float, nullable=True)
     unrealizedGain = Column(Float)
     isLongTerm = Column(Boolean)
     assetType = Column(String)
@@ -123,6 +124,16 @@ class OptionsRetain(Base):
     retain_quantity = Column(Float, nullable=False, default=0)
 
     __table_args__ = (UniqueConstraint("brokerage", "ticker", "buy_date", name="uq_options_retain"),)
+
+
+class PortfolioSummary(Base):
+    """Single-row cache of precomputed/fetched portfolio stats."""
+    __tablename__ = "portfolio_summary"
+
+    id = Column(Integer, primary_key=True, default=1)
+    cash_balance = Column(Float, default=0.0)
+    buying_power_json = Column(String, nullable=True)  # JSON: {brokerage: amount}
+    analyst_json = Column(String, nullable=True)       # JSON: [AnalystData, ...]
 
 
 class TickerReference(Base):

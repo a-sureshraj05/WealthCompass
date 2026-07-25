@@ -8,6 +8,19 @@ from backend.app.core.transaction_actions import BUY_ACTIONS, SELL_ACTIONS, OPTI
 from backend.app.core.stock_split_utils import build_split_map, apply_splits_to_lot
 
 
+def is_long_term_holding(buy_date, sell_date, is_short_position: bool) -> bool:
+    """Long-term capital gain eligibility.
+
+    Equities and *long* (bought-to-open) options qualify as long-term when held
+    more than 365 days. *Short* (sold-to-open / written) options are always
+    short-term regardless of holding period, per IRS rules. `is_short_position`
+    is only ever True for written options; it is False for all equity lots.
+    """
+    if is_short_position:
+        return False
+    return (sell_date - buy_date).days > 365
+
+
 def delete(db: Session, brokerage_name: str = None):
     if brokerage_name:
         db.query(RealizedGain).filter(RealizedGain.brokerage == brokerage_name).delete()
@@ -118,12 +131,19 @@ def load(db: Session, brokerage_name: str = None, tracked_tickers: Optional[Set[
 
         sorted_transactions = sorted(ticker_transactions, key=lambda x: (x.date, x.id))
 
+        # An option position is "short" (written) if the opening transaction for the
+        # contract is a sell-to-open. Short options are always short-term for tax
+        # purposes; long (bought-to-open) options follow the >365-day rule. Equities
+        # are never short here.
+        is_short_position = bool(option_symbol) and sorted_transactions[0].action.upper() in SELL_ACTIONS
+
         # Each lot tracks its transaction_id so explicit assignments can find it
         buy_lots_queue: List[Dict[str, Any]] = []
 
         def _record_gain(lot, sell_txn, qty, adj_sell_cpu=None, adj_sell_price=None):
-            is_options = (lot.get("assetType") or "").lower() == "options"
-            is_long_term = False if is_options else (sell_txn.date - lot["date"]).days > 365
+            is_long_term = is_long_term_holding(
+                lot["date"], sell_txn.date, lot.get("is_short_position", False)
+            )
             # Use cost_per_unit derived from the source totalCost — this already reflects
             # the options multiplier (100 shares/contract) as reported by the brokerage.
             buy_cost_per_unit = lot["cost_per_unit"]
@@ -170,6 +190,7 @@ def load(db: Session, brokerage_name: str = None, tracked_tickers: Optional[Set[
                     "ticker": t.ticker,
                     "assetType": t.assetType,
                     "option_symbol": getattr(t, "option_symbol", None),
+                    "is_short_position": is_short_position,
                 }
                 # Apply stock splits that occurred after this buy date (equity only).
                 # EXTERNAL_ASSET_TRANSFER_IN lots already carry post-split cost basis
@@ -185,7 +206,11 @@ def load(db: Session, brokerage_name: str = None, tracked_tickers: Optional[Set[
                 while buy_lots_queue:
                     lot = buy_lots_queue[0]
                     qty = lot["quantity"]
-                    is_long_term = False  # options never qualify as long-term
+                    # A long option that expires worthless is treated as sold for $0
+                    # on the expiration date — long-term if it was held > 365 days.
+                    is_long_term = is_long_term_holding(
+                        lot["date"], t.date, lot.get("is_short_position", False)
+                    )
                     realized_gains_list.append(RealizedGain(
                         brokerage=lot["brokerage"],
                         ticker=underlying_ticker(ticker),

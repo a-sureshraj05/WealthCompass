@@ -34,9 +34,10 @@ interface Props {
   onClearFocus?: () => void;
   allKnownBrokerages?: string[];
   accounts?: BrokerageAccount[];
+  numbersVisible?: boolean;
 }
 
-const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert, selectedBrokerages, setSelectedBrokerages, selectedAssetTypes, setSelectedAssetTypes, selectedTickers, setSelectedTickers, focusTicker, focusDate, onClearFocus, allKnownBrokerages, accounts = [] }) => {
+const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelete, onUpdate, onRevert, selectedBrokerages, setSelectedBrokerages, selectedAssetTypes, setSelectedAssetTypes, selectedTickers, setSelectedTickers, focusTicker, focusDate, onClearFocus, allKnownBrokerages, accounts = [], numbersVisible = true }) => {
   const accountMap = useMemo(() => Object.fromEntries(accounts.map(a => [a.id, a.name])) as Record<number, string>, [accounts]);
   const [dateRangeType, setDateRangeType] = useState<DateRangeType>('all');
   const [startDate, setStartDate] = useState<string>('');
@@ -767,7 +768,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white overflow-hidden">
+        <div className={`overflow-x-auto rounded border border-[#D2D2D7] bg-white overflow-hidden${!numbersVisible ? ' blur-sm select-none pointer-events-none' : ''}`}>
           <table className="w-full text-left">
             <thead>
               <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">

@@ -14,6 +14,24 @@ const fmt = (n: number, decimals = 2) =>
 
 const fmtCurrency = (n: number) => `$${fmt(Math.abs(n))}`;
 
+type TermType = 'Long' | 'Short' | 'Mixed' | null;
+// Long if held > 1 year, Short if held ≤ 1 year (from the backend isLongTerm flag,
+// which encodes the >365-day rule). Aggregated rows with both terms return 'Mixed'.
+const termTypeOf = (items: { isLongTerm: boolean }[]): TermType => {
+  if (items.length === 0) return null;
+  const hasLong = items.some(i => i.isLongTerm);
+  const hasShort = items.some(i => !i.isLongTerm);
+  return hasLong && hasShort ? 'Mixed' : hasLong ? 'Long' : 'Short';
+};
+const termRank = (t: TermType) => (t === 'Long' ? 2 : t === 'Mixed' ? 1 : t === 'Short' ? 0 : -1);
+const termBadge = (t: TermType) => {
+  if (!t) return <span className="text-slate-300 text-xs">—</span>;
+  const cls = t === 'Long' ? 'bg-[#E6EEFB] text-[#0A3E8F]'
+    : t === 'Short' ? 'bg-[#E5E5EA] text-[#6E6E73]'
+    : 'bg-amber-50 text-amber-700';
+  return <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${cls}`}>{t}</span>;
+};
+
 interface BrokerageGroup {
   brokerage: string;
   totalQty: number;
@@ -24,6 +42,9 @@ interface BrokerageGroup {
   avgCurrentPrice: number;
   marketValue: number;
   unrealizedGain: number;
+  dailyGain: number;
+  dailyPrevMV: number;
+  termType: TermType;
   positions: OptionsPosition[];
 }
 
@@ -38,26 +59,31 @@ interface TickerCalc {
   avgCurrentPrice: number;
   marketValue: number;
   unrealizedGain: number;
+  dailyGain: number;
+  dailyPrevMV: number;
   sellableCostBasis: number;
   realizedLosses: number;
   targetPrice: number | null;
   projectedGainPct: number | null;
   isCovered: boolean;
+  termType: TermType;
 }
 
 interface OptionsViewProps {
   selectedBrokerages?: string[];
   selectedTickers?: string[];
+  selectedTerms?: ('long' | 'short')[];
   holdings?: StockHolding[];
   unrealizedGains?: UnrealizedLot[];
   realizedGains?: RealizedGain[];
-  taxRateInput?: string;
-  onTaxRateChange?: (v: string) => void;
+  stTaxRate?: number;
+  ltTaxRate?: number;
   accounts?: BrokerageAccount[];
   viewMode?: 'ticker' | 'brokerage';
+  numbersVisible?: boolean;
 }
 
-const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [], holdings = [], unrealizedGains = [], realizedGains = [], taxRateInput: taxRateInputProp, onTaxRateChange, accounts = [], viewMode = 'ticker' }) => {
+const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], selectedTickers = [], selectedTerms = [], holdings = [], unrealizedGains = [], realizedGains = [], stTaxRate = 37, ltTaxRate = 20, accounts = [], viewMode = 'ticker', numbersVisible = true }) => {
   const accountMap = useMemo(() => Object.fromEntries(accounts.map(a => [a.id, a.name])) as Record<number, string>, [accounts]);
   const [positions, setPositions] = useState<OptionsPosition[]>([]);
   const [calculator, setCalculator] = useState<OptionsCalculator | null>(null);
@@ -65,9 +91,6 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   const [saving, setSaving] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [taxRateInputLocal, setTaxRateInputLocal] = useState('40');
-  const taxRateInput = taxRateInputProp ?? taxRateInputLocal;
-  const setTaxRateInput = onTaxRateChange ?? setTaxRateInputLocal;
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
   const [expandedBrokerages, setExpandedBrokerages] = useState<Set<string>>(new Set());
   const [expandedBV_L1, setExpandedBV_L1] = useState<Set<string>>(new Set());
@@ -76,9 +99,9 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   const toggleBV_L1 = (k: string) => setExpandedBV_L1(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const toggleBV_L2 = (k: string) => setExpandedBV_L2(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const toggleBV_L3 = (k: string) => setExpandedBV_L3(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
-  type SortKey = 'ticker' | 'washSale' | 'totalQty' | 'avgBuyPrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'targetPrice';
-  type ColKey = 'ticker' | 'washSale' | 'totalQty' | 'avgBuyPrice' | 'strikePrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'gainToSell' | 'targetPrice';
-  const DEFAULT_COLS: ColKey[] = ['ticker','washSale','totalQty','avgBuyPrice','strikePrice','totalValue','avgCurrentPrice','marketValue','unrealizedGain','unrealizedPct','retainQty','sellableQty','gainToSell','targetPrice'];
+  type SortKey = 'ticker' | 'washSale' | 'termType' | 'totalQty' | 'avgBuyPrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'dailyGain' | 'dailyPct' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'targetPrice';
+  type ColKey = 'ticker' | 'washSale' | 'termType' | 'totalQty' | 'avgBuyPrice' | 'strikePrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'dailyGain' | 'dailyPct' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'gainToSell' | 'targetPrice';
+  const DEFAULT_COLS: ColKey[] = ['ticker','washSale','termType','totalQty','avgBuyPrice','strikePrice','totalValue','avgCurrentPrice','marketValue','dailyGain','dailyPct','unrealizedGain','unrealizedPct','retainQty','sellableQty','gainToSell','targetPrice'];
   const [columnOrder, setColumnOrder] = useState<ColKey[]>(() => {
     try {
       const saved = localStorage.getItem('options-col-order');
@@ -145,6 +168,17 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // prevClose keyed by brokerage::ticker::buyDate — sourced from unrealizedGains prop which
+  // is always refreshed by App.tsx after sync/reprocess, unlike positions which only loads on mount.
+  const prevCloseMap = useMemo(() => {
+    const map: Record<string, number | null> = {};
+    unrealizedGains.filter(l => (l.assetType || '').toLowerCase() === 'options').forEach(l => {
+      const key = `${l.brokerage}::${l.ticker}::${l.buyDate?.slice(0, 10)}`;
+      map[key] = l.prevClose ?? null;
+    });
+    return map;
+  }, [unrealizedGains]);
 
   // Per-ticker wash sale summary — must be before any early returns (Rules of Hooks)
   const washSaleByTicker = useMemo(() => {
@@ -232,13 +266,36 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     <div className="p-8 text-center text-slate-400 text-sm">No open options positions found.</div>
   );
 
-  const taxRate = Math.max(0, Math.min(100, parseFloat(taxRateInput) || 0)) / 100;
+  // Per-position tax rate: long-term positions use the LT rate, short-term the ST rate
+  // (both edited in the Gains & Losses tab). Used for the Gain-to-Sell / Target Price calc.
+  const stRate = Math.max(0, Math.min(100, stTaxRate || 0)) / 100;
+  const ltRate = Math.max(0, Math.min(100, ltTaxRate || 0)) / 100;
+  const posRate = (p: OptionsPosition) => (p.isLongTerm ? ltRate : stRate);
+
+  // Break-even-after-tax target price for a set of sellable positions, each taxed at its
+  // own ST/LT rate. Solves: Σ[ proceedsᵢ − rateᵢ·(proceedsᵢ − costBasisᵢ) ] = base for a
+  // single per-share price P, giving P = (base − Σrateᵢ·costBasisᵢ) / (shares − Σrateᵢ·sharesᵢ).
+  const targetPriceFor = (posns: OptionsPosition[], base: number): number | null => {
+    let sellableShares = 0, taxWeightedShares = 0, taxWeightedCostBasis = 0;
+    posns.forEach(p => {
+      const shares = p.sellableQuantity * 100;
+      if (shares <= 0) return;
+      const rate = posRate(p);
+      sellableShares += shares;
+      taxWeightedShares += rate * shares;
+      taxWeightedCostBasis += rate * shares * p.buyPrice;
+    });
+    const denom = sellableShares - taxWeightedShares;
+    if (sellableShares <= 0 || denom <= 0) return null;
+    return (base - taxWeightedCostBasis) / denom;
+  };
 
   // Apply brokerage + ticker filters
   const filteredPositions = positions.filter(p => {
     const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(p.brokerage);
     const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(p.ticker);
-    return matchesBrokerage && matchesTicker;
+    const matchesTerm = selectedTerms.length === 0 || selectedTerms.includes(p.isLongTerm ? 'long' : 'short');
+    return matchesBrokerage && matchesTicker && matchesTerm;
   });
 
   if (filteredPositions.length === 0) return (
@@ -267,13 +324,8 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     const unrealizedGain = marketValue - totalValue;
     const realizedLosses = calculator?.realizedLosses ?? 0;
 
-    const sellableShares = sellableQty * 100;
     const base = totalValue + realizedLosses;
-
-    let targetPrice: number | null = null;
-    if (sellableShares > 0 && taxRate < 1) {
-      targetPrice = (base - taxRate * sellableCostBasis) / (sellableShares * (1 - taxRate));
-    }
+    const targetPrice = targetPriceFor(tickerPositions, base);
 
     const projectedGainPct = avgBuyPrice > 0 && targetPrice !== null
       ? (targetPrice / avgBuyPrice - 1) * 100
@@ -286,6 +338,12 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       brokerageMap[p.brokerage] = brokerageMap[p.brokerage] || [];
       brokerageMap[p.brokerage].push(p);
     });
+    const _pc = (p: OptionsPosition) => prevCloseMap[`${p.brokerage}::${p.ticker}::${p.buyDate?.slice(0, 10)}`] ?? null;
+    const _posDaily = (p: OptionsPosition) => { const pc = _pc(p); return pc != null ? (p.currentPrice - pc) * p.quantity * 100 : 0; };
+    const _posPrevMV = (p: OptionsPosition) => { const pc = _pc(p); return pc != null ? pc * p.quantity * 100 : 0; };
+    const dailyGain = tickerPositions.reduce((s, p) => s + _posDaily(p), 0);
+    const dailyPrevMV = tickerPositions.reduce((s, p) => s + _posPrevMV(p), 0);
+
     const brokerageGroups: BrokerageGroup[] = Object.entries(brokerageMap)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([brokerage, bPos]) => {
@@ -302,6 +360,9 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
           avgCurrentPrice: bTotalQty > 0 ? bMarketValue / (bTotalQty * 100) : 0,
           marketValue: bMarketValue,
           unrealizedGain: bMarketValue - bTotalValue,
+          dailyGain: bPos.reduce((s, p) => s + _posDaily(p), 0),
+          dailyPrevMV: bPos.reduce((s, p) => s + _posPrevMV(p), 0),
+          termType: termTypeOf(bPos),
           positions: bPos,
         };
       });
@@ -309,9 +370,10 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     return {
       ticker, brokerageGroups,
       totalQty, retainQty, sellableQty,
-      avgBuyPrice, totalValue, avgCurrentPrice, marketValue, unrealizedGain,
+      avgBuyPrice, totalValue, avgCurrentPrice, marketValue, unrealizedGain, dailyGain, dailyPrevMV,
       sellableCostBasis, realizedLosses,
       targetPrice, projectedGainPct, isCovered,
+      termType: termTypeOf(tickerPositions),
     };
   });
 
@@ -326,10 +388,14 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
         return 2;
       };
       let vA: any = sortKey === 'unrealizedPct' ? (a.avgBuyPrice > 0 ? (a.avgCurrentPrice - a.avgBuyPrice) / a.avgBuyPrice * 100 : 0)
+        : sortKey === 'dailyPct' ? (a.dailyPrevMV > 0 ? a.dailyGain / a.dailyPrevMV : 0)
         : sortKey === 'washSale' ? wsPriority(a.ticker)
+        : sortKey === 'termType' ? termRank(a.termType)
         : a[sortKey as keyof TickerCalc];
       let vB: any = sortKey === 'unrealizedPct' ? (b.avgBuyPrice > 0 ? (b.avgCurrentPrice - b.avgBuyPrice) / b.avgBuyPrice * 100 : 0)
+        : sortKey === 'dailyPct' ? (b.dailyPrevMV > 0 ? b.dailyGain / b.dailyPrevMV : 0)
         : sortKey === 'washSale' ? wsPriority(b.ticker)
+        : sortKey === 'termType' ? termRank(b.termType)
         : b[sortKey as keyof TickerCalc];
       if (vA === null) vA = sortDir === 'asc' ? Infinity : -Infinity;
       if (vB === null) vB = sortDir === 'asc' ? Infinity : -Infinity;
@@ -364,12 +430,12 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
           const unrealizedGain = marketValue - totalValue;
           const sellableCostBasis = positions.reduce((s, p) => s + p.sellableQuantity * 100 * p.buyPrice, 0);
           const realizedLosses = calculator?.realizedLosses ?? 0;
-          const sellableShares = sellableQty * 100;
-          let targetPrice: number | null = null;
-          if (sellableShares > 0 && taxRate < 1)
-            targetPrice = (totalValue + realizedLosses - taxRate * sellableCostBasis) / (sellableShares * (1 - taxRate));
+          const targetPrice = targetPriceFor(positions, totalValue + realizedLosses);
           const projectedGainPct = avgBuyPrice > 0 && targetPrice !== null ? (targetPrice / avgBuyPrice - 1) * 100 : null;
-          return { ticker, positions, totalQty, retainQty, sellableQty, avgBuyPrice, totalValue, avgCurrentPrice, marketValue, unrealizedGain, sellableCostBasis, realizedLosses, targetPrice, projectedGainPct, isCovered: projectedGainPct !== null && projectedGainPct <= 0, brokerageGroups: [] };
+          const _bvPc = (p: OptionsPosition) => prevCloseMap[`${p.brokerage}::${p.ticker}::${p.buyDate?.slice(0, 10)}`] ?? null;
+          const bvDailyGain = positions.reduce((s, p) => { const pc = _bvPc(p); return s + (pc != null ? (p.currentPrice - pc) * p.quantity * 100 : 0); }, 0);
+          const bvDailyPrevMV = positions.reduce((s, p) => { const pc = _bvPc(p); return s + (pc != null ? pc * p.quantity * 100 : 0); }, 0);
+          return { ticker, positions, totalQty, retainQty, sellableQty, avgBuyPrice, totalValue, avgCurrentPrice, marketValue, unrealizedGain, dailyGain: bvDailyGain, dailyPrevMV: bvDailyPrevMV, sellableCostBasis, realizedLosses, targetPrice, projectedGainPct, isCovered: projectedGainPct !== null && projectedGainPct <= 0, termType: termTypeOf(positions), brokerageGroups: [] };
         }).sort((a, b) => a.ticker.localeCompare(b.ticker));
         const acctMV = tickers.reduce((s, t) => s + t.marketValue, 0);
         const acctCost = tickers.reduce((s, t) => s + t.totalValue, 0);
@@ -403,14 +469,17 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     switch (col) {
       case 'ticker':        return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] ${sortKey==='ticker'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('ticker')}>Ticker <SI col="ticker" /></th>;
       case 'washSale':      return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] ${sortKey==='washSale'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('washSale')}>Wash Sale <SI col="washSale" /></th>;
+      case 'termType':      return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] ${sortKey==='termType'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('termType')}>Term Type <SI col="termType" /></th>;
       case 'totalQty':      return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='totalQty'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('totalQty')}><div className="flex items-center justify-end">Contracts <SI col="totalQty" /></div></th>;
       case 'avgBuyPrice':   return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='avgBuyPrice'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('avgBuyPrice')}><div className="flex items-center justify-end">Avg Price <SI col="avgBuyPrice" /></div></th>;
       case 'strikePrice':   return <th key={col} {...dp} className={thCls(col, 'text-slate-400 text-right')}>Strike</th>;
       case 'totalValue':    return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='totalValue'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('totalValue')}><div className="flex items-center justify-end">Total Value <SI col="totalValue" /></div></th>;
       case 'avgCurrentPrice':return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='avgCurrentPrice'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('avgCurrentPrice')}><div className="flex items-center justify-end">Current Price <SI col="avgCurrentPrice" /></div></th>;
       case 'marketValue':   return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='marketValue'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('marketValue')}><div className="flex items-center justify-end">Market Value <SI col="marketValue" /></div></th>;
-      case 'unrealizedGain':return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='unrealizedGain'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('unrealizedGain')}><div className="flex items-center justify-end">Unrealized $ <SI col="unrealizedGain" /></div></th>;
-      case 'unrealizedPct': return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='unrealizedPct'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('unrealizedPct')}><div className="flex items-center justify-end">Unrealized % <SI col="unrealizedPct" /></div></th>;
+      case 'dailyGain':     return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='dailyGain'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('dailyGain')}><div className="flex items-center justify-end">Daily $ <SI col="dailyGain" /></div></th>;
+      case 'dailyPct':      return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='dailyPct'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('dailyPct')}><div className="flex items-center justify-end">Daily % <SI col="dailyPct" /></div></th>;
+      case 'unrealizedGain':return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='unrealizedGain'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('unrealizedGain')}><div className="flex items-center justify-end">Overall $ <SI col="unrealizedGain" /></div></th>;
+      case 'unrealizedPct': return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='unrealizedPct'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('unrealizedPct')}><div className="flex items-center justify-end">Overall % <SI col="unrealizedPct" /></div></th>;
       case 'retainQty':     return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='retainQty'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('retainQty')}><div className="flex items-center justify-end">Retained <SI col="retainQty" /></div></th>;
       case 'sellableQty':   return <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA] text-right ${sortKey==='sellableQty'?'text-[#0F52BA]':'text-slate-400'}`)} onClick={() => handleSort('sellableQty')}><div className="flex items-center justify-end">Sellable <SI col="sellableQty" /></div></th>;
       case 'gainToSell':    return <th key={col} {...dp} className={thCls(col, 'text-slate-400 text-right')}>Gain to Sell</th>;
@@ -424,12 +493,22 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     switch (col) {
       case 'ticker': return <td key={col} className="px-4 py-2"><div className="flex items-center gap-2"><TickerLogo ticker={tc.ticker} size={compact ? 24 : 32} assetType={assetTypeByTicker[tc.ticker]} /><span className={`${compact ? 'text-[11px]' : 'text-xs'} font-bold text-[#1D1D1F] uppercase tracking-tight`}>{tc.ticker}</span></div></td>;
       case 'washSale': return <td key={col} className="px-4 py-2">{(() => { const ws = washSaleByTicker[tc.ticker]; const isRed = ws && ((ws.lastLossDaysAgo !== null && ws.lastLossDaysAgo <= 30) || ws.type1Count > 0); const isYellow = !isRed && ws && ws.type2Count > 0; if (isRed) { const detail = ws.type1Count > 0 && ws.minDays !== Infinity ? `${ws.minDays}d to go` : ws.lastLossDaysAgo !== null ? `loss ${ws.lastLossDaysAgo}d ago` : ''; return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" /><div><p className="text-[10px] font-black text-rose-600">Active</p>{detail && <p className="text-[9px] text-rose-400">{detail}</p>}</div></div>; } if (isYellow) return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" /><div><p className="text-[10px] font-black text-amber-600">Caution</p><p className="text-[9px] text-amber-400">don't sell at loss</p></div></div>; return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" /><p className="text-[10px] font-medium text-emerald-600">Clear</p></div>; })()}</td>;
+      case 'termType':       return <td key={col} className="px-4 py-2">{termBadge(tc.termType)}</td>;
       case 'totalQty':       return <td key={col} className={`px-4 py-2 text-right font-bold text-slate-800 ${sz}`}>{fmt(tc.totalQty, 0)}</td>;
       case 'avgBuyPrice':    return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>{fmtCurrency(tc.avgBuyPrice)}</td>;
       case 'strikePrice':    return <td key={col} />;
       case 'totalValue':     return <td key={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>{fmtCurrency(tc.totalValue)}</td>;
       case 'avgCurrentPrice':return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>{fmtCurrency(tc.avgCurrentPrice)}</td>;
       case 'marketValue':    return <td key={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>{fmtCurrency(tc.marketValue)}</td>;
+      case 'dailyGain': {
+        if (tc.dailyPrevMV === 0) return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-300`}>—</td>;
+        const dg = tc.dailyGain;
+        return <td key={col} className={`px-4 py-2 text-right ${sz} font-black ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}{fmtCurrency(dg)}</td>;
+      }
+      case 'dailyPct': {
+        const dp2 = tc.dailyPrevMV > 0 ? (tc.dailyGain / tc.dailyPrevMV) * 100 : null;
+        return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${dp2 != null ? dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600' : 'text-slate-300'}`}>{dp2 != null ? `${dp2 >= 0 ? '+' : ''}${dp2.toFixed(2)}%` : '—'}</td>;
+      }
       case 'unrealizedGain': return <td key={col} className={`px-4 py-2 text-right ${sz} font-black ${tc.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.unrealizedGain >= 0 ? '+' : '-'}{fmtCurrency(tc.unrealizedGain)}</td>;
       case 'unrealizedPct':  return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${tc.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.avgBuyPrice > 0 ? `${tc.unrealizedGain >= 0 ? '+' : ''}${((tc.avgCurrentPrice - tc.avgBuyPrice) / tc.avgBuyPrice * 100).toFixed(2)}%` : '—'}</td>;
       case 'retainQty':      return <td key={col} className={`px-4 py-2 text-right font-medium text-slate-600 ${sz}`}>{fmt(tc.retainQty, 0)}</td>;
@@ -444,12 +523,22 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     switch (col) {
       case 'ticker': return <td key={col} className="px-4 py-2"><span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' : bg.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' : 'bg-[#E5E5EA] text-[#6E6E73]'}`}>{bg.brokerage}</span></td>;
       case 'washSale':      return <td key={col} />;
+      case 'termType':      return <td key={col} className="px-4 py-2">{termBadge(bg.termType)}</td>;
       case 'totalQty':      return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{fmt(bg.totalQty, 0)}</td>;
       case 'avgBuyPrice':   return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(bg.avgBuyPrice)}</td>;
       case 'strikePrice':   return <td key={col} />;
       case 'totalValue':    return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{fmtCurrency(bg.totalValue)}</td>;
       case 'avgCurrentPrice':return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(bg.avgCurrentPrice)}</td>;
       case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{fmtCurrency(bg.marketValue)}</td>;
+      case 'dailyGain': {
+        if (bg.dailyPrevMV === 0) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
+        const dg = bg.dailyGain;
+        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}{fmtCurrency(dg)}</td>;
+      }
+      case 'dailyPct': {
+        const dp2 = bg.dailyPrevMV > 0 ? (bg.dailyGain / bg.dailyPrevMV) * 100 : null;
+        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 != null ? dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600' : 'text-slate-300'}`}>{dp2 != null ? `${dp2 >= 0 ? '+' : ''}${dp2.toFixed(2)}%` : '—'}</td>;
+      }
       case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${bg.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{bg.unrealizedGain >= 0 ? '+' : '-'}{fmtCurrency(bg.unrealizedGain)}</td>;
       case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${bg.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{bg.totalValue > 0 ? `${bg.unrealizedGain >= 0 ? '+' : ''}${(bg.unrealizedGain / bg.totalValue * 100).toFixed(2)}%` : '—'}</td>;
       case 'retainQty':     return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmt(bg.retainQty, 0)}</td>;
@@ -465,14 +554,17 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     switch (col) {
       case 'ticker':        return s('Buy Date', 'left');
       case 'washSale':      return s('Wash Sale', 'left');
+      case 'termType':      return s('Term Type', 'left');
       case 'totalQty':      return s('Qty');
       case 'avgBuyPrice':   return s('Avg Price');
       case 'strikePrice':   return s('Strike');
       case 'totalValue':    return s('Total Value');
       case 'avgCurrentPrice':return s('Current Price');
       case 'marketValue':   return s('Market Value');
-      case 'unrealizedGain':return s('Unrealized $');
-      case 'unrealizedPct': return s('Unrealized %');
+      case 'dailyGain':     return s('Daily $');
+      case 'dailyPct':      return s('Daily %');
+      case 'unrealizedGain':return s('Overall $');
+      case 'unrealizedPct': return s('Overall %');
       case 'retainQty':     return s('Retain');
       case 'sellableQty':   return s('Sellable');
       case 'gainToSell':    return <td key={col} />;
@@ -485,6 +577,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
     switch (col) {
       case 'ticker': return <td key={col} className="px-4 py-2 text-[11px] text-slate-500 font-bold whitespace-nowrap">{new Date(pos.buyDate).toLocaleDateString('en-CA')}</td>;
       case 'washSale': return <td key={col} className="px-4 py-2">{(() => { const key = `${pos.ticker}::${pos.brokerage}::${pos.buyDate.slice(0,10)}`; const ws = washSaleByPosition[key]; if (ws?.daysToGo > 0) return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" /><div><p className="text-[9px] font-black text-rose-600">Active</p><p className="text-[9px] text-rose-400">{ws.daysToGo}d to go</p></div></div>; if (ws?.atRisk && ws.riskDaysAgo <= 30) return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" /><div><p className="text-[9px] font-black text-amber-600">Caution</p><p className="text-[9px] text-amber-400">new buy · {ws.riskDaysAgo}d ago</p></div></div>; return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" /><p className="text-[9px] font-medium text-emerald-600">Clear</p></div>; })()}</td>;
+      case 'termType':      return <td key={col} className="px-4 py-2">{termBadge(pos.isLongTerm ? 'Long' : 'Short')}</td>;
       case 'totalQty':      return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{fmt(pos.quantity, 0)}</td>;
       case 'avgBuyPrice':   return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(pos.buyPrice)}</td>;
       case 'strikePrice': {
@@ -494,6 +587,16 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       case 'totalValue':    return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(posTotalValue)}</td>;
       case 'avgCurrentPrice':return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(pos.currentPrice)}</td>;
       case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(posMarketValue)}</td>;
+      case 'dailyGain': {
+        if (pos.prevClose == null) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
+        const dg = (pos.currentPrice - pos.prevClose) * pos.quantity * 100;
+        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}{fmtCurrency(dg)}</td>;
+      }
+      case 'dailyPct': {
+        if (pos.prevClose == null || pos.prevClose === 0) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
+        const dp2 = ((pos.currentPrice - pos.prevClose) / pos.prevClose) * 100;
+        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dp2 >= 0 ? '+' : ''}{dp2.toFixed(2)}%</td>;
+      }
       case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-[11px] font-black ${posUnrealized >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{posUnrealized >= 0 ? '+' : '-'}{fmtCurrency(posUnrealized)}</td>;
       case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${posUnrealized >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pos.buyPrice > 0 ? `${posUnrealized >= 0 ? '+' : ''}${((pos.currentPrice - pos.buyPrice) / pos.buyPrice * 100).toFixed(2)}%` : '—'}</td>;
       case 'retainQty': return <td key={col} className="px-4 py-2"><div className="flex justify-end"><input type="number" min={0} max={pos.quantity} step={1} value={pendingRetain[pos.id] ?? pos.retainQuantity} onChange={e => handleRetainChange(pos.id, e.target.value)} onBlur={() => handleRetainSave(pos)} onKeyDown={e => e.key === 'Enter' && handleRetainSave(pos)} className="w-20 px-2 py-0.5 text-right border border-[#D2D2D7] rounded text-[11px] focus:outline-none focus:ring-2 focus:ring-[#0F52BA] bg-[#E6EEFB]/20 font-semibold text-[#0A3E8F] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div></td>;
@@ -505,7 +608,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   };
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4${!numbersVisible ? ' blur-sm select-none pointer-events-none' : ''}`}>
 
       {/* Ticker View */}
       {viewMode === 'ticker' && <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white shadow-sm overflow-hidden">

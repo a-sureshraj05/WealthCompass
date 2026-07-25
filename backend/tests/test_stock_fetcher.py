@@ -7,33 +7,33 @@ class TestStockFetcher(unittest.TestCase):
 
     @patch('yfinance.Ticker')
     def test_get_stock_price_success(self, mock_ticker):
-        """Test successful retrieval of a stock price."""
+        """Returns the latest closing price as a float."""
         mock_instance = MagicMock()
         # Create a mock DataFrame for the history call
         mock_df = pd.DataFrame({'Close': [150.0]})
         mock_instance.history.return_value = mock_df
         mock_ticker.return_value = mock_instance
 
-        data = get_stock_price('AAPL')
-        self.assertIsNotNone(data)
-        self.assertIsInstance(data, pd.DataFrame)
-        self.assertEqual(data['Close'].iloc[0], 150.0)
+        price = get_stock_price('AAPL')
+        self.assertIsNotNone(price)
+        self.assertIsInstance(price, float)
+        self.assertEqual(price, 150.0)
         mock_ticker.assert_called_with('AAPL')
         mock_instance.history.assert_called_with(period='1d')
 
     @patch('yfinance.Ticker')
     def test_get_stock_price_custom_period(self, mock_ticker):
-        """Test successful retrieval of a stock price for a custom period."""
+        """Returns the last close of a custom period as a float."""
         mock_instance = MagicMock()
         # Create a mock DataFrame for the history call
         mock_df = pd.DataFrame({'Close': [150.0, 152.0, 151.0, 153.0, 155.0]})
         mock_instance.history.return_value = mock_df
         mock_ticker.return_value = mock_instance
 
-        data = get_stock_price('AAPL', period='5d')
-        self.assertIsNotNone(data)
-        self.assertIsInstance(data, pd.DataFrame)
-        self.assertEqual(len(data), 5)
+        price = get_stock_price('AAPL', period='5d')
+        self.assertIsNotNone(price)
+        self.assertIsInstance(price, float)
+        self.assertEqual(price, 155.0)
         mock_ticker.assert_called_with('AAPL')
         mock_instance.history.assert_called_with(period='5d')
 
