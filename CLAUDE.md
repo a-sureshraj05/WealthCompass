@@ -77,8 +77,9 @@ manual_raw_transactions / snaptrade_transactions   ← raw source tables
     transactions                                   ← normalized, unified
         │
         ├──► realized_gains
-        ├──► unrealized_gains
-        └──► holdings
+        ├──► unrealized_gains  (includes prevClose per lot for daily P&L)
+        ├──► holdings
+        └──► portfolio_summary.cash_balance        ← precomputed on full reprocess
 ```
 
 `process_transactions()` in `core/process.py` is the entry point for recomputing all derived tables. It is called after any import, sync, edit, or reset.
@@ -87,6 +88,12 @@ manual_raw_transactions / snaptrade_transactions   ← raw source tables
 - SQLite at `./db/wealthcompass.db` (also `./wealthcompass.db` at root — legacy)
 - No migration framework — schema changes are handled via inline `ALTER TABLE` in `main.py` startup
 - `Base.metadata.create_all()` runs on every startup
+
+### portfolio_summary table (single row, id=1)
+Caches slow external API results so every page load is instant:
+- `cash_balance` — computed from Cash-type transactions during `process_transactions()`
+- `buying_power_json` — last SnapTrade result from `GET /buying-power`; served by `GET /buying-power/cached`
+- `analyst_json` — last yfinance batch from `POST /analyst/batch`; served by `GET /analyst/cached`
 
 ## Supported Brokerages (CSV import)
 Configured in `core/brokerage_configs.py`:
@@ -99,9 +106,23 @@ SnapTrade supports: Robinhood, Schwab, Fidelity (via API sync).
 - All API routes are prefixed `/api/v1`
 - Auth uses JWT Bearer tokens; all routes except `/api/v1/login` and `/api/v1/register` require auth
 - `Transaction.raw_id` links a normalized transaction back to its raw source row
-- `Transaction.is_backend_verified` is set only via `PATCH /transactions/{id}/verify` — never by loaders
+- `Transaction.is_backend_verified` is set only via `PATCH /transactions/{id}/verify` — never by loaders; verified transactions are NOT immutable (no `_assert_mutable` guard)
 - OCC option symbols are stored as-is (spaces stripped) on `Transaction.option_symbol` and `SnaptradeTransaction.option_symbol`
 - Lot assignments (`lot_assignments` table) are explicit sell→buy lot mappings; the gain loader respects them
+- `unrealized_gains.prevClose` — previous session close per lot; used for daily P&L columns in HoldingsView/OptionsView. For options, fetched via `history(period='5d')` on the OCC symbol (same as equity)
+
+## Frontend Load Architecture (App.tsx)
+Page load fires 5 parallel DB reads — no external API calls on mount:
+1. `fetchHoldings()` + `fetchAccounts()` + `fetchCashBalance()` + `fetchBuyingPowerCached()` + `fetchAnalystDataCached()`
+
+Background (non-blocking, fire-and-forget on mount):
+- `refreshAnalystData()` — hits yfinance for all tickers, saves to `analyst_json` cache, patches holdings with sector/target when done
+
+On explicit sync/refresh only:
+- `getBuyingPower()` — hits SnapTrade, saves to `buying_power_json` cache
+- `refreshAnalystData()` — re-runs yfinance batch
+
+The full-screen loading spinner is only shown during import/processing operations, not on normal page load.
 
 ## Environment Variables
 Backend reads from `.env` in the project root and `.gemini/.env`:

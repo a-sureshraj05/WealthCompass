@@ -87,6 +87,7 @@ export interface UnrealizedLot {
   quantity: number;
   buyPrice: number;
   currentPrice: number;
+  prevClose?: number | null;
   gain: number;
   isLongTerm: boolean;
   brokerage: string;

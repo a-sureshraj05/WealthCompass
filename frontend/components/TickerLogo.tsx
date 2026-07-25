@@ -30,10 +30,15 @@ const ETFIcon: React.FC<{ size: number }> = ({ size }) => {
   );
 };
 
+// Tickers where parqet returns a wrong logo — skip straight to FMP
+const PARQET_BLOCKLIST = new Set(['SPCX']);
+
 type LoadState = 'parqet' | 'fmp' | 'failed';
 
 const TickerLogo: React.FC<Props> = ({ ticker, size = 28, assetType }) => {
-  const [loadState, setLoadState] = useState<LoadState>('parqet');
+  const [loadState, setLoadState] = useState<LoadState>(
+    PARQET_BLOCKLIST.has(ticker) ? 'fmp' : 'parqet'
+  );
   const resolvedType = useTickerType(ticker, assetType);
   const isETF = resolvedType.toUpperCase() === 'ETF';
 

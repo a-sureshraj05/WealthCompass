@@ -1,7 +1,11 @@
+import json
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 import yfinance as yf
+
+from backend.app.core.database import get_db
 
 router = APIRouter()
 
@@ -37,8 +41,18 @@ def get_analyst_data(ticker: str):
         raise HTTPException(status_code=500, detail=f"Failed to fetch analyst data for {ticker}: {str(e)}")
 
 
+@router.get("/analyst/cached", response_model=List[AnalystData])
+def get_analyst_cached(db: Session = Depends(get_db)):
+    """Return last cached analyst data — instant, no yfinance call."""
+    from backend.app.db.schema import PortfolioSummary
+    summary = db.query(PortfolioSummary).first()
+    if summary and summary.analyst_json:
+        return json.loads(summary.analyst_json)
+    return []
+
+
 @router.post("/analyst/batch", response_model=List[AnalystData])
-def get_analyst_data_batch(tickers: List[str]):
+def get_analyst_data_batch(tickers: List[str], db: Session = Depends(get_db)):
     results = []
     for ticker in tickers:
         try:
@@ -56,4 +70,13 @@ def get_analyst_data_batch(tickers: List[str]):
             ))
         except Exception:
             results.append(AnalystData(ticker=ticker.upper()))
+    # Cache result in DB
+    from backend.app.db.schema import PortfolioSummary
+    summary = db.query(PortfolioSummary).first()
+    payload = json.dumps([r.dict() for r in results])
+    if summary:
+        summary.analyst_json = payload
+    else:
+        db.add(PortfolioSummary(id=1, analyst_json=payload))
+    db.commit()
     return results

@@ -149,6 +149,35 @@ def startup_event():
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN option_symbol TEXT"))
                 conn.commit()
+        if "prevClose" not in ug_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN prevClose REAL"))
+                conn.commit()
+
+    # Migration: buying_power_json and analyst_json columns on portfolio_summary
+    if "portfolio_summary" in inspector.get_table_names():
+        ps_cols = [col["name"] for col in inspector.get_columns("portfolio_summary")]
+        if "buying_power_json" not in ps_cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN buying_power_json TEXT"))
+                conn.commit()
+        if "analyst_json" not in ps_cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN analyst_json TEXT"))
+                conn.commit()
+
+    # Bootstrap portfolio_summary if empty (first run after adding the table)
+    from backend.app.core.database import SessionLocal
+    from backend.app.db.schema import PortfolioSummary, Transaction as _DBTxn
+    _sum_db = SessionLocal()
+    try:
+        if not _sum_db.query(PortfolioSummary).first():
+            cash_txns = _sum_db.query(_DBTxn).filter(_DBTxn.assetType == "Cash", _DBTxn.is_deleted == False).all()
+            balance = sum(t.totalCost if t.action.upper() == "BUY" else -t.totalCost for t in cash_txns)
+            _sum_db.add(PortfolioSummary(id=1, cash_balance=round(balance, 2)))
+            _sum_db.commit()
+    finally:
+        _sum_db.close()
 
     # Seed stock_splits with well-known historical splits (safe to run every startup — skips duplicates)
     from backend.app.core.stock_split_seeds import SEED_SPLITS

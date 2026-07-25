@@ -286,6 +286,12 @@ export interface AnalystData {
   sector?: string;
 }
 
+export const fetchAnalystDataCached = async (): Promise<AnalystData[]> => {
+  const response = await apiFetch("/api/v1/analyst/cached");
+  if (!response.ok) return [];
+  return response.json();
+};
+
 export const fetchAnalystData = async (tickers: string[]): Promise<AnalystData[]> => {
   const response = await apiFetch("/api/v1/analyst/batch", {
     method: "POST",
@@ -305,6 +311,12 @@ export const fetchCashBalance = async (): Promise<number> => {
 
 export const fetchBuyingPower = async (): Promise<Record<string, number>> => {
   const response = await apiFetch("/api/v1/buying-power");
+  if (!response.ok) return {};
+  return response.json();
+};
+
+export const fetchBuyingPowerCached = async (): Promise<Record<string, number>> => {
+  const response = await apiFetch("/api/v1/buying-power/cached");
   if (!response.ok) return {};
   return response.json();
 };
@@ -389,6 +401,7 @@ export interface OptionsPosition {
   sellableQuantity: number;
   buyPrice: number;
   currentPrice: number;
+  prevClose?: number | null;
   unrealizedGain: number;
   isLongTerm: boolean;
   option_symbol?: string | null;

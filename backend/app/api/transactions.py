@@ -51,6 +51,7 @@ class UnrealizedGain(BaseModel):
     quantity: float
     buyPrice: float
     currentPrice: float
+    prevClose: Optional[float] = None
     unrealizedGain: float
     isLongTerm: bool
     assetType: Optional[str] = None
@@ -565,18 +566,10 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
 
 @router.get("/cash-balance")
 def get_cash_balance(db: Session = Depends(get_db)):
-    """Return total cash balance from Cash asset type transactions (BUY adds, SELL subtracts)."""
-    cash_txns = db.query(DBTransaction).filter(
-        DBTransaction.assetType == "Cash",
-        DBTransaction.is_deleted == False,
-    ).all()
-    balance = 0.0
-    for t in cash_txns:
-        if t.action.upper() == "BUY":
-            balance += t.totalCost
-        elif t.action.upper() == "SELL":
-            balance -= t.totalCost
-    return {"balance": round(balance, 2)}
+    """Return precomputed cash balance from portfolio_summary (updated on every reprocess)."""
+    from backend.app.db.schema import PortfolioSummary
+    summary = db.query(PortfolioSummary).first()
+    return {"balance": summary.cash_balance if summary else 0.0}
 
 
 @router.get("/buying-power")
@@ -652,10 +645,42 @@ def get_buying_power():
         finally:
             db.close()
         print(f"[buying-power] result: {result}")
+        # Cache result so /buying-power/cached can serve it instantly next time
+        _save_buying_power_cache(result)
         return result
     except Exception as e:
         print(f"[buying-power] top-level error: {e}")
         return {}
+
+
+def _save_buying_power_cache(result: dict):
+    import json
+    from backend.app.db.schema import PortfolioSummary
+    from backend.app.core.database import SessionLocal
+    _db = SessionLocal()
+    try:
+        summary = _db.query(PortfolioSummary).first()
+        if summary:
+            summary.buying_power_json = json.dumps(result)
+        else:
+            summary = PortfolioSummary(id=1, cash_balance=0.0, buying_power_json=json.dumps(result))
+            _db.add(summary)
+        _db.commit()
+    except Exception:
+        _db.rollback()
+    finally:
+        _db.close()
+
+
+@router.get("/buying-power/cached")
+def get_buying_power_cached(db: Session = Depends(get_db)):
+    """Return last cached buying power from DB — instant, no SnapTrade call."""
+    import json
+    from backend.app.db.schema import PortfolioSummary
+    summary = db.query(PortfolioSummary).first()
+    if summary and summary.buying_power_json:
+        return json.loads(summary.buying_power_json)
+    return {}
 
 
 @router.get("/holdings", response_model=List[Holding])

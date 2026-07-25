@@ -20,37 +20,60 @@ def _parse_occ(symbol: str):
     return underlying, expiry, cp.lower(), strike
 
 
-def _get_option_price(occ_symbol: str) -> Union[float, None]:
-    """Fetch current mid-price for an OCC option symbol via the underlying's option chain."""
+def _get_option_quote(occ_symbol: str) -> tuple:
+    """Fetch (current_price, prev_close) for an OCC option symbol.
+    current_price: bid/ask mid from the option chain (or lastPrice fallback).
+    prev_close: previous session close from history(period='5d') on the OCC symbol,
+    same approach as equity — avoids the stale lastPrice/change inconsistency.
+    Returns (None, None) on failure."""
     parsed = _parse_occ(occ_symbol)
     if not parsed:
-        return None
+        return None, None
     underlying, expiry, cp, strike = parsed
     try:
+        # Current price from the live option chain (bid/ask mid)
         ticker = yf.Ticker(underlying)
         chain = ticker.option_chain(expiry)
         df = chain.calls if cp == 'c' else chain.puts
         row = df[df['strike'] == strike]
         if row.empty:
-            # Try nearest strike in case of floating-point mismatch
             row = df.iloc[(df['strike'] - strike).abs().argsort()[:1]]
             if abs(row.iloc[0]['strike'] - strike) > 0.01:
                 print(f"[option_price] No exact strike match for {occ_symbol} (closest={row.iloc[0]['strike']})")
-                return None
-        bid = float(row.iloc[0].get('bid', 0) or 0)
-        ask = float(row.iloc[0].get('ask', 0) or 0)
-        last = float(row.iloc[0].get('lastPrice', 0) or 0)
+                return None, None
+        r = row.iloc[0]
+        bid = float(r.get('bid', 0) or 0)
+        ask = float(r.get('ask', 0) or 0)
+        last = float(r.get('lastPrice', 0) or 0)
         if bid > 0 and ask > 0:
-            price = (bid + ask) / 2
+            current = (bid + ask) / 2
         elif last > 0:
-            price = last
+            current = last
         else:
-            price = None
-        print(f"[option_price] {occ_symbol} → underlying={underlying} expiry={expiry} strike={strike} {cp.upper()} bid={bid} ask={ask} last={last} → price={price}")
-        return price
+            current = None
+
+        # Previous close from history — same as equity approach
+        prev_close = current
+        try:
+            hist = yf.Ticker(occ_symbol).history(period='5d').dropna(subset=['Close'])
+            if len(hist) >= 2:
+                prev_close = float(hist['Close'].iloc[-2])
+            elif len(hist) == 1:
+                prev_close = float(hist['Close'].iloc[-1])
+        except Exception:
+            pass
+
+        print(f"[option_price] {occ_symbol} → bid={bid} ask={ask} last={last} → price={current} prev_close={prev_close}")
+        return current, prev_close
     except Exception as e:
         print(f"[option_price] Error fetching chain for {occ_symbol}: {e}")
-        return None
+        return None, None
+
+
+def _get_option_price(occ_symbol: str) -> Union[float, None]:
+    """Fetch current mid-price for an OCC option symbol. Used by get_stock_price."""
+    price, _ = _get_option_quote(occ_symbol)
+    return price
 
 
 def get_stock_quote(ticker_symbol: str) -> tuple:
@@ -60,8 +83,7 @@ def get_stock_quote(ticker_symbol: str) -> tuple:
     Falls back to (current, current) if only one day of data is available.
     Returns (None, None) on failure. Does not handle OCC option symbols."""
     if _OCC_RE.match(ticker_symbol):
-        price = _get_option_price(ticker_symbol)
-        return (price, price)
+        return _get_option_quote(ticker_symbol)
     try:
         t = yf.Ticker(ticker_symbol)
         # fast_info.last_price reflects current intraday price (or last close outside hours)
