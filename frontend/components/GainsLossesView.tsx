@@ -315,6 +315,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
 
   const [isTickerMenuOpen, setIsTickerMenuOpen] = useState(false);
   const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
+  const [isTermMenuOpen, setIsTermMenuOpen] = useState(false);
+  const [selectedTerms, setSelectedTerms] = useState<('long' | 'short')[]>([]);
 
   const [heatmapMode, setHeatmapMode] = useState<'overall' | 'daily'>('daily');
 
@@ -341,10 +343,11 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
 
   const tickerMenuRef = useRef<HTMLDivElement>(null);
   const brokerageMenuRef = useRef<HTMLDivElement>(null);
+  const termMenuRef = useRef<HTMLDivElement>(null);
 
   useClickOutside(
-    [tickerMenuRef, brokerageMenuRef],
-    [setIsTickerMenuOpen, setIsBrokerageMenuOpen],
+    [tickerMenuRef, brokerageMenuRef, termMenuRef],
+    [setIsTickerMenuOpen, setIsBrokerageMenuOpen, setIsTermMenuOpen],
   );
 
   const yoyData = useMemo(() => {
@@ -406,11 +409,12 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     let result = source.filter(g => {
       const matchesTicker = selectedTickers.length === 0 || selectedTickers.includes(g.ticker);
       const matchesBrokerage = selectedBrokerages.length === 0 || selectedBrokerages.includes(g.brokerage);
+      const matchesTerm = selectedTerms.length === 0 || selectedTerms.includes(g.isLongTerm ? 'long' : 'short');
       if (activeSubTab === 'realized') {
         const year = new Date((g as RealizedGain).sellDate).getFullYear().toString();
-        return matchesTicker && matchesBrokerage && (selectedYear === 'Overall' || year === selectedYear);
+        return matchesTicker && matchesBrokerage && matchesTerm && (selectedYear === 'Overall' || year === selectedYear);
       }
-      return matchesTicker && matchesBrokerage;
+      return matchesTicker && matchesBrokerage && matchesTerm;
     });
 
     if (sortKey && sortDirection) {
@@ -442,7 +446,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       result = [...result].sort((a, b) => new Date(b.buyDate).getTime() - new Date(a.buyDate).getTime());
     }
     return result;
-  }, [realizedGainsData, unrealizedGainsData, selectedTickers, selectedBrokerages, selectedYear, activeSubTab, sortKey, sortDirection]);
+  }, [realizedGainsData, unrealizedGainsData, selectedTickers, selectedBrokerages, selectedTerms, selectedYear, activeSubTab, sortKey, sortDirection]);
 
   const isOpt = (g: RealizedGain | UnrealizedLot) => (g.assetType || '').toLowerCase() === 'options';
   // Top-level split is Short-Term vs Long-Term; each term is further split into
@@ -554,6 +558,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       stTotal, ltTotal, total, taxEst, stTax, ltTax,
       stMV: stEqMV + stOptMV, ltMV: ltEqMV + ltOptMV,
       stEqMV, stOptMV, ltEqMV, ltOptMV,
+      stCost: stEqCost + stOptCost, ltCost: ltEqCost + ltOptCost,
+      stEqCost, stOptCost, ltEqCost, ltOptCost,
       stEqPct:  pct(stEqTotal, stEqCost),   stOptPct: pct(stOptTotal, stOptCost),
       ltEqPct:  pct(ltEqTotal, ltEqCost),   ltOptPct: pct(ltOptTotal, ltOptCost),
       stPct: pct(stTotal, stEqCost + stOptCost),
@@ -563,6 +569,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
 
   const toggleTicker = (ticker: string) => setSelectedTickers(selectedTickers.includes(ticker) ? selectedTickers.filter(t => t !== ticker) : [...selectedTickers, ticker]);
   const toggleBrokerage = (broker: string) => setSelectedBrokerages(selectedBrokerages.includes(broker) ? selectedBrokerages.filter(b => b !== broker) : [...selectedBrokerages, broker]);
+  const toggleTerm = (term: 'long' | 'short') => setSelectedTerms(selectedTerms.includes(term) ? selectedTerms.filter(t => t !== term) : [...selectedTerms, term]);
+  const resetFilters = () => { setSelectedTickers([]); setSelectedBrokerages([]); setSelectedTerms([]); };
 
   const handleSort = (key: GainSortKey) => {
     if (sortKey === key) {
@@ -730,7 +738,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   // Equity / Options sub-section inside a term. Returns null when empty.
   const renderSubSection = (
     key: string, label: string, data: (RealizedGain | UnrealizedLot)[],
-    isOptions: boolean, mv: number, gain: number, gainPct: number,
+    isOptions: boolean, cost: number, mv: number, gain: number, gainPct: number,
   ) => {
     if (data.length === 0) return null;
     const expanded = expandedSections.has(key);
@@ -748,6 +756,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             <span className="text-[10px] text-slate-400 font-medium">· {data.length} lot{data.length !== 1 ? 's' : ''}</span>
           </div>
           <div className="flex items-center gap-4">
+            <div className="w-32 text-right">
+              <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Invested Value</p>
+              <p className="text-xs font-black text-slate-500">${cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
             <div className="w-32 text-right">
               <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
               <p className="text-xs font-black text-slate-700">${mv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -770,9 +782,9 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
   const renderTerm = (cfg: {
     key: string; label: string; heldText: string; color: string;
     eqData: (RealizedGain | UnrealizedLot)[]; optData: (RealizedGain | UnrealizedLot)[];
-    mv: number; gain: number; gainPct: number;
-    eqMV: number; eqGain: number; eqPct: number;
-    optMV: number; optGain: number; optPct: number;
+    cost: number; mv: number; gain: number; gainPct: number;
+    eqCost: number; eqMV: number; eqGain: number; eqPct: number;
+    optCost: number; optMV: number; optGain: number; optPct: number;
   }) => {
     const expanded = expandedSections.has(cfg.key);
     const lotCount = cfg.eqData.length + cfg.optData.length;
@@ -796,6 +808,10 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           </div>
           <div className="flex items-center gap-4">
             <div className="w-36 text-right">
+              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Invested Value</p>
+              <p className="text-sm font-black text-slate-500">${cfg.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
+            <div className="w-36 text-right">
               <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
               <p className="text-sm font-black text-slate-700">${cfg.mv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
@@ -815,8 +831,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             </div>
           ) : (
             <div className="ml-3 space-y-2">
-              {renderSubSection(`${cfg.key}-EQ`, 'Equity', cfg.eqData, false, cfg.eqMV, cfg.eqGain, cfg.eqPct)}
-              {renderSubSection(`${cfg.key}-OPT`, 'Options', cfg.optData, true, cfg.optMV, cfg.optGain, cfg.optPct)}
+              {renderSubSection(`${cfg.key}-EQ`, 'Equity', cfg.eqData, false, cfg.eqCost, cfg.eqMV, cfg.eqGain, cfg.eqPct)}
+              {renderSubSection(`${cfg.key}-OPT`, 'Options', cfg.optData, true, cfg.optCost, cfg.optMV, cfg.optGain, cfg.optPct)}
             </div>
           )
         )}
@@ -824,33 +840,35 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
     );
   };
 
-  const FilterDropdown = ({ label, refEl, isOpen, onToggle, count, onClear, children }: {
-    label: string; refEl: React.RefObject<HTMLDivElement>; isOpen: boolean; onToggle: () => void;
+  // Matches the filter bar styling in HoldingsView.
+  const FilterDropdown = ({ label, summary, panelTitle, refEl, isOpen, onToggle, count, onClear, children }: {
+    label: string; summary: string; panelTitle: string;
+    refEl: React.RefObject<HTMLDivElement>; isOpen: boolean; onToggle: () => void;
     count: number; onClear: () => void; children: React.ReactNode;
   }) => (
     <div className="relative" ref={refEl}>
-      <button
-        onClick={onToggle}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold border transition-all ${
-          count > 0 ? 'bg-[#0F52BA] text-white border-[#0F52BA]' : 'bg-white text-slate-600 border-[#D2D2D7] hover:border-[#0F52BA] hover:text-[#0F52BA]'
-        }`}
-      >
-        <span className="uppercase tracking-wider">{label}</span>
-        {count > 0 && <span className="ml-0.5 bg-white/20 rounded px-1">{count}</span>}
-        {count > 0 ? (
-          <span onClick={e => { e.stopPropagation(); onClear(); }} className="ml-1 hover:opacity-70">
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-          </span>
-        ) : (
-          <svg className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        )}
+      <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">{label}</label>
+      <button onClick={onToggle} className="flex items-center justify-between pl-3 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left">
+        <span className="truncate max-w-[100px] capitalize">{summary}</span>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1.5 w-52 bg-white border border-[#D2D2D7] rounded shadow-xl overflow-hidden z-50">
-          <div className="max-h-80 overflow-y-auto p-1.5 space-y-0.5">{children}</div>
+        <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50">
+          <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <span className="text-[10px] font-black text-slate-400 uppercase px-2">{panelTitle}</span>
+            {count > 0 && <button onClick={onClear} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
+          </div>
+          <div className="max-h-60 overflow-y-auto p-2 space-y-1">{children}</div>
         </div>
       )}
     </div>
+  );
+
+  const filterOption = (key: string, labelText: string, checked: boolean, onChange: () => void) => (
+    <label key={key} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
+      <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={checked} onChange={onChange} />
+      <span className="ml-3 text-sm font-bold text-slate-700 capitalize">{labelText}</span>
+    </label>
   );
 
   return (
@@ -1028,45 +1046,68 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       </div>
 
       {/* Row 2 — Filter card (filters only, no duplicate stats) */}
-      <div className="bg-white rounded border border-[#D2D2D7] px-5 py-3 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5 mr-2">
-          <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
-          <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Filters</span>
-        </div>
-
-        {activeSubTab === 'realized' && (
-          <div className="relative">
-            <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)}
-              className="appearance-none pl-3 pr-7 py-1.5 bg-white border border-[#D2D2D7] rounded text-[11px] font-bold text-slate-600 uppercase tracking-wide focus:outline-none focus:ring-2 focus:ring-[#0F52BA] cursor-pointer hover:border-[#0F52BA] transition-colors">
-              {availableYears.map(y => <option key={y} value={y}>Tax Year: {y}</option>)}
-            </select>
-            <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
-              <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </div>
+      <div className="bg-white p-4 rounded border border-[#D2D2D7] relative z-30">
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex items-center space-x-2">
+            <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            <span className="text-sm font-bold text-slate-700">Filter</span>
           </div>
-        )}
 
-        <FilterDropdown label="Brokerage" refEl={brokerageMenuRef} isOpen={isBrokerageMenuOpen} onToggle={() => setIsBrokerageMenuOpen(v => !v)} count={selectedBrokerages.length} onClear={() => setSelectedBrokerages([])}>
-          {uniqueBrokerages.map(b => (
-            <label key={b} className="flex items-center gap-2.5 px-3 py-1.5 rounded hover:bg-slate-50 cursor-pointer">
-              <input type="checkbox" className="w-3.5 h-3.5 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedBrokerages.includes(b)} onChange={() => toggleBrokerage(b)} />
-              <span className="text-xs font-medium text-slate-700">{b}</span>
-            </label>
-          ))}
-        </FilterDropdown>
+          <div className="flex flex-wrap items-center gap-4 flex-1">
+            {activeSubTab === 'realized' && (
+              <div className="relative">
+                <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Tax Year</label>
+                <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)}
+                  className="appearance-none pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px]">
+                  {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <div className="absolute inset-y-0 right-2.5 flex items-center pointer-events-none">
+                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </div>
+              </div>
+            )}
 
-        <FilterDropdown label="Ticker" refEl={tickerMenuRef} isOpen={isTickerMenuOpen} onToggle={() => setIsTickerMenuOpen(v => !v)} count={selectedTickers.length} onClear={() => setSelectedTickers([])}>
-          {uniqueTickers.map(ticker => (
-            <label key={ticker} className="flex items-center gap-2.5 px-3 py-1.5 rounded hover:bg-slate-50 cursor-pointer">
-              <input type="checkbox" className="w-3.5 h-3.5 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedTickers.includes(ticker)} onChange={() => toggleTicker(ticker)} />
-              <span className="text-xs font-medium text-slate-700">{ticker}</span>
-            </label>
-          ))}
-        </FilterDropdown>
+            <FilterDropdown
+              label="Brokerage" panelTitle="Select Brokerages"
+              summary={selectedBrokerages.length === 0 ? 'All Brokers' : selectedBrokerages.length === 1 ? selectedBrokerages[0] : `${selectedBrokerages.length} Brokers`}
+              refEl={brokerageMenuRef} isOpen={isBrokerageMenuOpen} onToggle={() => setIsBrokerageMenuOpen(v => !v)}
+              count={selectedBrokerages.length} onClear={() => setSelectedBrokerages([])}
+            >
+              {uniqueBrokerages.map(b => filterOption(b, b, selectedBrokerages.includes(b), () => toggleBrokerage(b)))}
+            </FilterDropdown>
 
-        <span className="ml-auto text-[10px] text-slate-400 font-medium">{filteredData.length} lots</span>
+            <FilterDropdown
+              label="Ticker" panelTitle="Select Tickers"
+              summary={selectedTickers.length === 0 ? 'All Tickers' : selectedTickers.length === 1 ? selectedTickers[0] : `${selectedTickers.length} Tickers`}
+              refEl={tickerMenuRef} isOpen={isTickerMenuOpen} onToggle={() => setIsTickerMenuOpen(v => !v)}
+              count={selectedTickers.length} onClear={() => setSelectedTickers([])}
+            >
+              {uniqueTickers.map(t => filterOption(t, t, selectedTickers.includes(t), () => toggleTicker(t)))}
+            </FilterDropdown>
+
+            {/* Term Type — lot-level; empties the ST or LT section when one term is excluded */}
+            <FilterDropdown
+              label="Term Type" panelTitle="Select Term Type"
+              summary={selectedTerms.length === 0 ? 'All Terms' : selectedTerms.length === 1 ? selectedTerms[0] : 'Long & Short'}
+              refEl={termMenuRef} isOpen={isTermMenuOpen} onToggle={() => setIsTermMenuOpen(v => !v)}
+              count={selectedTerms.length} onClear={() => setSelectedTerms([])}
+            >
+              {(['long', 'short'] as const).map(t => filterOption(t, t, selectedTerms.includes(t), () => toggleTerm(t)))}
+            </FilterDropdown>
+          </div>
+
+          <div className="w-px h-8 bg-slate-200 shrink-0" />
+
+          <button onClick={resetFilters} className="text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 shrink-0">
+            Reset
+          </button>
+
+          <div className="w-px h-8 bg-slate-200 shrink-0" />
+
+          <span className="text-[10px] text-slate-400 font-medium shrink-0">{filteredData.length} lots</span>
+        </div>
       </div>
 
       {/* Row 3 — Stats card */}
@@ -1074,8 +1115,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         <div className="flex">
 
           {/* Col 1 — Total Gain + Tax Est. */}
-          <div className="flex-1 flex flex-col justify-between gap-3 pr-6 border-r border-[#E5E5EA]">
-            <div className="flex flex-col gap-3 w-fit">
+          <div className="flex-1 flex items-center pr-6 border-r border-[#E5E5EA]">
+            <div className="flex items-end gap-3">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain</p>
                 <p className={`text-2xl font-black ${stats.total >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -1090,8 +1131,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           </div>
 
           {/* Col 2 — Short-Term (equity + options) + ST Tax (orange) */}
-          <div className="flex-1 flex flex-col justify-between gap-3 px-6 border-r border-[#E5E5EA]">
-            <div className="flex flex-col gap-3 w-fit">
+          <div className="flex-1 flex items-center px-6 border-r border-[#E5E5EA]">
+            <div className="flex items-end gap-3">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Short-Term</p>
                 <p className={`text-2xl font-black ${stats.stTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.stTotal)}</p>
@@ -1105,8 +1146,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           </div>
 
           {/* Col 3 — Long-Term (equity + options) + LT Tax (blue) */}
-          <div className="flex-1 flex flex-col justify-between gap-3 px-6 border-r border-[#E5E5EA]">
-            <div className="flex flex-col gap-3 w-fit">
+          <div className="flex-1 flex items-center px-6 border-r border-[#E5E5EA]">
+            <div className="flex items-end gap-3">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Long-Term</p>
                 <p className={`text-2xl font-black ${stats.ltTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.ltTotal)}</p>
@@ -1122,17 +1163,19 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           {/* Col 5 — Rate inputs */}
           <div className="flex-1 flex flex-col justify-center gap-2.5 pl-6">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Tax Rates</p>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-400 w-6">ST</span>
-              <input type="number" value={stTaxRate} onChange={e => setStTaxRate(Number(e.target.value))}
-                className="w-12 px-1.5 py-1 bg-orange-50 border border-orange-200 rounded text-[11px] font-bold text-center focus:outline-none focus:ring-1 focus:ring-orange-400" style={{ color: ST_COLOR }} title="Short-term rate %" />
-              <span className="text-[10px] text-slate-400">%</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-400 w-6">LT</span>
-              <input type="number" value={ltTaxRate} onChange={e => setLtTaxRate(Number(e.target.value))}
-                className="w-12 px-1.5 py-1 bg-blue-50 border border-blue-200 rounded text-[11px] font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-400" style={{ color: LT_COLOR }} title="Long-term rate %" />
-              <span className="text-[10px] text-slate-400">%</span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-slate-400">Short</span>
+                <input type="number" value={stTaxRate} onChange={e => setStTaxRate(Number(e.target.value))}
+                  className="w-12 px-1.5 py-1 bg-orange-50 border border-orange-200 rounded text-[11px] font-bold text-center focus:outline-none focus:ring-1 focus:ring-orange-400" style={{ color: ST_COLOR }} title="Short-term rate %" />
+                <span className="text-[10px] text-slate-400">%</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-slate-400">Long</span>
+                <input type="number" value={ltTaxRate} onChange={e => setLtTaxRate(Number(e.target.value))}
+                  className="w-12 px-1.5 py-1 bg-blue-50 border border-blue-200 rounded text-[11px] font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-400" style={{ color: LT_COLOR }} title="Long-term rate %" />
+                <span className="text-[10px] text-slate-400">%</span>
+              </div>
             </div>
           </div>
 
@@ -1144,16 +1187,16 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
         {renderTerm({
           key: 'ST', label: 'Short-Term', heldText: 'held ≤ 1 year', color: ST_COLOR,
           eqData: stEquity, optData: stOptions,
-          mv: stats.stMV, gain: stats.stTotal, gainPct: stats.stPct,
-          eqMV: stats.stEqMV, eqGain: stats.stEqTotal, eqPct: stats.stEqPct,
-          optMV: stats.stOptMV, optGain: stats.stOptTotal, optPct: stats.stOptPct,
+          cost: stats.stCost, mv: stats.stMV, gain: stats.stTotal, gainPct: stats.stPct,
+          eqCost: stats.stEqCost, eqMV: stats.stEqMV, eqGain: stats.stEqTotal, eqPct: stats.stEqPct,
+          optCost: stats.stOptCost, optMV: stats.stOptMV, optGain: stats.stOptTotal, optPct: stats.stOptPct,
         })}
         {renderTerm({
           key: 'LT', label: 'Long-Term', heldText: 'held > 1 year', color: LT_COLOR,
           eqData: ltEquity, optData: ltOptions,
-          mv: stats.ltMV, gain: stats.ltTotal, gainPct: stats.ltPct,
-          eqMV: stats.ltEqMV, eqGain: stats.ltEqTotal, eqPct: stats.ltEqPct,
-          optMV: stats.ltOptMV, optGain: stats.ltOptTotal, optPct: stats.ltOptPct,
+          cost: stats.ltCost, mv: stats.ltMV, gain: stats.ltTotal, gainPct: stats.ltPct,
+          eqCost: stats.ltEqCost, eqMV: stats.ltEqMV, eqGain: stats.ltEqTotal, eqPct: stats.ltEqPct,
+          optCost: stats.ltOptCost, optMV: stats.ltOptMV, optGain: stats.ltOptTotal, optPct: stats.ltOptPct,
         })}
       </div>
       </div>
