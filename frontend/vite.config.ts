@@ -13,8 +13,8 @@ export default defineConfig(() => {
         // governed by the network (LAN + tailnet only; nothing is port-forwarded).
         // '.ts.net' covers the full MagicDNS name; the bare machine name has no
         // suffix to match, so it needs listing separately. Update if the device
-        // is renamed in the Tailscale admin console.
-        allowedHosts: ['.ts.net', 'nivethas-macbook-air'],
+        // is renamed (tailscale set --hostname=...).
+        allowedHosts: ['.ts.net', 'wealthcompass'],
         proxy: {
           '/api/v1': {
             target: 'http://localhost:8000',
