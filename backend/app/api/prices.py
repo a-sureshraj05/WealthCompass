@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.core.stock_fetcher import get_stock_quote
+from backend.app.core.stock_fetcher import get_stock_quote, is_expired_option
 from backend.app.core.table_loader import holding_loader
 from backend.app.core.table_loader.holding_loader import _multiplier
 from backend.app.db.schema import UnrealizedGain
@@ -59,10 +59,16 @@ def refresh_prices(db: Session = Depends(get_db)):
     quotes = {}
     failed = []
     for symbol, (current, prev) in zip(symbols, quotes_raw):
-        if current is None:
-            failed.append(symbol)
+        # `is None` isn't enough: a 0 from a thin or throttled quote is falsy but
+        # not None, and storing it would mark a live position worthless. Only an
+        # expired contract is legitimately worth zero.
+        if current is None or current <= 0:
+            if is_expired_option(symbol):
+                quotes[symbol] = (0.0, 0.0)
+            else:
+                failed.append(symbol)
             continue
-        quotes[symbol] = (current, prev if prev is not None else current)
+        quotes[symbol] = (current, prev if prev and prev > 0 else current)
 
     # Feeds holding_loader's equity previous-close lookup; options are derived
     # from their own lots inside the loader.

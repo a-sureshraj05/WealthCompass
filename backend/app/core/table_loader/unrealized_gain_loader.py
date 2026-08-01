@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 from backend.app.db.schema import UnrealizedGain
-from backend.app.core.stock_fetcher import get_stock_price, get_stock_quote
+from backend.app.core.stock_fetcher import get_stock_price, get_stock_quote, is_expired_option
 from backend.app.core.utils.ticker import underlying_ticker
 from backend.app.core.stock_split_utils import build_split_map
 
@@ -21,6 +21,18 @@ def delete(db: Session, brokerage_name: str = None):
 
 def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brokerage_name: str = None) -> Dict[str, float]:
     print(f"[unrealized_gain_loader] Starting load for brokerage: {brokerage_name}")
+
+    # Capture the marks we already have before clearing the table. A price fetch
+    # can fail for reasons that have nothing to do with the position — a rate
+    # limit, a network blip — and rebuilding from scratch would otherwise
+    # destroy rows we cannot re-derive. A stale price is wrong by a day; a
+    # missing lot is wrong by the whole position.
+    last_known: Dict[str, tuple] = {}
+    for row in db.query(UnrealizedGain).all():
+        key = row.option_symbol or row.ticker
+        if key and row.currentPrice:
+            last_known[key] = (row.currentPrice, row.prevClose)
+
     # First, delete existing unrealized gains
     delete(db, brokerage_name)
 
@@ -44,12 +56,20 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
         price_ticker = option_symbol if option_symbol else ticker
         current_price, prev_close = get_stock_quote(price_ticker)
         if current_price is None:
-            if option_symbol:
-                print(f"[unrealized_gain_loader] Option {option_symbol} has no price data (likely expired). Using $0.")
+            # Only an expiry date in the past proves a contract is worthless.
+            # Absence of price data does not — that conflation once marked a
+            # live options book to zero during a yfinance rate limit.
+            if option_symbol and is_expired_option(option_symbol):
+                print(f"[unrealized_gain_loader] Option {option_symbol} expired. Using $0.")
                 current_price = 0.0
                 prev_close = 0.0
+            elif price_ticker in last_known:
+                current_price, prev_close = last_known[price_ticker]
+                print(f"[unrealized_gain_loader] No price for {price_ticker}; keeping last known mark {current_price}.")
             else:
-                print(f"Warning: Could not fetch current price for {ticker} ({brokerage}). Skipping.")
+                # Nothing fetched and nothing on record — dropping is the only
+                # option left, but say so loudly rather than failing silently.
+                print(f"Warning: no price and no prior mark for {price_ticker} ({brokerage}). Lot omitted.")
                 continue
         # Cache previous close keyed by underlying equity ticker (for holding_loader)
         if not option_symbol and prev_close is not None:
