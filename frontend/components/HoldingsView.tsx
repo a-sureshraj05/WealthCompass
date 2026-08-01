@@ -4,12 +4,21 @@ import { fetchAnalystData } from '../services/apiService';
 import TickerLogo from './TickerLogo';
 import SortIndicator from './SortIndicator';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { useSyncedColumnOrder } from '../hooks/useSyncedColumnOrder';
+import ColumnOrderSheet from './ColumnOrderSheet';
 import { optionsMultiplier } from '../utils/finance';
 
 type SortKey = 'ticker' | 'washSale' | 'termType' | 'quantity' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain' | 'gainPct' | 'dailyGain' | 'dailyPct' | 'realized' | 'totalGain' | 'analystPrice' | 'analystPct';
 type SortDirection = 'asc' | 'desc' | null;
 
 type ColKey = 'ticker' | 'washSale' | 'termType' | 'quantity' | 'avgCost' | 'totalCost' | 'currentPrice' | 'marketValue' | 'dailyGain' | 'dailyPct' | 'unrealizedGain' | 'unrealizedPct' | 'realized' | 'totalGain' | 'analystPrice' | 'analystPct';
+const COL_LABELS: Record<ColKey, string> = {
+  ticker: 'Ticker', washSale: 'Wash Sale', termType: 'Term Type', quantity: 'Quantity',
+  avgCost: 'Avg Cost', totalCost: 'Total Cost', currentPrice: 'Current Price',
+  marketValue: 'Market Value', dailyGain: 'Daily Gain', dailyPct: 'Daily %',
+  unrealizedGain: 'Unrealized Gain', unrealizedPct: 'Unrealized %', realized: 'Realized',
+  totalGain: 'Total Gain', analystPrice: 'Analyst Price', analystPct: 'Analyst %',
+};
 const DEFAULT_COLS: ColKey[] = ['ticker','washSale','termType','quantity','avgCost','totalCost','currentPrice','marketValue','dailyGain','dailyPct','unrealizedGain','unrealizedPct','realized','totalGain','analystPrice','analystPct'];
 
 type TermType = 'Long' | 'Short' | 'Mixed' | null;
@@ -102,30 +111,13 @@ const HoldingsView: React.FC<Props> = ({
   const [expandedBV_L3, setExpandedBV_L3] = useState<Set<string>>(new Set());
 
   // Column drag-and-drop state
-  const [columnOrder, setColumnOrder] = useState<ColKey[]>(() => {
-    try {
-      const saved = localStorage.getItem('holdings-col-order');
-      if (saved) {
-        const parsed: ColKey[] = JSON.parse(saved);
-        if (parsed.length === DEFAULT_COLS.length && DEFAULT_COLS.every(c => parsed.includes(c))) return parsed;
-      }
-    } catch {}
-    return DEFAULT_COLS;
-  });
+  // Server-backed so the order matches on the Mac and the phone.
+  const { order: columnOrder, reorder: reorderCol, move: moveCol } =
+    useSyncedColumnOrder<ColKey>('holdings-col-order', DEFAULT_COLS);
+  const [showColSheet, setShowColSheet] = useState(false);
   const [dragCol, setDragCol] = useState<ColKey | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ColKey | null>(null);
 
-  const reorderCol = (from: ColKey, to: ColKey) => {
-    if (from === to) return;
-    setColumnOrder(prev => {
-      const o = [...prev];
-      const fi = o.indexOf(from), ti = o.indexOf(to);
-      o.splice(fi, 1);
-      o.splice(ti, 0, from);
-      try { localStorage.setItem('holdings-col-order', JSON.stringify(o)); } catch {}
-      return o;
-    });
-  };
 
   const dragProps = (col: ColKey) => ({
     draggable: true as const,
@@ -851,6 +843,16 @@ const HoldingsView: React.FC<Props> = ({
             Reset
           </button>
 
+          {/* Header drag-and-drop never fires from touch — this is the only
+              way to reorder columns on a phone. */}
+          <button onClick={() => setShowColSheet(true)} title="Reorder columns"
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 py-2 min-h-[44px] shrink-0">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            Columns
+          </button>
+
           {onViewModeChange && (
             <>
               <div className="w-px h-8 bg-slate-200 shrink-0" />
@@ -1099,6 +1101,14 @@ const HoldingsView: React.FC<Props> = ({
         </div>
       ))}
       </div>
+
+      <ColumnOrderSheet
+        open={showColSheet}
+        onClose={() => setShowColSheet(false)}
+        order={columnOrder}
+        labels={COL_LABELS}
+        onMove={moveCol}
+      />
     </div>
   );
 };

@@ -1,5 +1,17 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import TickerLogo from './TickerLogo';
+import { useSyncedColumnOrder } from '../hooks/useSyncedColumnOrder';
+import ColumnOrderSheet from './ColumnOrderSheet';
+
+const OPT_COL_LABELS: Record<string, string> = {
+  ticker: 'Ticker', washSale: 'Wash Sale', termType: 'Term Type', totalQty: 'Total Qty',
+  avgBuyPrice: 'Avg Buy Price', strikePrice: 'Strike Price', totalValue: 'Total Value',
+  avgCurrentPrice: 'Avg Current Price', marketValue: 'Market Value', dailyGain: 'Daily Gain',
+  dailyPct: 'Daily %', unrealizedGain: 'Unrealized Gain', unrealizedPct: 'Unrealized %',
+  retainQty: 'Retain Qty', sellableQty: 'Sellable Qty', gainToSell: 'Gain To Sell',
+  targetPrice: 'Target Price',
+};
+
 import { BrokerageAccount, StockHolding, UnrealizedLot, RealizedGain } from '../types';
 import {
   OptionsPosition,
@@ -102,29 +114,12 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   type SortKey = 'ticker' | 'washSale' | 'termType' | 'totalQty' | 'avgBuyPrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'dailyGain' | 'dailyPct' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'targetPrice';
   type ColKey = 'ticker' | 'washSale' | 'termType' | 'totalQty' | 'avgBuyPrice' | 'strikePrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'dailyGain' | 'dailyPct' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'gainToSell' | 'targetPrice';
   const DEFAULT_COLS: ColKey[] = ['ticker','washSale','termType','totalQty','avgBuyPrice','strikePrice','totalValue','avgCurrentPrice','marketValue','dailyGain','dailyPct','unrealizedGain','unrealizedPct','retainQty','sellableQty','gainToSell','targetPrice'];
-  const [columnOrder, setColumnOrder] = useState<ColKey[]>(() => {
-    try {
-      const saved = localStorage.getItem('options-col-order');
-      if (saved) {
-        const parsed: ColKey[] = JSON.parse(saved);
-        if (parsed.length === DEFAULT_COLS.length && DEFAULT_COLS.every(c => parsed.includes(c))) return parsed;
-      }
-    } catch {}
-    return DEFAULT_COLS;
-  });
+  // Server-backed so the order matches on the Mac and the phone.
+  const { order: columnOrder, reorder: reorderCol, move: moveCol } =
+    useSyncedColumnOrder<ColKey>('options-col-order', DEFAULT_COLS);
+  const [showColSheet, setShowColSheet] = useState(false);
   const [dragCol, setDragCol] = useState<ColKey | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ColKey | null>(null);
-  const reorderCol = (from: ColKey, to: ColKey) => {
-    if (from === to) return;
-    setColumnOrder(prev => {
-      const o = [...prev];
-      const fi = o.indexOf(from), ti = o.indexOf(to);
-      o.splice(fi, 1);
-      o.splice(ti, 0, from);
-      try { localStorage.setItem('options-col-order', JSON.stringify(o)); } catch {}
-      return o;
-    });
-  };
   const dragProps = (col: ColKey) => ({
     draggable: true as const,
     onDragStart: (e: React.DragEvent) => { e.dataTransfer.effectAllowed = 'move'; setDragCol(col); },
@@ -610,6 +605,18 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   return (
     <div className={`space-y-4${!numbersVisible ? ' blur-sm select-none pointer-events-none' : ''}`}>
 
+      <div className="flex justify-end">
+        {/* Header drag-and-drop never fires from touch — this is the only
+            way to reorder columns on a phone. */}
+        <button onClick={() => setShowColSheet(true)} title="Reorder columns"
+          className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 py-2 min-h-[44px]">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+          Columns
+        </button>
+      </div>
+
       {/* Ticker View */}
       {viewMode === 'ticker' && <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white shadow-sm overflow-hidden">
         <table className="w-full text-left">
@@ -813,6 +820,14 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
         </div>
       )}
 
+
+      <ColumnOrderSheet
+        open={showColSheet}
+        onClose={() => setShowColSheet(false)}
+        order={columnOrder}
+        labels={OPT_COL_LABELS}
+        onMove={moveCol}
+      />
     </div>
   );
 };
