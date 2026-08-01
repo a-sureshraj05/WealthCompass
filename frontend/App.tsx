@@ -5,7 +5,7 @@ import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LoginPage from './components/LoginPage';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchBuyingPowerCached, fetchAnalystData, fetchAnalystDataCached, fetchAccounts } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchBuyingPowerCached, fetchAnalystData, fetchAnalystDataCached, fetchAccounts, refreshPrices } from './services/apiService';
 import { BrokerageAccount } from './types';
 import TickerTypeContext from './contexts/TickerTypeContext';
 
@@ -117,6 +117,28 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   }, []);
 
+  // Hits yfinance for every open lot, then re-reads the rows it rewrote.
+  // Non-blocking by design: callers render cached prices first and get patched
+  // when the quotes land, same as refreshAnalystData.
+  const refreshLivePrices = useCallback(async () => {
+    try {
+      const result = await refreshPrices();
+      if (result.failed.length > 0) {
+        console.warn(`Price refresh could not quote ${result.failed.length} symbol(s):`, result.failed);
+      }
+      const [h, u] = await Promise.all([fetchHoldings(), fetchUnrealizedGains()]);
+      setHoldings(prev => {
+        // Keep sector/target that refreshAnalystData patched on; the price
+        // endpoint doesn't know about them.
+        const extras = new Map(prev.map(x => [`${x.brokerage}|${x.ticker}|${x.assetType}`, x.sector]));
+        return h.map(x => ({ ...x, sector: extras.get(`${x.brokerage}|${x.ticker}|${x.assetType}`) ?? x.sector }));
+      });
+      setUnrealizedGains(u);
+    } catch (error) {
+      console.error("Failed to refresh live prices:", error);
+    }
+  }, []);
+
   const getRealizedGains = useCallback(async () => {
     try {
       setRealizedGains(await fetchRealizedGains());
@@ -138,7 +160,8 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     getRealizedGains();
     getUnrealizedGains();
     refreshAnalystData(); // background — renders from cache above, then patches when yfinance returns
-  }, [getHoldings, getRealizedGains, getUnrealizedGains, refreshAnalystData]);
+    refreshLivePrices();  // background — same pattern, patches prices when quotes land
+  }, [getHoldings, getRealizedGains, getUnrealizedGains, refreshAnalystData, refreshLivePrices]);
 
   // Fetch transactions from backend with filters
   const getTransactions = useCallback(async () => {
@@ -335,7 +358,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             unrealizedGains={unrealizedGains}
             stats={stats}
             onAddTransactions={handleAddTransactions}
-            onRefresh={() => { Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower()]); refreshAnalystData(); }}
+            onRefresh={() => { Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower()]); refreshAnalystData(); refreshLivePrices(); }}
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
             onSoftDeleteTransaction={handleSoftDeleteTransaction}
