@@ -8,6 +8,11 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 5173,
         host: '0.0.0.0',
+        // Vite 6 rejects requests whose Host header isn't localhost or an IP.
+        // Tailscale reaches the machine by its MagicDNS name, so allow that suffix.
+        // This is a DNS-rebinding guard, not access control — reachability is still
+        // governed by the network (LAN + tailnet only; nothing is port-forwarded).
+        allowedHosts: ['.ts.net'],
         proxy: {
           '/api/v1': {
             target: 'http://localhost:8000',
