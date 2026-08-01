@@ -1,6 +1,7 @@
 import re
 import yfinance as yf
 import pandas as pd
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Union
 
 # OCC option symbol: up to 6-char root + YYMMDD + C/P + 8-digit strike (e.g. MSFT281215C00400000)
@@ -46,7 +47,16 @@ def _get_option_quote(occ_symbol: str) -> tuple:
         ask = float(r.get('ask', 0) or 0)
         last = float(r.get('lastPrice', 0) or 0)
         if bid > 0 and ask > 0:
-            current = (bid + ask) / 2
+            # Options quote in penny increments, so a mid on a half-cent isn't a
+            # tradeable price. Round to the cent to match how brokerages display
+            # the mark — otherwise totals drift a few dollars off the statement.
+            # Decimal + ROUND_HALF_UP on purpose: a half-cent mid is exactly the
+            # case here, and round() would bankers-round it to the even cent.
+            current = float(
+                ((Decimal(str(bid)) + Decimal(str(ask))) / 2).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+            )
         elif last > 0:
             current = last
         else:

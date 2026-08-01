@@ -286,6 +286,20 @@ export interface AnalystData {
   sector?: string;
 }
 
+export interface PriceRefreshResult {
+  symbols: number;
+  lotsUpdated: number;
+  failed: string[];
+}
+
+// Re-quotes every open lot and rebuilds holdings. Slow (hits yfinance per symbol),
+// so callers should fire it in the background rather than blocking a render.
+export const refreshPrices = async (): Promise<PriceRefreshResult> => {
+  const response = await apiFetch("/api/v1/prices/refresh", { method: "POST" });
+  if (!response.ok) throw new Error("Failed to refresh prices");
+  return response.json();
+};
+
 export const fetchAnalystDataCached = async (): Promise<AnalystData[]> => {
   const response = await apiFetch("/api/v1/analyst/cached");
   if (!response.ok) return [];

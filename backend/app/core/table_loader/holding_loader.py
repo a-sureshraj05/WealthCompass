@@ -44,23 +44,39 @@ def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, fl
                 "ticker": row.ticker,
                 "quantity": 0.0,
                 "totalCost": 0.0,
-                "currentPrice": row.currentPrice,
+                "marketValue": 0.0,
+                "prevMarketValue": 0.0,
                 "assetType": row.assetType,
             }
 
         m = _multiplier(row.assetType)
+        # Value each lot at its own price before summing. An options position can
+        # hold several contracts at different strikes/expiries, so a single price
+        # cannot stand in for the group.
+        current = row.currentPrice or 0.0
+        prev = row.prevClose if row.prevClose is not None else current
         aggregated[key]["quantity"] += row.quantity
         aggregated[key]["totalCost"] += row.quantity * m * row.buyPrice
+        aggregated[key]["marketValue"] += row.quantity * m * current
+        aggregated[key]["prevMarketValue"] += row.quantity * m * prev
 
     holdings_list = []
     for agg in aggregated.values():
         total_quantity = agg["quantity"]
         total_cost = agg["totalCost"]
-        current_price = agg["currentPrice"]
+        market_value = agg["marketValue"]
         ticker = agg["ticker"]
 
         m = _multiplier(agg.get("assetType"))
-        prev_close = (prev_close_cache or {}).get(ticker, current_price)
+        units = total_quantity * m
+        # Blended per-unit prices derived from the summed values, so a multi-strike
+        # options position reports a real weighted average rather than one lot's price.
+        current_price = market_value / units if units > 0 else 0.0
+        prev_close = agg["prevMarketValue"] / units if units > 0 else current_price
+        # Equities carry a shared per-ticker close; options must come from the lots,
+        # since prev_close_cache is only populated for non-options.
+        if m == 1:
+            prev_close = (prev_close_cache or {}).get(ticker, prev_close)
         holding = Holding(
             brokerage=agg["brokerage"],
             account_id=agg.get("account_id"),
@@ -70,7 +86,7 @@ def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, fl
             totalCost=total_cost,
             currentPrice=current_price,
             previousClose=prev_close,
-            marketValue=total_quantity * m * current_price,
+            marketValue=market_value,
             assetType=normalize_asset_type(agg.get("assetType") or "", ticker=ticker),
         )
         holdings_list.append(holding)
