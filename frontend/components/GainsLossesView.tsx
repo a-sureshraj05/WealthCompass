@@ -746,7 +746,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       <div className="space-y-2">
         <button
           onClick={() => toggleSection(key)}
-          className="w-full pl-4 pr-4 py-2.5 bg-[#FAFAFA] rounded border border-[#E5E5EA] flex items-center justify-between hover:bg-[#F0F0F2] transition-colors"
+          className="w-full pl-4 pr-4 py-2.5 bg-[#FAFAFA] rounded border border-[#E5E5EA] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 hover:bg-[#F0F0F2] transition-colors"
         >
           <div className="flex items-center gap-2.5">
             <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -755,16 +755,17 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</span>
             <span className="text-[10px] text-slate-400 font-medium">· {data.length} lot{data.length !== 1 ? 's' : ''}</span>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="w-32 text-right">
+          {/* Full-width and evenly spread on a phone; fixed-width right-aligned columns once there's room. */}
+          <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+            <div className="text-left sm:text-right sm:w-32">
               <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Invested Value</p>
               <p className="text-xs font-black text-slate-500">${cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
-            <div className="w-32 text-right">
+            <div className="text-left sm:text-right sm:w-32">
               <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
               <p className="text-xs font-black text-slate-700">${mv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
-            <div className="w-40 text-right">
+            <div className="text-right sm:w-40">
               <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
               <p className={`text-xs font-black ${gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {gain >= 0 ? '+' : '-'}${Math.abs(gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -792,7 +793,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       <div className="space-y-3">
         <button
           onClick={() => toggleSection(cfg.key)}
-          className="w-full p-4 bg-white rounded border border-[#D2D2D7] flex items-center justify-between hover:bg-[#F5F5F7] transition-colors"
+          className="w-full p-4 bg-white rounded border border-[#D2D2D7] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 hover:bg-[#F5F5F7] transition-colors"
         >
           <div className="flex items-center gap-3">
             <svg className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -806,16 +807,16 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="w-36 text-right">
+          <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+            <div className="text-left sm:text-right sm:w-36">
               <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Invested Value</p>
               <p className="text-sm font-black text-slate-500">${cfg.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
-            <div className="w-36 text-right">
+            <div className="text-left sm:text-right sm:w-36">
               <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Market Value</p>
               <p className="text-sm font-black text-slate-700">${cfg.mv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
-            <div className="w-44 text-right">
+            <div className="text-right sm:w-44">
               <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
               <p className={`text-sm font-black ${cfg.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {cfg.gain >= 0 ? '+' : '-'}${Math.abs(cfg.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1111,11 +1112,13 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
       </div>
 
       {/* Row 3 — Stats card */}
-      <div className="bg-white rounded border border-[#D2D2D7] px-6 py-4">
-        <div className="flex">
+      <div className="bg-white rounded border border-[#D2D2D7] px-4 py-3 sm:px-6 sm:py-4">
+        {/* Four fixed columns overflow a phone, so stack them and swap the
+            vertical rules for horizontal ones until there's room. */}
+        <div className="flex flex-col lg:flex-row">
 
           {/* Col 1 — Total Gain + Tax Est. */}
-          <div className="flex-1 flex items-center pr-6 border-r border-[#E5E5EA]">
+          <div className="flex-1 flex items-center py-3 lg:py-0 lg:pr-6 border-b lg:border-b-0 lg:border-r border-[#E5E5EA]">
             <div className="flex items-end gap-3">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain</p>
@@ -1131,7 +1134,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           </div>
 
           {/* Col 2 — Short-Term (equity + options) + ST Tax (orange) */}
-          <div className="flex-1 flex items-center px-6 border-r border-[#E5E5EA]">
+          <div className="flex-1 flex items-center py-3 lg:py-0 lg:px-6 border-b lg:border-b-0 lg:border-r border-[#E5E5EA]">
             <div className="flex items-end gap-3">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Short-Term</p>
@@ -1146,7 +1149,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           </div>
 
           {/* Col 3 — Long-Term (equity + options) + LT Tax (blue) */}
-          <div className="flex-1 flex items-center px-6 border-r border-[#E5E5EA]">
+          <div className="flex-1 flex items-center py-3 lg:py-0 lg:px-6 border-b lg:border-b-0 lg:border-r border-[#E5E5EA]">
             <div className="flex items-end gap-3">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Long-Term</p>
@@ -1161,7 +1164,7 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
           </div>
 
           {/* Col 5 — Rate inputs */}
-          <div className="flex-1 flex flex-col justify-center gap-2.5 pl-6">
+          <div className="flex-1 flex flex-col justify-center gap-2.5 pt-3 lg:pt-0 lg:pl-6">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Tax Rates</p>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">

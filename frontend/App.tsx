@@ -4,6 +4,7 @@ import { StockHolding, PortfolioStats, Transaction, DateRangeType, RealizedGain,
 import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import MobileTabBar from './components/MobileTabBar';
 import LoginPage from './components/LoginPage';
 import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchBuyingPowerCached, fetchAnalystData, fetchAnalystDataCached, fetchAccounts, refreshPrices } from './services/apiService';
 import { BrokerageAccount } from './types';
@@ -346,7 +347,8 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} numbersVisible={numbersVisible} onToggleNumbers={() => setNumbersVisible(v => !v)} />
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        {/* pb-24 on mobile clears the fixed MobileTabBar */}
+        <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-8 lg:pb-8">
           <DashboardView
             activeTab={activeTab}
             setActiveTab={handleSetActiveTab}
@@ -381,6 +383,8 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           />
         </main>
       </div>
+
+      <MobileTabBar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
 
       {loading && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50">
