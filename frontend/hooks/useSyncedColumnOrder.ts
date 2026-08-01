@@ -38,6 +38,9 @@ export function useSyncedColumnOrder<T extends string>(
   // Suppresses the echo from our own save, so a slow response can't revert a
   // reorder the user just made.
   const pendingWrite = useRef(false);
+  // The order this device started with, captured once so the seeding effect
+  // below doesn't need `order` as a dependency and re-run on every change.
+  const initialOrder = useRef(order);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +51,16 @@ export function useSyncedColumnOrder<T extends string>(
         if (isValid(remote)) {
           setOrder(remote);
           try { localStorage.setItem(prefKey, JSON.stringify(remote)); } catch { /* cache only */ }
+          return;
         }
+        // Server has no order for this view yet. Seed it from whatever this
+        // device is already using, otherwise both devices sit on their own
+        // localStorage and stay divergent until someone happens to reorder.
+        // First device to load wins, and any later reorder overrides it.
+        pendingWrite.current = true;
+        savePreferences({ [prefKey]: initialOrder.current })
+          .catch(() => { /* stays local; retried next load */ })
+          .finally(() => { pendingWrite.current = false; });
       })
       .catch(() => { /* offline or logged out — the cached order still works */ });
     return () => { cancelled = true; };
