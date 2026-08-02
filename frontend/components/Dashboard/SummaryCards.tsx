@@ -53,10 +53,7 @@ const EyeIcon: React.FC<{ visible: boolean; onToggle: () => void }> = ({ visible
   </button>
 );
 
-const fmt = (n: number) =>
-  `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-/** Unsigned — for the places where a direction arrow carries the sign instead. */
+/** Unsigned: every figure on these cards has an arrow carrying its sign. */
 const fmtAbs = (n: number) =>
   `$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -131,17 +128,16 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVis
           Cash Balance
           <span className="text-[9px] text-slate-300 normal-case tracking-normal font-normal">hover for breakdown</span>
         </p>
-        {/* Cash is a level, not a change, so only the negative case carries an
-            arrow — it reads as "below zero". An up arrow on a positive balance
-            would imply cash had risen, which this number doesn't say. */}
-        <p className={`text-2xl font-bold leading-tight flex items-center gap-1.5 ${numbersVisible && stats.buyingPower < 0 ? NEGATIVE : 'text-[#1D1D1F]'}`}>
-          {numbersVisible && stats.buyingPower < 0 && (
+        {/* Arrows both ways here, matching the change cards: above or below
+            zero, i.e. cash on hand versus margin drawn. */}
+        <p className={`text-2xl font-bold leading-tight flex items-center gap-1.5 ${numbersVisible ? (stats.buyingPower < 0 ? NEGATIVE : POSITIVE) : 'text-[#1D1D1F]'}`}>
+          {numbersVisible && (
             <>
-              <TrendArrow direction="down" />
-              <span className="sr-only">negative</span>
+              <TrendArrow direction={stats.buyingPower < 0 ? 'down' : 'up'} />
+              <span className="sr-only">{stats.buyingPower < 0 ? 'negative' : 'positive'}</span>
             </>
           )}
-          {numbersVisible ? (stats.buyingPower < 0 ? fmtAbs(stats.buyingPower) : fmt(stats.buyingPower)) : mask}
+          {numbersVisible ? fmtAbs(stats.buyingPower) : mask}
         </p>
         {/* rose-600 rather than rose-500: at 12px the latter is 3.7:1 on white,
             under the 4.5:1 AA floor for normal text. */}
@@ -174,13 +170,9 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVis
                           is 6.3:1 and emerald-400 8.8:1 against #1D1D1F. The
                           card's darker steps would be unreadable on this. */}
                       <span className={`text-[11px] font-black tabular-nums shrink-0 flex items-center gap-1 ${amount < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                        {amount < 0 && (
-                          <>
-                            <TrendArrow direction="down" className="w-2.5 h-2.5" />
-                            <span className="sr-only">negative</span>
-                          </>
-                        )}
-                        {amount < 0 ? fmtAbs(amount) : fmt(amount)}
+                        <TrendArrow direction={amount < 0 ? 'down' : 'up'} className="w-2.5 h-2.5" />
+                        <span className="sr-only">{amount < 0 ? 'negative' : 'positive'}</span>
+                        {fmtAbs(amount)}
                       </span>
                     </div>
                   );
