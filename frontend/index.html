@@ -40,6 +40,22 @@
            same element is a shorthand that resets every side, and would knock
            the bottom clearance out between md and lg — where the bar is still
            visible. */
+        /* iOS Safari zooms the whole page in when a form control smaller than
+           16px takes focus, and never zooms back out. In a single-page app that
+           zoom then follows you to every other tab, which reads as a broken
+           layout rather than as zoom. Forcing 16px at touch widths prevents the
+           gesture from ever firing.
+           !important because Tailwind's text-sm / text-[11px] sit on the
+           elements themselves and would win on specificity. Checkboxes and
+           radios are excluded — font-size doesn't affect them and changing it
+           would only shift their alignment. */
+        @media (max-width: 1023px) {
+            input:not([type="checkbox"]):not([type="radio"]),
+            select,
+            textarea {
+                font-size: 16px !important;
+            }
+        }
         .pb-tabbar {
             padding-bottom: calc(56px + env(safe-area-inset-bottom) + 1rem);
         }
