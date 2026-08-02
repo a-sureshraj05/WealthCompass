@@ -9,6 +9,18 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* The app shell is h-screen and scrolls internally via <main>, so the
+           document itself must never scroll. Without an explicit height chain
+           down to #root, the shell's 100vh is the only anchor and anything that
+           makes the document even slightly taller lets the body scroll — which
+           drags the whole shell up and exposes page background beneath it. */
+        html, body, #root {
+            height: 100%;
+        }
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
         html {
             font-size: 90%;
         }

@@ -341,7 +341,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   return (
     <TickerTypeContext.Provider value={tickerTypeMap}>
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    {/* h-full (of #root, now pinned to the viewport) rather than h-screen:
+        100vh on mobile browsers means the *largest* viewport, ignoring the
+        address bar, so the shell would overflow by the toolbar's height. */}
+    <div className="flex h-full overflow-hidden bg-slate-50">
       <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
