@@ -347,8 +347,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} numbersVisible={numbersVisible} onToggleNumbers={() => setNumbersVisible(v => !v)} />
 
-        {/* pb-24 on mobile clears the fixed MobileTabBar */}
-        <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-8 lg:pb-8">
+        {/* px/pt rather than the p- shorthand: `md:p-8` resets every side, which
+            would override .pb-tabbar's clearance between md and lg — exactly the
+            range where the bar is still visible. See .pb-tabbar in index.html. */}
+        <main className="flex-1 overflow-y-auto px-4 pt-4 md:px-8 md:pt-8 pb-tabbar">
           <DashboardView
             activeTab={activeTab}
             setActiveTab={handleSetActiveTab}

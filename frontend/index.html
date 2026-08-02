@@ -19,6 +19,22 @@
         .font-display {
             font-family: 'Hanken Grotesk', sans-serif;
         }
+        /* Clears the fixed MobileTabBar: its 56px row plus the home-indicator
+           inset, plus a little breathing room. Derived from the bar's real
+           height rather than a round number, so there's no dead space under
+           the last card. Uses px for the bar because the root font-size is 90%
+           above, which would make a rem-based figure ~10% short.
+           Written here rather than as a Tailwind class because `md:p-8` on the
+           same element is a shorthand that resets every side, and would knock
+           the bottom clearance out between md and lg — where the bar is still
+           visible. */
+        .pb-tabbar {
+            padding-bottom: calc(56px + env(safe-area-inset-bottom) + 1rem);
+        }
+        @media (min-width: 1024px) {
+            /* Tab bar is lg:hidden, so fall back to the normal page padding. */
+            .pb-tabbar { padding-bottom: 2rem; }
+        }
     </style>
 <script type="importmap">
 {
