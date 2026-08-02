@@ -7,6 +7,7 @@ structure, lot assignments, and realized gains untouched.
 """
 
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
@@ -27,6 +28,18 @@ router = APIRouter()
 # pool modest to avoid tripping rate limiting on a ~60 symbol portfolio.
 MAX_WORKERS = 8
 
+# holding_loader.load() is delete-then-insert with a commit in between, so two
+# refreshes running at once interleave as: A deletes, B deletes (nothing left),
+# A inserts, B inserts — leaving every holding duplicated and the portfolio
+# total exactly doubled. Easy to hit, since the frontend refreshes on mount and
+# the app is open on more than one device.
+#
+# Serialising the whole endpoint is the right trade here: a refresh is a
+# read-mostly rebuild that takes a couple of seconds, and two concurrent ones
+# would only fetch the same quotes twice. FastAPI runs sync endpoints in a
+# threadpool, so a module-level lock is sufficient.
+_refresh_lock = threading.Lock()
+
 
 class PriceRefreshResult(BaseModel):
     symbols: int          # distinct symbols quoted
@@ -38,10 +51,18 @@ class PriceRefreshResult(BaseModel):
 def refresh_prices(db: Session = Depends(get_db)):
     """Re-quote every open lot and rebuild holdings from the new prices.
 
+    Serialised on _refresh_lock — see the comment there; concurrent runs
+    duplicate every holding.
+
     Wash-sale fields are intentionally left alone: `wash_sale_at_risk` depends on
     `wash_sale_recent_buy_date`, which is not persisted on the row, so it cannot
     be re-derived here. Those are recomputed on the next full reprocess.
     """
+    with _refresh_lock:
+        return _refresh_prices_locked(db)
+
+
+def _refresh_prices_locked(db: Session) -> PriceRefreshResult:
     lots = db.query(UnrealizedGain).all()
     if not lots:
         return PriceRefreshResult(symbols=0, lotsUpdated=0, failed=[])
