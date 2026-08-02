@@ -14,9 +14,9 @@ const POSITIVE = 'text-emerald-700';
 const NEGATIVE = 'text-rose-600';
 
 /** Direction triangle. Decorative — the sign is announced via sr-only text. */
-const TrendArrow: React.FC<{ direction: Exclude<Direction, null> }> = ({ direction }) => (
+const TrendArrow: React.FC<{ direction: Exclude<Direction, null>; className?: string }> = ({ direction, className = 'w-4 h-4' }) => (
   <svg
-    className="w-4 h-4 shrink-0"
+    className={`${className} shrink-0`}
     viewBox="0 0 24 24"
     fill="currentColor"
     aria-hidden="true"
@@ -55,6 +55,10 @@ const EyeIcon: React.FC<{ visible: boolean; onToggle: () => void }> = ({ visible
 
 const fmt = (n: number) =>
   `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** Unsigned — for the places where a direction arrow carries the sign instead. */
+const fmtAbs = (n: number) =>
+  `$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVisible = true, onToggleNumbers }) => {
   const [showTooltip, setShowTooltip] = useState(false);
@@ -127,10 +131,21 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVis
           Cash Balance
           <span className="text-[9px] text-slate-300 normal-case tracking-normal font-normal">hover for breakdown</span>
         </p>
-        <p className={`text-2xl font-bold leading-tight ${stats.buyingPower < 0 ? 'text-rose-600' : 'text-[#1D1D1F]'}`}>
-          {numbersVisible ? fmt(stats.buyingPower) : mask}
+        {/* Cash is a level, not a change, so only the negative case carries an
+            arrow — it reads as "below zero". An up arrow on a positive balance
+            would imply cash had risen, which this number doesn't say. */}
+        <p className={`text-2xl font-bold leading-tight flex items-center gap-1.5 ${numbersVisible && stats.buyingPower < 0 ? NEGATIVE : 'text-[#1D1D1F]'}`}>
+          {numbersVisible && stats.buyingPower < 0 && (
+            <>
+              <TrendArrow direction="down" />
+              <span className="sr-only">negative</span>
+            </>
+          )}
+          {numbersVisible ? (stats.buyingPower < 0 ? fmtAbs(stats.buyingPower) : fmt(stats.buyingPower)) : mask}
         </p>
-        <p className={`text-xs font-medium mt-1.5 ${stats.buyingPower < 0 ? 'text-rose-500' : 'text-slate-400'}`}>
+        {/* rose-600 rather than rose-500: at 12px the latter is 3.7:1 on white,
+            under the 4.5:1 AA floor for normal text. */}
+        <p className={`text-xs font-medium mt-1.5 ${stats.buyingPower < 0 ? NEGATIVE : 'text-slate-400'}`}>
           {stats.buyingPower < 0 ? 'Margin in use' : 'Available to invest'}
         </p>
 
@@ -155,8 +170,17 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVis
                   return (
                     <div key={brokerage} className="flex items-center justify-between gap-4 py-1">
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${badgeCls}`}>{brokerage}</span>
-                      <span className={`text-[11px] font-black tabular-nums shrink-0 ${amount < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                        {fmt(amount)}
+                      {/* Lighter steps here because the surface is dark: rose-400
+                          is 6.3:1 and emerald-400 8.8:1 against #1D1D1F. The
+                          card's darker steps would be unreadable on this. */}
+                      <span className={`text-[11px] font-black tabular-nums shrink-0 flex items-center gap-1 ${amount < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        {amount < 0 && (
+                          <>
+                            <TrendArrow direction="down" className="w-2.5 h-2.5" />
+                            <span className="sr-only">negative</span>
+                          </>
+                        )}
+                        {amount < 0 ? fmtAbs(amount) : fmt(amount)}
                       </span>
                     </div>
                   );
