@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { StockHolding } from '../types';
+import { StockHolding } from '../../types';
 import { brokerageColor } from '../../utils/finance';
 
 interface Props {

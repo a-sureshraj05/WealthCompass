@@ -1,6 +1,31 @@
 
 import React, { useState } from 'react';
-import { PortfolioStats } from '../types';
+import { PortfolioStats } from '../../types';
+
+type Direction = 'up' | 'down' | null;
+
+// Gain/loss is a status pair, so red/green alone would be unreadable for the
+// most common form of colourblindness — the arrow is the secondary encoding
+// that makes direction survive without colour.
+// These steps are darker than the usual emerald-600/#FF3B30: at 12px those
+// score 3.8:1 and 3.6:1 against white, under the 4.5:1 AA floor for normal
+// text. emerald-700 (5.5:1) and rose-600 (4.7:1) pass at every size used here.
+const POSITIVE = 'text-emerald-700';
+const NEGATIVE = 'text-rose-600';
+
+/** Direction triangle. Decorative — the sign is announced via sr-only text. */
+const TrendArrow: React.FC<{ direction: Exclude<Direction, null> }> = ({ direction }) => (
+  <svg
+    className="w-4 h-4 shrink-0"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden="true"
+  >
+    {direction === 'up'
+      ? <path d="M12 5l7 11H5z" />
+      : <path d="M12 19L5 8h14z" />}
+  </svg>
+);
 
 interface Props {
   stats: PortfolioStats;
@@ -35,24 +60,35 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVis
   const [showTooltip, setShowTooltip] = useState(false);
   const mask = '••••••';
 
+  const money = (n: number) =>
+    `$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   const cards = [
     {
       label: 'Portfolio Value',
-      value: `${stats.totalValue < 0 ? '-' : ''}$${Math.abs(stats.totalValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      sub: `Assets $${stats.investmentValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + Cash`,
+      // A level, not a change — no direction, no polarity colour.
+      direction: null as Direction,
+      value: `${stats.totalValue < 0 ? '-' : ''}${money(stats.totalValue)}`,
+      valueColor: 'text-[#1D1D1F]',
+      sub: `Assets ${money(stats.investmentValue)} + Cash`,
       subColor: 'text-slate-400',
     },
     {
       label: 'Daily Gain/Loss',
-      value: `${stats.dayChange >= 0 ? '+' : '-'}$${Math.abs(stats.dayChange).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      sub: `${stats.dayChangePercentage >= 0 ? '+' : ''}${stats.dayChangePercentage.toFixed(2)}%`,
-      subColor: stats.dayChange >= 0 ? 'text-emerald-600' : 'text-[#FF3B30]',
+      direction: (stats.dayChange >= 0 ? 'up' : 'down') as Direction,
+      value: money(stats.dayChange),
+      valueColor: stats.dayChange >= 0 ? POSITIVE : NEGATIVE,
+      // No +/- here: the arrow above already carries the sign.
+      sub: `${Math.abs(stats.dayChangePercentage).toFixed(2)}%`,
+      subColor: stats.dayChange >= 0 ? POSITIVE : NEGATIVE,
     },
     {
       label: 'Overall Return',
-      value: `${stats.totalGain >= 0 ? '+' : '-'}$${Math.abs(stats.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      sub: `${stats.gainPercentage >= 0 ? '+' : ''}${stats.gainPercentage.toFixed(2)}% on cost basis`,
-      subColor: stats.totalGain >= 0 ? 'text-emerald-600' : 'text-[#FF3B30]',
+      direction: (stats.totalGain >= 0 ? 'up' : 'down') as Direction,
+      value: money(stats.totalGain),
+      valueColor: stats.totalGain >= 0 ? POSITIVE : NEGATIVE,
+      sub: `${Math.abs(stats.gainPercentage).toFixed(2)}% on cost basis`,
+      subColor: stats.totalGain >= 0 ? POSITIVE : NEGATIVE,
     },
   ];
 
@@ -66,8 +102,16 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVis
         >
           {onToggleNumbers && <EyeIcon visible={numbersVisible} onToggle={onToggleNumbers} />}
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.05em] mb-3">{card.label}</p>
-          <p className="text-2xl font-bold text-[#1D1D1F] leading-tight">{numbersVisible ? card.value : mask}</p>
-          <p className={`text-xs font-medium mt-1.5 ${card.subColor}`}>{numbersVisible ? card.sub : mask}</p>
+          <p className={`text-2xl font-bold leading-tight flex items-center gap-1.5 ${numbersVisible ? card.valueColor : 'text-[#1D1D1F]'}`}>
+            {numbersVisible && card.direction && (
+              <>
+                <TrendArrow direction={card.direction} />
+                <span className="sr-only">{card.direction === 'up' ? 'up' : 'down'}</span>
+              </>
+            )}
+            {numbersVisible ? card.value : mask}
+          </p>
+          <p className={`text-xs font-medium mt-1.5 ${numbersVisible ? card.subColor : 'text-slate-400'}`}>{numbersVisible ? card.sub : mask}</p>
         </div>
       ))}
 
