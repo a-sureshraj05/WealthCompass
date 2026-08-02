@@ -286,6 +286,26 @@ export interface AnalystData {
   sector?: string;
 }
 
+// UI preferences shared across devices. localStorage can't sync between the
+// Mac and the phone, so anything that should follow the user lives here.
+export const fetchPreferences = async (): Promise<Record<string, any>> => {
+  const response = await apiFetch("/api/v1/preferences");
+  if (!response.ok) return {};
+  const data = await response.json();
+  return data.preferences ?? {};
+};
+
+export const savePreferences = async (preferences: Record<string, any>): Promise<Record<string, any>> => {
+  const response = await apiFetch("/api/v1/preferences", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ preferences }),
+  });
+  if (!response.ok) throw new Error("Failed to save preferences");
+  const data = await response.json();
+  return data.preferences ?? {};
+};
+
 export interface PriceRefreshResult {
   symbols: number;
   lotsUpdated: number;

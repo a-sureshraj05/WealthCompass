@@ -1,6 +1,7 @@
 import re
 import yfinance as yf
 import pandas as pd
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Union
 
@@ -19,6 +20,26 @@ def _parse_occ(symbol: str):
     expiry = f"{year}-{mm}-{dd}"
     strike = int(strike_raw) / 1000.0
     return underlying, expiry, cp.lower(), strike
+
+
+def is_expired_option(symbol: str, as_of: date = None) -> bool:
+    """True only when the OCC symbol's expiry is in the past.
+
+    The expiry is encoded in the symbol, so "yfinance returned nothing" and
+    "this contract has expired" are separable facts. Callers must not infer the
+    second from the first: a rate limit or network blip would otherwise mark a
+    live position worthless.
+
+    Non-option symbols return False — an equity is never expired.
+    """
+    parsed = _parse_occ(symbol or "")
+    if not parsed:
+        return False
+    _, expiry, _, _ = parsed
+    try:
+        return date.fromisoformat(expiry) < (as_of or date.today())
+    except ValueError:
+        return False
 
 
 def _get_option_quote(occ_symbol: str) -> tuple:

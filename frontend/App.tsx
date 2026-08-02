@@ -4,6 +4,7 @@ import { StockHolding, PortfolioStats, Transaction, DateRangeType, RealizedGain,
 import DashboardView from './components/Dashboard/DashboardView';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import MobileTabBar from './components/MobileTabBar';
 import LoginPage from './components/LoginPage';
 import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchBuyingPowerCached, fetchAnalystData, fetchAnalystDataCached, fetchAccounts, refreshPrices } from './services/apiService';
 import { BrokerageAccount } from './types';
@@ -340,13 +341,19 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   return (
     <TickerTypeContext.Provider value={tickerTypeMap}>
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    {/* h-full (of #root, now pinned to the viewport) rather than h-screen:
+        100vh on mobile browsers means the *largest* viewport, ignoring the
+        address bar, so the shell would overflow by the toolbar's height. */}
+    <div className="flex h-full overflow-hidden bg-slate-50">
       <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} numbersVisible={numbersVisible} onToggleNumbers={() => setNumbersVisible(v => !v)} />
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        {/* px/pt rather than the p- shorthand: `md:p-8` resets every side, which
+            would override .pb-tabbar's clearance between md and lg — exactly the
+            range where the bar is still visible. See .pb-tabbar in index.html. */}
+        <main className="flex-1 overflow-y-auto px-4 pt-4 md:px-8 md:pt-8 pb-tabbar">
           <DashboardView
             activeTab={activeTab}
             setActiveTab={handleSetActiveTab}
@@ -381,6 +388,8 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           />
         </main>
       </div>
+
+      <MobileTabBar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
 
       {loading && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50">

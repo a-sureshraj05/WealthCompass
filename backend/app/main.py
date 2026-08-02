@@ -11,7 +11,7 @@ from fastapi import FastAPI, Depends
 from backend.app.core.database import engine
 from backend.app.db.schema import Base
 
-from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, prices
+from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, prices, preferences
 from .api.auth import get_current_user
 
 app = FastAPI()
@@ -165,6 +165,10 @@ def startup_event():
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN analyst_json TEXT"))
                 conn.commit()
+        if "ui_prefs_json" not in ps_cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN ui_prefs_json TEXT"))
+                conn.commit()
 
     # Bootstrap portfolio_summary if empty (first run after adding the table)
     from backend.app.core.database import SessionLocal
@@ -203,6 +207,7 @@ app.include_router(lot_assignments.router, prefix="/api/v1", dependencies=[Depen
 app.include_router(options.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(splits.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(prices.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(preferences.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")

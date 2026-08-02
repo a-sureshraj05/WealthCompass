@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StockHolding, PortfolioStats, Transaction, RealizedGain, UnrealizedLot } from '../../types';
 import SummaryCards from './SummaryCards';
 import PortfolioVisuals from './PortfolioVisuals';
+import { SignedValue } from '../TrendIndicator';
 import HoldingsView from '../HoldingsView';
 import ImportDataView from '../ImportDataView';
 import AIInsights from './AIInsights';
@@ -239,8 +240,12 @@ const DashboardView: React.FC<Props> = ({
               </div>
             </div>
             <div className="text-right">
-              <p className={`text-sm font-bold ${h.gainPct >= 0 ? 'text-emerald-600' : 'text-[#FF3B30]'}`}>
-                {h.gainPct >= 0 ? '+' : ''}{h.gainPct.toFixed(2)}%
+              <p className="text-sm font-bold">
+                <SignedValue
+                  value={h.gainPct}
+                  format={() => `${Math.abs(h.gainPct).toFixed(2)}%`}
+                  arrowClass="w-3 h-3"
+                />
               </p>
               <p className="text-xs text-slate-400">prev ${h.previousClose.toFixed(2)}</p>
             </div>

@@ -3,6 +3,8 @@ import { BrokerageAccount, Transaction } from '../types';
 import TickerLogo from './TickerLogo';
 import SortIndicator from './SortIndicator';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { useSyncedColumnOrder } from '../hooks/useSyncedColumnOrder';
+import ColumnOrderSheet from './ColumnOrderSheet';
 import { brokerageColor } from '../utils/finance';
 import {
   fetchOpenBuys, fetchLotAssignments, createLotAssignment, deleteLotAssignment, splitTransaction,
@@ -14,6 +16,10 @@ type SortKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'action' | 'quant
 type SortDirection = 'asc' | 'desc' | null;
 type ColKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'action' | 'quantity' | 'price' | 'amount';
 const DEFAULT_COLS: ColKey[] = ['date', 'brokerage', 'assetType', 'ticker', 'action', 'quantity', 'price', 'amount'];
+const COL_LABELS: Record<ColKey, string> = {
+  date: 'Date', brokerage: 'Brokerage', assetType: 'Asset Type', ticker: 'Ticker',
+  action: 'Action', quantity: 'Quantity', price: 'Price', amount: 'Amount',
+};
 
 type VisibilityFilter = 'active' | 'hidden' | 'duplicates' | 'all';
 
@@ -54,16 +60,10 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
   // Track which sell transaction IDs have at least one lot assignment (for icon highlight)
   const [mappedSellIds, setMappedSellIds] = useState<Set<string>>(new Set());
 
-  const [columnOrder, setColumnOrder] = useState<ColKey[]>(() => {
-    try {
-      const saved = localStorage.getItem('transactions-col-order');
-      if (saved) {
-        const parsed: ColKey[] = JSON.parse(saved);
-        if (parsed.length === DEFAULT_COLS.length && DEFAULT_COLS.every(c => parsed.includes(c))) return parsed;
-      }
-    } catch {}
-    return DEFAULT_COLS;
-  });
+  // Server-backed so the order matches on the Mac and the phone.
+  const { order: columnOrder, reorder: reorderCol, move: moveCol } =
+    useSyncedColumnOrder<ColKey>('transactions-col-order', DEFAULT_COLS);
+  const [showColSheet, setShowColSheet] = useState(false);
   const [dragCol, setDragCol] = useState<ColKey | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ColKey | null>(null);
 
@@ -384,17 +384,6 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
   const SI = ({ column }: { column: SortKey }) => (
     <SortIndicator column={column} sortKey={sortKey} sortDirection={sortDirection} />
   );
-
-  const reorderCol = (from: ColKey, to: ColKey) => {
-    if (from === to) return;
-    setColumnOrder(prev => {
-      const o = [...prev];
-      const fi = o.indexOf(from), ti = o.indexOf(to);
-      o.splice(fi, 1); o.splice(ti, 0, from);
-      try { localStorage.setItem('transactions-col-order', JSON.stringify(o)); } catch {}
-      return o;
-    });
-  };
 
   const dragProps = (col: ColKey) => ({
     draggable: true as const,
@@ -749,6 +738,19 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
             className="text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2"
           >
             Reset
+          </button>
+
+          {/* Header drag-and-drop never fires from touch, so this is the only
+              way to reorder columns on a phone. */}
+          <button
+            onClick={() => setShowColSheet(true)}
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 py-2 min-h-[44px]"
+            title="Reorder columns"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            Columns
           </button>
 
         </div>
@@ -1106,6 +1108,14 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
           </div>
         </div>
       )}
+
+      <ColumnOrderSheet
+        open={showColSheet}
+        onClose={() => setShowColSheet(false)}
+        order={columnOrder}
+        labels={COL_LABELS}
+        onMove={moveCol}
+      />
     </div>
   );
 };

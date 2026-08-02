@@ -134,6 +134,9 @@ class PortfolioSummary(Base):
     cash_balance = Column(Float, default=0.0)
     buying_power_json = Column(String, nullable=True)  # JSON: {brokerage: amount}
     analyst_json = Column(String, nullable=True)       # JSON: [AnalystData, ...]
+    # JSON: {key: value} — UI preferences that should follow the user between
+    # devices rather than living in one browser's localStorage.
+    ui_prefs_json = Column(String, nullable=True)
 
 
 class TickerReference(Base):

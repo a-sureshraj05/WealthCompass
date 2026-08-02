@@ -40,5 +40,10 @@ sql/*.sql
 # Local data files (personal brokerage CSVs — never commit)
 data/
 
-# One-time migration scripts (depend on local data/ files)
-scripts/
+# One-time migration scripts (depend on local data/ files).
+# Uses scripts/* rather than scripts/ so the exceptions below can re-include
+# individual files — git can't un-ignore a file whose parent directory is excluded.
+scripts/*
+# Backup tooling is infrastructure, not a one-off migration.
+!scripts/backup_db.sh
+!scripts/com.wealthcompass.backup.plist

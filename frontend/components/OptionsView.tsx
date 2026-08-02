@@ -1,5 +1,18 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import TickerLogo from './TickerLogo';
+import { useSyncedColumnOrder } from '../hooks/useSyncedColumnOrder';
+import ColumnOrderSheet from './ColumnOrderSheet';
+import { SignedValue } from './TrendIndicator';
+
+const OPT_COL_LABELS: Record<string, string> = {
+  ticker: 'Ticker', washSale: 'Wash Sale', termType: 'Term Type', totalQty: 'Total Qty',
+  avgBuyPrice: 'Avg Buy Price', strikePrice: 'Strike Price', totalValue: 'Total Value',
+  avgCurrentPrice: 'Avg Current Price', marketValue: 'Market Value', dailyGain: 'Daily Gain',
+  dailyPct: 'Daily %', unrealizedGain: 'Unrealized Gain', unrealizedPct: 'Unrealized %',
+  retainQty: 'Retain Qty', sellableQty: 'Sellable Qty', gainToSell: 'Gain To Sell',
+  targetPrice: 'Target Price',
+};
+
 import { BrokerageAccount, StockHolding, UnrealizedLot, RealizedGain } from '../types';
 import {
   OptionsPosition,
@@ -102,29 +115,12 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   type SortKey = 'ticker' | 'washSale' | 'termType' | 'totalQty' | 'avgBuyPrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'dailyGain' | 'dailyPct' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'targetPrice';
   type ColKey = 'ticker' | 'washSale' | 'termType' | 'totalQty' | 'avgBuyPrice' | 'strikePrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'dailyGain' | 'dailyPct' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'gainToSell' | 'targetPrice';
   const DEFAULT_COLS: ColKey[] = ['ticker','washSale','termType','totalQty','avgBuyPrice','strikePrice','totalValue','avgCurrentPrice','marketValue','dailyGain','dailyPct','unrealizedGain','unrealizedPct','retainQty','sellableQty','gainToSell','targetPrice'];
-  const [columnOrder, setColumnOrder] = useState<ColKey[]>(() => {
-    try {
-      const saved = localStorage.getItem('options-col-order');
-      if (saved) {
-        const parsed: ColKey[] = JSON.parse(saved);
-        if (parsed.length === DEFAULT_COLS.length && DEFAULT_COLS.every(c => parsed.includes(c))) return parsed;
-      }
-    } catch {}
-    return DEFAULT_COLS;
-  });
+  // Server-backed so the order matches on the Mac and the phone.
+  const { order: columnOrder, reorder: reorderCol, move: moveCol } =
+    useSyncedColumnOrder<ColKey>('options-col-order', DEFAULT_COLS);
+  const [showColSheet, setShowColSheet] = useState(false);
   const [dragCol, setDragCol] = useState<ColKey | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ColKey | null>(null);
-  const reorderCol = (from: ColKey, to: ColKey) => {
-    if (from === to) return;
-    setColumnOrder(prev => {
-      const o = [...prev];
-      const fi = o.indexOf(from), ti = o.indexOf(to);
-      o.splice(fi, 1);
-      o.splice(ti, 0, from);
-      try { localStorage.setItem('options-col-order', JSON.stringify(o)); } catch {}
-      return o;
-    });
-  };
   const dragProps = (col: ColKey) => ({
     draggable: true as const,
     onDragStart: (e: React.DragEvent) => { e.dataTransfer.effectAllowed = 'move'; setDragCol(col); },
@@ -503,17 +499,20 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       case 'dailyGain': {
         if (tc.dailyPrevMV === 0) return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-300`}>—</td>;
         const dg = tc.dailyGain;
-        return <td key={col} className={`px-4 py-2 text-right ${sz} font-black ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}{fmtCurrency(dg)}</td>;
+        return <td key={col} className={`px-4 py-2 text-right ${sz} font-black`}><SignedValue value={dg} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
       }
       case 'dailyPct': {
         const dp2 = tc.dailyPrevMV > 0 ? (tc.dailyGain / tc.dailyPrevMV) * 100 : null;
-        return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${dp2 != null ? dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600' : 'text-slate-300'}`}>{dp2 != null ? `${dp2 >= 0 ? '+' : ''}${dp2.toFixed(2)}%` : '—'}</td>;
+        return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${dp2 == null ? 'text-slate-300' : ''}`}>{dp2 != null ? <SignedValue value={dp2} format={() => `${Math.abs(dp2).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : '—'}</td>;
       }
-      case 'unrealizedGain': return <td key={col} className={`px-4 py-2 text-right ${sz} font-black ${tc.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.unrealizedGain >= 0 ? '+' : '-'}{fmtCurrency(tc.unrealizedGain)}</td>;
-      case 'unrealizedPct':  return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${tc.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.avgBuyPrice > 0 ? `${tc.unrealizedGain >= 0 ? '+' : ''}${((tc.avgCurrentPrice - tc.avgBuyPrice) / tc.avgBuyPrice * 100).toFixed(2)}%` : '—'}</td>;
+      case 'unrealizedGain': return <td key={col} className={`px-4 py-2 text-right ${sz} font-black`}><SignedValue value={tc.unrealizedGain} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct':  return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold`}>{tc.avgBuyPrice > 0 ? <SignedValue value={tc.unrealizedGain} format={() => `${Math.abs((tc.avgCurrentPrice - tc.avgBuyPrice) / tc.avgBuyPrice * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
       case 'retainQty':      return <td key={col} className={`px-4 py-2 text-right font-medium text-slate-600 ${sz}`}>{fmt(tc.retainQty, 0)}</td>;
       case 'sellableQty':    return <td key={col} className={`px-4 py-2 text-right font-medium text-slate-600 ${sz}`}>{fmt(tc.sellableQty, 0)}</td>;
-      case 'gainToSell':     return <td key={col} className="px-4 py-2 text-right">{tc.projectedGainPct !== null ? <span className={`font-bold ${sz} ${tc.isCovered ? 'text-emerald-600' : 'text-rose-600'}`}>{tc.isCovered ? '✓ Covered' : `+${fmt(tc.projectedGainPct)}%`}</span> : <span className="text-xs text-slate-400">No sellable</span>}</td>;
+      // Not a signed gain: the colour here means covered vs not covered, and the
+      // uncovered case deliberately shows a positive percentage in red (how far
+      // it still has to move). An arrow would read as direction and invert that.
+      case 'gainToSell':     return <td key={col} className="px-4 py-2 text-right">{tc.projectedGainPct !== null ? <span className={`font-bold ${sz} ${tc.isCovered ? 'text-emerald-700' : 'text-rose-600'}`}>{tc.isCovered ? '✓ Covered' : `+${fmt(tc.projectedGainPct)}%`}</span> : <span className="text-xs text-slate-400">No sellable</span>}</td>;
       case 'targetPrice':    return <td key={col} className="px-4 py-2 text-right">{tc.targetPrice !== null && !tc.isCovered ? <span className={`font-bold text-[#0A3E8F] ${sz}`}>{fmtCurrency(tc.targetPrice)}</span> : <span className="text-xs text-slate-300">—</span>}</td>;
       default: return <td key={col} />;
     }
@@ -533,14 +532,14 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       case 'dailyGain': {
         if (bg.dailyPrevMV === 0) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
         const dg = bg.dailyGain;
-        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}{fmtCurrency(dg)}</td>;
+        return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dg} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
       }
       case 'dailyPct': {
         const dp2 = bg.dailyPrevMV > 0 ? (bg.dailyGain / bg.dailyPrevMV) * 100 : null;
-        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 != null ? dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600' : 'text-slate-300'}`}>{dp2 != null ? `${dp2 >= 0 ? '+' : ''}${dp2.toFixed(2)}%` : '—'}</td>;
+        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 == null ? 'text-slate-300' : ''}`}>{dp2 != null ? <SignedValue value={dp2} format={() => `${Math.abs(dp2).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : '—'}</td>;
       }
-      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${bg.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{bg.unrealizedGain >= 0 ? '+' : '-'}{fmtCurrency(bg.unrealizedGain)}</td>;
-      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${bg.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{bg.totalValue > 0 ? `${bg.unrealizedGain >= 0 ? '+' : ''}${(bg.unrealizedGain / bg.totalValue * 100).toFixed(2)}%` : '—'}</td>;
+      case 'unrealizedGain':return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={bg.unrealizedGain} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct': return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold">{bg.totalValue > 0 ? <SignedValue value={bg.unrealizedGain} format={() => `${Math.abs(bg.unrealizedGain / bg.totalValue * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
       case 'retainQty':     return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmt(bg.retainQty, 0)}</td>;
       case 'sellableQty':   return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{fmt(bg.sellableQty, 0)}</td>;
       case 'gainToSell':    return <td key={col} />;
@@ -590,15 +589,15 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       case 'dailyGain': {
         if (pos.prevClose == null) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
         const dg = (pos.currentPrice - pos.prevClose) * pos.quantity * 100;
-        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}{fmtCurrency(dg)}</td>;
+        return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dg} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
       }
       case 'dailyPct': {
         if (pos.prevClose == null || pos.prevClose === 0) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
         const dp2 = ((pos.currentPrice - pos.prevClose) / pos.prevClose) * 100;
-        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dp2 >= 0 ? '+' : ''}{dp2.toFixed(2)}%</td>;
+        return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dp2} format={() => `${Math.abs(dp2).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /></td>;
       }
-      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-[11px] font-black ${posUnrealized >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{posUnrealized >= 0 ? '+' : '-'}{fmtCurrency(posUnrealized)}</td>;
-      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${posUnrealized >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pos.buyPrice > 0 ? `${posUnrealized >= 0 ? '+' : ''}${((pos.currentPrice - pos.buyPrice) / pos.buyPrice * 100).toFixed(2)}%` : '—'}</td>;
+      case 'unrealizedGain':return <td key={col} className="px-4 py-2 text-right text-[11px] font-black"><SignedValue value={posUnrealized} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct': return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold">{pos.buyPrice > 0 ? <SignedValue value={posUnrealized} format={() => `${Math.abs((pos.currentPrice - pos.buyPrice) / pos.buyPrice * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
       case 'retainQty': return <td key={col} className="px-4 py-2"><div className="flex justify-end"><input type="number" min={0} max={pos.quantity} step={1} value={pendingRetain[pos.id] ?? pos.retainQuantity} onChange={e => handleRetainChange(pos.id, e.target.value)} onBlur={() => handleRetainSave(pos)} onKeyDown={e => e.key === 'Enter' && handleRetainSave(pos)} className="w-20 px-2 py-0.5 text-right border border-[#D2D2D7] rounded text-[11px] focus:outline-none focus:ring-2 focus:ring-[#0F52BA] bg-[#E6EEFB]/20 font-semibold text-[#0A3E8F] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div></td>;
       case 'sellableQty':   return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-600">{saving === pos.id ? <span className="text-slate-400">...</span> : fmt(pos.sellableQuantity, 0)}</td>;
       case 'gainToSell':    return <td key={col} />;
@@ -609,6 +608,18 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
 
   return (
     <div className={`space-y-4${!numbersVisible ? ' blur-sm select-none pointer-events-none' : ''}`}>
+
+      <div className="flex justify-end">
+        {/* Header drag-and-drop never fires from touch — this is the only
+            way to reorder columns on a phone. */}
+        <button onClick={() => setShowColSheet(true)} title="Reorder columns"
+          className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 py-2 min-h-[44px]">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+          Columns
+        </button>
+      </div>
 
       {/* Ticker View */}
       {viewMode === 'ticker' && <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white shadow-sm overflow-hidden">
@@ -746,7 +757,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                       {columnOrder.filter(c => c !== 'ticker').map(c => {
                         if (c === 'totalValue') return <td key={c} className="px-4 py-2 text-right font-black text-slate-900 text-sm">{fmtVal(bvRow.totalValue)}</td>;
                         if (c === 'marketValue') return <td key={c} className="px-4 py-2 text-right font-black text-slate-900 text-sm">{fmtVal(bvRow.marketValue)}</td>;
-                        if (c === 'unrealizedGain') return <td key={c} className={`px-4 py-2 text-right text-sm font-black ${bvRow.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{bvRow.unrealizedGain >= 0 ? '+' : '-'}{fmtVal(bvRow.unrealizedGain)}</td>;
+                        if (c === 'unrealizedGain') return <td key={c} className="px-4 py-2 text-right text-sm font-black"><SignedValue value={bvRow.unrealizedGain} format={v => fmtVal(v)} arrowClass="w-2.5 h-2.5" /></td>;
                         return <td key={c} />;
                       })}
                     </tr>
@@ -796,7 +807,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                               {columnOrder.filter(c => c !== 'ticker').map(c => {
                                 if (c === 'totalValue') return <td key={c} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">{fmtVal(acct.totalValue)}</td>;
                                 if (c === 'marketValue') return <td key={c} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">{fmtVal(acct.marketValue)}</td>;
-                                if (c === 'unrealizedGain') return <td key={c} className={`px-4 py-2 text-right text-xs font-bold ${acct.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{acct.unrealizedGain >= 0 ? '+' : '-'}{fmtVal(acct.unrealizedGain)}</td>;
+                                if (c === 'unrealizedGain') return <td key={c} className="px-4 py-2 text-right text-xs font-bold"><SignedValue value={acct.unrealizedGain} format={v => fmtVal(v)} arrowClass="w-2.5 h-2.5" /></td>;
                                 return <td key={c} />;
                               })}
                             </tr>
@@ -813,6 +824,14 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
         </div>
       )}
 
+
+      <ColumnOrderSheet
+        open={showColSheet}
+        onClose={() => setShowColSheet(false)}
+        order={columnOrder}
+        labels={OPT_COL_LABELS}
+        onMove={moveCol}
+      />
     </div>
   );
 };

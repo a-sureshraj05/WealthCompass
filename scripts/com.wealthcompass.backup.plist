@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Daily WealthCompass database backup.
+
+  Install:
+    cp scripts/com.wealthcompass.backup.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.wealthcompass.backup.plist
+
+  Run once now:
+    launchctl kickstart -k gui/$(id -u)/com.wealthcompass.backup
+
+  Remove:
+    launchctl bootout gui/$(id -u)/com.wealthcompass.backup
+    rm ~/Library/LaunchAgents/com.wealthcompass.backup.plist
+
+  If the Mac is asleep at the scheduled time, launchd runs the job on wake.
+  To send backups off this machine, set WC_BACKUP_DIR below to an external
+  drive or a synced folder.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.wealthcompass.backup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/suresh/Documents/Projects/WealthCompass/scripts/backup_db.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>WC_BACKUP_KEEP</key>
+        <string>30</string>
+        <!-- <key>WC_BACKUP_DIR</key>
+             <string>/Volumes/YourDrive/WealthCompass</string> -->
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>21</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/suresh/Backups/WealthCompass/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/suresh/Backups/WealthCompass/launchd.err.log</string>
+</dict>
+</plist>
