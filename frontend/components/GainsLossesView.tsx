@@ -5,6 +5,7 @@ import TickerLogo from './TickerLogo';
 import SortIndicator from './SortIndicator';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { formatCurrency, formatDate } from '../utils/finance';
+import { SignedValue, trendColor } from './TrendIndicator';
 
 type GainSortKey = 'ticker' | 'assetType' | 'brokerage' | 'buyDate' | 'sellDate' | 'quantity' | 'buyPrice' | 'price' | 'gain' | 'proceeds' | 'costBasis';
 type SortDirection = 'asc' | 'desc' | null;
@@ -690,8 +691,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                     </td>
                     <td className="px-4 py-3 text-right text-sm text-slate-700 font-semibold">{fmt(tEntry.totalProceeds)}</td>
                     <td className="px-4 py-3 text-right text-sm text-slate-500">{fmt(tEntry.totalCost)}</td>
-                    <td className={`px-4 py-3 text-right text-sm font-black ${tEntry.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {tEntry.totalGain >= 0 ? '+' : '-'}${Math.abs(tEntry.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <td className="px-4 py-3 text-right text-sm font-black">
+                      <SignedValue value={tEntry.totalGain} format={fmt} arrowClass="w-3 h-3" />
                     </td>
                   </tr>
 
@@ -720,8 +721,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
                         </td>
                         <td className="px-4 py-2 text-right text-[11px] text-slate-600">{fmt(proc)}</td>
                         <td className="px-4 py-2 text-right text-[11px] text-slate-400">{fmt(cost)}</td>
-                        <td className={`px-4 py-2 text-right text-[11px] font-bold ${g.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {g.gain >= 0 ? '+' : '-'}${Math.abs(g.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <td className="px-4 py-2 text-right text-[11px] font-bold">
+                          <SignedValue value={g.gain} format={fmt} arrowClass="w-2.5 h-2.5" />
                         </td>
                       </tr>
                     );
@@ -767,9 +768,9 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             </div>
             <div className="text-right sm:w-40">
               <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
-              <p className={`text-xs font-black ${gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {gain >= 0 ? '+' : '-'}${Math.abs(gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                <span className="text-[9px] ml-1 opacity-75">({gainPct >= 0 ? '+' : ''}{gainPct.toFixed(2)}%)</span>
+              <p className="text-xs font-black">
+                <SignedValue value={gain} format={fmt} arrowClass="w-2.5 h-2.5"
+                  suffix={<span className="text-[9px] ml-1 opacity-75">({Math.abs(gainPct).toFixed(2)}%)</span>} />
               </p>
             </div>
           </div>
@@ -818,9 +819,9 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             </div>
             <div className="text-right sm:w-44">
               <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Gain / Loss</p>
-              <p className={`text-sm font-black ${cfg.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {cfg.gain >= 0 ? '+' : '-'}${Math.abs(cfg.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                <span className="text-[10px] ml-1 opacity-75">({cfg.gainPct >= 0 ? '+' : ''}{cfg.gainPct.toFixed(2)}%)</span>
+              <p className="text-sm font-black">
+                <SignedValue value={cfg.gain} format={fmt} arrowClass="w-3 h-3"
+                  suffix={<span className="text-[10px] ml-1 opacity-75">({Math.abs(cfg.gainPct).toFixed(2)}%)</span>} />
               </p>
             </div>
           </div>
@@ -1122,8 +1123,8 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             <div className="flex items-end gap-3">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total {activeSubTab === 'realized' ? 'Realized' : 'Unrealized'} Gain</p>
-                <p className={`text-2xl font-black ${stats.total >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {stats.total >= 0 ? '+' : ''}{fmt(stats.total)}
+                <p className="text-2xl font-black">
+                  <SignedValue value={stats.total} format={fmt} arrowClass="w-4 h-4" />
                 </p>
               </div>
               <div className="bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5">
@@ -1138,8 +1139,11 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             <div className="flex items-end gap-3">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Short-Term</p>
-                <p className={`text-2xl font-black ${stats.stTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.stTotal)}</p>
-                <p className="text-[9px] text-slate-400 font-medium mt-0.5">eq {fmt(stats.stEqTotal)} · opt {fmt(stats.stOptTotal)}</p>
+                <p className="text-2xl font-black"><SignedValue value={stats.stTotal} format={fmt} arrowClass="w-4 h-4" /></p>
+                <p className="text-[9px] font-medium mt-0.5 text-slate-400">
+                  eq <span className={trendColor(stats.stEqTotal)}>{fmt(stats.stEqTotal)}</span>
+                  {' · '}opt <span className={trendColor(stats.stOptTotal)}>{fmt(stats.stOptTotal)}</span>
+                </p>
               </div>
               <div className="bg-orange-50 border border-orange-100 rounded px-2.5 py-1.5">
                 <p className="text-[8px] font-black uppercase tracking-widest mb-0.5" style={{ color: ST_COLOR }}>ST Tax</p>
@@ -1153,8 +1157,11 @@ const GainsLossesView: React.FC<Props> = ({ realizedGains: realizedGainsData, un
             <div className="flex items-end gap-3">
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Long-Term</p>
-                <p className={`text-2xl font-black ${stats.ltTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(stats.ltTotal)}</p>
-                <p className="text-[9px] text-slate-400 font-medium mt-0.5">eq {fmt(stats.ltEqTotal)} · opt {fmt(stats.ltOptTotal)}</p>
+                <p className="text-2xl font-black"><SignedValue value={stats.ltTotal} format={fmt} arrowClass="w-4 h-4" /></p>
+                <p className="text-[9px] font-medium mt-0.5 text-slate-400">
+                  eq <span className={trendColor(stats.ltEqTotal)}>{fmt(stats.ltEqTotal)}</span>
+                  {' · '}opt <span className={trendColor(stats.ltOptTotal)}>{fmt(stats.ltOptTotal)}</span>
+                </p>
               </div>
               <div className="bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5">
                 <p className="text-[8px] font-black uppercase tracking-widest mb-0.5" style={{ color: LT_COLOR }}>LT Tax</p>

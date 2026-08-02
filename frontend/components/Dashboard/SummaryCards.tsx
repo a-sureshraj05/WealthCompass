@@ -1,31 +1,10 @@
 
 import React, { useState } from 'react';
 import { PortfolioStats } from '../../types';
+import { TrendArrow, POSITIVE, NEGATIVE } from '../TrendIndicator';
 
 type Direction = 'up' | 'down' | null;
 
-// Gain/loss is a status pair, so red/green alone would be unreadable for the
-// most common form of colourblindness — the arrow is the secondary encoding
-// that makes direction survive without colour.
-// These steps are darker than the usual emerald-600/#FF3B30: at 12px those
-// score 3.8:1 and 3.6:1 against white, under the 4.5:1 AA floor for normal
-// text. emerald-700 (5.5:1) and rose-600 (4.7:1) pass at every size used here.
-const POSITIVE = 'text-emerald-700';
-const NEGATIVE = 'text-rose-600';
-
-/** Direction triangle. Decorative — the sign is announced via sr-only text. */
-const TrendArrow: React.FC<{ direction: Exclude<Direction, null>; className?: string }> = ({ direction, className = 'w-4 h-4' }) => (
-  <svg
-    className={`${className} shrink-0`}
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    aria-hidden="true"
-  >
-    {direction === 'up'
-      ? <path d="M12 5l7 11H5z" />
-      : <path d="M12 19L5 8h14z" />}
-  </svg>
-);
 
 interface Props {
   stats: PortfolioStats;
@@ -106,7 +85,7 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVis
           <p className={`text-2xl font-bold leading-tight flex items-center gap-1.5 ${numbersVisible ? card.valueColor : 'text-[#1D1D1F]'}`}>
             {numbersVisible && card.direction && (
               <>
-                <TrendArrow direction={card.direction} />
+                <TrendArrow up={card.direction === 'up'} />
                 <span className="sr-only">{card.direction === 'up' ? 'up' : 'down'}</span>
               </>
             )}
@@ -133,7 +112,7 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVis
         <p className={`text-2xl font-bold leading-tight flex items-center gap-1.5 ${numbersVisible ? (stats.buyingPower < 0 ? NEGATIVE : POSITIVE) : 'text-[#1D1D1F]'}`}>
           {numbersVisible && (
             <>
-              <TrendArrow direction={stats.buyingPower < 0 ? 'down' : 'up'} />
+              <TrendArrow up={stats.buyingPower >= 0} />
               <span className="sr-only">{stats.buyingPower < 0 ? 'negative' : 'positive'}</span>
             </>
           )}
@@ -170,7 +149,7 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVis
                           is 6.3:1 and emerald-400 8.8:1 against #1D1D1F. The
                           card's darker steps would be unreadable on this. */}
                       <span className={`text-[11px] font-black tabular-nums shrink-0 flex items-center gap-1 ${amount < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                        <TrendArrow direction={amount < 0 ? 'down' : 'up'} className="w-2.5 h-2.5" />
+                        <TrendArrow up={amount >= 0} className="w-2.5 h-2.5" />
                         <span className="sr-only">{amount < 0 ? 'negative' : 'positive'}</span>
                         {fmtAbs(amount)}
                       </span>
