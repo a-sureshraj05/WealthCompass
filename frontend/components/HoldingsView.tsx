@@ -7,6 +7,7 @@ import { useClickOutside } from '../hooks/useClickOutside';
 import { useSyncedColumnOrder } from '../hooks/useSyncedColumnOrder';
 import ColumnOrderSheet from './ColumnOrderSheet';
 import { optionsMultiplier } from '../utils/finance';
+import { SignedValue, trendColor } from './TrendIndicator';
 
 type SortKey = 'ticker' | 'washSale' | 'termType' | 'quantity' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain' | 'gainPct' | 'dailyGain' | 'dailyPct' | 'realized' | 'totalGain' | 'analystPrice' | 'analystPct';
 type SortDirection = 'asc' | 'desc' | null;
@@ -560,18 +561,18 @@ const HoldingsView: React.FC<Props> = ({
       case 'dailyGain': {
         if (row.dailyPrevMV === 0) return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-300`}>—</td>;
         const dg = row.dailyGain;
-        return <td key={col} className={`px-4 py-2 text-right ${sz} font-black ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}${n2(Math.abs(dg))}</td>;
+        return <td key={col} className={`px-4 py-2 text-right ${sz} font-black`}><SignedValue value={dg} format={m => `$${n2(m)}`} arrowClass="w-2.5 h-2.5" /></td>;
       }
       case 'dailyPct': {
         const dp2 = row.dailyPrevMV > 0 ? (row.dailyGain / row.dailyPrevMV) * 100 : null;
-        return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${dp2 != null ? dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600' : 'text-slate-300'}`}>{dp2 != null ? `${dp2 >= 0 ? '+' : ''}${dp2.toFixed(2)}%` : '—'}</td>;
+        return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${dp2 == null ? 'text-slate-300' : ''}`}>{dp2 != null ? <SignedValue value={dp2} format={() => `${Math.abs(dp2).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : '—'}</td>;
       }
-      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right ${sz} font-black ${row.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.unrealizedGain >= 0 ? '+' : '-'}${n2(Math.abs(row.unrealizedGain))}</td>;
-      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${row.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.avgCost > 0 ? `${row.unrealizedGain >= 0 ? '+' : ''}${((row.currentPrice - row.avgCost) / row.avgCost * 100).toFixed(2)}%` : '—'}</td>;
-      case 'realized':      return <td key={col} className="px-4 py-2 text-right">{row.realized !== 0 ? <div className={`${sz} font-black ${row.realized >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.realized >= 0 ? '+' : '-'}${n2(Math.abs(row.realized))}</div> : <div className="text-xs text-slate-300">—</div>}</td>;
-      case 'totalGain':     return <td key={col} className="px-4 py-2 text-right"><div className={`${sz} font-black ${row.totalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalGain >= 0 ? '+' : '-'}${n2(Math.abs(row.totalGain))}</div></td>;
+      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right ${sz} font-black`}><SignedValue value={row.unrealizedGain} format={m => `$${n2(m)}`} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold`}>{row.avgCost > 0 ? <SignedValue value={row.unrealizedGain} format={() => `${Math.abs((row.currentPrice - row.avgCost) / row.avgCost * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
+      case 'realized':      return <td key={col} className="px-4 py-2 text-right">{row.realized !== 0 ? <div className={`${sz} font-black`}><SignedValue value={row.realized} format={m => `$${n2(m)}`} arrowClass="w-2.5 h-2.5" /></div> : <div className="text-xs text-slate-300">—</div>}</td>;
+      case 'totalGain':     return <td key={col} className="px-4 py-2 text-right"><div className={`${sz} font-black`}><SignedValue value={row.totalGain} format={m => `$${n2(m)}`} arrowClass="w-2.5 h-2.5" /></div></td>;
       case 'analystPrice':  return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold text-[#0F52BA]`}>{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-xs text-slate-300">—</span>}</td>;
-      case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && row.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - row.currentPrice) / row.currentPrice) * 100; return <span className={`${sz} font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>; })() : <span className="text-xs text-slate-300">—</span>}</td>;
+      case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && row.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - row.currentPrice) / row.currentPrice) * 100; return <span className={`${sz} font-bold`}><SignedValue value={pct} format={() => `${Math.abs(pct).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /></span>; })() : <span className="text-xs text-slate-300">—</span>}</td>;
       default: return <td key={col} />;
     }
   };
@@ -593,18 +594,18 @@ const HoldingsView: React.FC<Props> = ({
       case 'dailyGain': {
         if (bg.dailyPrevMV === 0) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
         const dg = bg.dailyGain;
-        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}${Math.abs(dg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
+        return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dg} format={v => `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} arrowClass="w-2.5 h-2.5" /></td>;
       }
       case 'dailyPct': {
         const dp2 = bg.dailyPrevMV > 0 ? (bg.dailyGain / bg.dailyPrevMV) * 100 : null;
-        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 != null ? dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600' : 'text-slate-300'}`}>{dp2 != null ? `${dp2 >= 0 ? '+' : ''}${dp2.toFixed(2)}%` : '—'}</td>;
+        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 == null ? 'text-slate-300' : ''}`}>{dp2 != null ? <SignedValue value={dp2} format={() => `${Math.abs(dp2).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : '—'}</td>;
       }
-      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${bg.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{bg.unrealizedGain >= 0 ? '+' : '-'}${Math.abs(bg.unrealizedGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
-      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${bg.unrealizedGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{bg.totalCost > 0 ? `${bg.unrealizedGain >= 0 ? '+' : ''}${(bg.unrealizedGain / bg.totalCost * 100).toFixed(2)}%` : '—'}</td>;
+      case 'unrealizedGain':return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={bg.unrealizedGain} format={v => `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct': return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold">{bg.totalCost > 0 ? <SignedValue value={bg.unrealizedGain} format={() => `${Math.abs(bg.unrealizedGain / bg.totalCost * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
       case 'realized':      return <td key={col} />;
       case 'totalGain':     return <td key={col} />;
       case 'analystPrice':  return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold text-[#0F52BA]">{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-[10px] text-slate-300">—</span>}</td>;
-      case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && bg.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - bg.currentPrice) / bg.currentPrice) * 100; return <span className={`text-[11px] font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>; })() : <span className="text-[10px] text-slate-300">—</span>}</td>;
+      case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && bg.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - bg.currentPrice) / bg.currentPrice) * 100; return <span className="text-[11px] font-bold"><SignedValue value={pct} format={() => `${Math.abs(pct).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /></span>; })() : <span className="text-[10px] text-slate-300">—</span>}</td>;
       default: return <td key={col} />;
     }
   };
@@ -676,19 +677,19 @@ const HoldingsView: React.FC<Props> = ({
         if (lot.prevClose == null) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
         const m = (lot.assetType || '').toLowerCase() === 'options' ? 100 : 1;
         const dg = (lot.currentPrice - lot.prevClose) * lot.quantity * m;
-        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dg >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dg >= 0 ? '+' : '-'}${Math.abs(dg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
+        return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dg} format={v => `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} arrowClass="w-2.5 h-2.5" /></td>;
       }
       case 'dailyPct': {
         if (lot.prevClose == null || lot.prevClose === 0) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
         const dp2 = ((lot.currentPrice - lot.prevClose) / lot.prevClose) * 100;
-        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{dp2 >= 0 ? '+' : ''}{dp2.toFixed(2)}%</td>;
+        return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dp2} format={() => `${Math.abs(dp2).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /></td>;
       }
-      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-[11px] font-black ${lot.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{lot.gain >= 0 ? '+' : '-'}${Math.abs(lot.gain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>;
-      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${lot.gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{lot.buyPrice > 0 ? `${lot.gain >= 0 ? '+' : ''}${((lot.currentPrice - lot.buyPrice) / lot.buyPrice * 100).toFixed(2)}%` : '—'}</td>;
+      case 'unrealizedGain':return <td key={col} className="px-4 py-2 text-right text-[11px] font-black"><SignedValue value={lot.gain} format={v => `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct': return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold">{lot.buyPrice > 0 ? <SignedValue value={lot.gain} format={() => `${Math.abs((lot.currentPrice - lot.buyPrice) / lot.buyPrice * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
       case 'realized':      return <td key={col} />;
       case 'totalGain':     return <td key={col} />;
       case 'analystPrice':  return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold text-[#0F52BA]">{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-[10px] text-slate-300">—</span>}</td>;
-      case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && lot.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - lot.currentPrice) / lot.currentPrice) * 100; return <span className={`text-[11px] font-bold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>; })() : <span className="text-[10px] text-slate-300">—</span>}</td>;
+      case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && lot.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - lot.currentPrice) / lot.currentPrice) * 100; return <span className="text-[11px] font-bold"><SignedValue value={pct} format={() => `${Math.abs(pct).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /></span>; })() : <span className="text-[10px] text-slate-300">—</span>}</td>;
       default: return <td key={col} />;
     }
   };
@@ -708,8 +709,8 @@ const HoldingsView: React.FC<Props> = ({
       case 'marketValue':   return <td key={col} className="px-4 py-2 text-right font-black text-slate-900 text-sm">${fmt(row.marketValue)}</td>;
       case 'dailyGain':     return <td key={col} />;
       case 'dailyPct':      return <td key={col} />;
-      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-sm font-black ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{g >= 0 ? '+' : '-'}${fmt(Math.abs(g))}</td>;
-      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-sm font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalCost > 0 ? `${g >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—'}</td>;
+      case 'unrealizedGain':return <td key={col} className="px-4 py-2 text-right text-sm font-black"><SignedValue value={g} format={v => `$${fmt(v)}`} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct': return <td key={col} className="px-4 py-2 text-right text-sm font-bold">{row.totalCost > 0 ? <SignedValue value={g} format={() => `${Math.abs(pct).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
       default:              return <td key={col} />;
     }
   };
@@ -725,8 +726,8 @@ const HoldingsView: React.FC<Props> = ({
       case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">${fmt(row.marketValue)}</td>;
       case 'dailyGain':     return <td key={col} />;
       case 'dailyPct':      return <td key={col} />;
-      case 'unrealizedGain':return <td key={col} className={`px-4 py-2 text-right text-xs font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{g >= 0 ? '+' : '-'}${fmt(Math.abs(g))}</td>;
-      case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right text-xs font-bold ${g >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.totalCost > 0 ? `${g >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—'}</td>;
+      case 'unrealizedGain':return <td key={col} className="px-4 py-2 text-right text-xs font-bold"><SignedValue value={g} format={v => `$${fmt(v)}`} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct': return <td key={col} className="px-4 py-2 text-right text-xs font-bold">{row.totalCost > 0 ? <SignedValue value={g} format={() => `${Math.abs(pct).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
       default:              return <td key={col} />;
     }
   };
