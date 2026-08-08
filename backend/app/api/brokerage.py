@@ -38,7 +38,7 @@ class AccountRenameRequest(BaseModel):
     name: str
 
 
-def _require_provider_access(user: User) -> None:
+def require_provider_access(user: User) -> None:
     """Guard every route that talks to SnapTrade.
 
     Three independent gates, in order of how much they can be trusted. The flag
@@ -68,7 +68,7 @@ def _require_provider_access(user: User) -> None:
 def get_connect_url(brokerage: str, db: Session = Depends(get_db),
                     current_user: User = Depends(get_current_user)):
     """Return the URL to open for connecting a brokerage account."""
-    _require_provider_access(current_user)
+    require_provider_access(current_user)
     try:
         return {"url": snaptrade.get_connect_url(brokerage)}
     except Exception as e:
@@ -79,7 +79,7 @@ def get_connect_url(brokerage: str, db: Session = Depends(get_db),
 def get_connections(db: Session = Depends(get_db),
                     current_user: User = Depends(get_current_user)):
     """Return list of connected brokerages for the signed-in user."""
-    _require_provider_access(current_user)
+    require_provider_access(current_user)
     return snaptrade.get_connections(UserScope(db, current_user.id))
 
 
@@ -116,7 +116,7 @@ def rename_account(account_id: int, req: AccountRenameRequest,
 def ignore_account(snaptrade_account_id: str, db: Session = Depends(get_db),
                    current_user: User = Depends(get_current_user)):
     """Hide an account from WealthCompass (does not affect SnapTrade connection)."""
-    _require_provider_access(current_user)
+    require_provider_access(current_user)
     try:
         snaptrade.ignore_account(snaptrade_account_id, UserScope(db, current_user.id))
         return {"message": "Account hidden."}
@@ -128,7 +128,7 @@ def ignore_account(snaptrade_account_id: str, db: Session = Depends(get_db),
 def delete_connection(authorization_id: str, db: Session = Depends(get_db),
                       current_user: User = Depends(get_current_user)):
     """Delete a brokerage connection from provider and local DB."""
-    _require_provider_access(current_user)
+    require_provider_access(current_user)
     try:
         snaptrade.delete_connection(authorization_id, UserScope(db, current_user.id))
         return {"message": "Connection removed."}
@@ -140,7 +140,7 @@ def delete_connection(authorization_id: str, db: Session = Depends(get_db),
 def backfill_account_ids(db: Session = Depends(get_db),
                          current_user: User = Depends(get_current_user)):
     """One-time: read SnapTrade, set account_id on is_backend_verified transactions, then re-process."""
-    _require_provider_access(current_user)
+    require_provider_access(current_user)
     try:
         scope = UserScope(db, current_user.id)
         updated = snaptrade.backfill_verified_account_ids(scope)
@@ -160,7 +160,7 @@ def sync(
     current_user: User = Depends(get_current_user),
 ):
     """Sync transactions from connected brokerages, optionally filtered by date range, account IDs, and tickers."""
-    _require_provider_access(current_user)
+    require_provider_access(current_user)
     scope = UserScope(db, current_user.id)
     total = snaptrade.sync(scope, start_date=start_date, end_date=end_date,
                            account_ids=account_ids, tickers=tickers)

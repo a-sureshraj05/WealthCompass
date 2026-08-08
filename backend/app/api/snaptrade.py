@@ -5,7 +5,7 @@ from snaptrade_client import SnapTrade
 from sqlalchemy.orm import Session
 
 from backend.app.db.schema import BrokerageAccount, SnaptradeConnection, SnaptradeIgnoredAccount, SnaptradeTransaction, Transaction as DBTransaction
-from backend.app.core.scoping import UserScope
+from backend.app.core.scoping import UserScope, require_scope
 from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 
 # --- Snaptrade client setup ---
@@ -93,6 +93,7 @@ def get_connect_url(brokerage: str) -> str:
 
 def ignore_account(account_id: str, scope: UserScope) -> None:
     """Add an account to this user's ignore list."""
+    require_scope(scope)
     if not scope.query(SnaptradeIgnoredAccount).filter(
         SnaptradeIgnoredAccount.account_id == account_id
     ).first():
@@ -102,6 +103,7 @@ def ignore_account(account_id: str, scope: UserScope) -> None:
 
 def get_accounts(scope: UserScope) -> list:
     """Return list of user accounts from Snaptrade API, excluding ignored accounts."""
+    require_scope(scope)
     ignored_ids = {row.account_id for row in scope.query(SnaptradeIgnoredAccount).all()}
     client = get_client()
     auth_brokerage_map = _build_auth_brokerage_map(client)
@@ -132,6 +134,7 @@ def get_accounts(scope: UserScope) -> list:
 
 def get_connections(scope: UserScope) -> list:
     """Return list of connected brokerages directly from Snaptrade API."""
+    require_scope(scope)
     client = get_client()
     resp = client.connections.list_brokerage_authorizations(
         query_params={"userId": USER_ID, "userSecret": USER_SECRET}
@@ -146,6 +149,7 @@ def get_connections(scope: UserScope) -> list:
 
 def delete_connection(authorization_id: str, scope: UserScope) -> None:
     """Delete a brokerage connection from Snaptrade and local DB."""
+    require_scope(scope)
     client = get_client()
     # Remove from Snaptrade
     client.connections.remove_brokerage_authorization(
@@ -164,6 +168,7 @@ def delete_connection(authorization_id: str, scope: UserScope) -> None:
 
 def sync(scope: UserScope, start_date: str = None, end_date: str = None, account_ids: list = None, tickers: list = None) -> int:
     """Fetch latest connections and transactions from Snaptrade, store in DB."""
+    require_scope(scope)
     db = scope.db
     client = get_client()
     total_synced = 0
@@ -382,6 +387,7 @@ def sync(scope: UserScope, start_date: str = None, end_date: str = None, account
 def backfill_verified_account_ids(scope: UserScope) -> int:
     """One-time: read every account's transactions from SnapTrade and set account_id
     on is_backend_verified transactions. Never touches any other field."""
+    require_scope(scope)
     db = scope.db
     client = get_client()
     ignored_ids = {row.account_id for row in scope.query(SnaptradeIgnoredAccount).all()}

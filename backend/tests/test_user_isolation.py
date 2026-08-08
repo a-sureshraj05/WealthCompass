@@ -156,10 +156,10 @@ def test_test_users_cannot_reach_the_brokerage_api(db, monkeypatch):
 
     fixture = User(id=USER_A, email="demo@example.test", hashed_password="x", is_test_user=True)
     with pytest.raises(HTTPException) as exc:
-        brokerage._require_provider_access(fixture)
+        brokerage.require_provider_access(fixture)
     assert exc.value.status_code == 503
     assert "test account" in exc.value.detail.lower()
 
     # ...and a real account in the same environment is allowed through.
     real = User(id=USER_A, email="real@example.test", hashed_password="x", is_test_user=False)
-    brokerage._require_provider_access(real)
+    brokerage.require_provider_access(real)

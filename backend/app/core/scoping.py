@@ -100,3 +100,20 @@ class UserScope:
 def get_scope(db: Session, user: Any) -> UserScope:
     """Build a scope from an authenticated user."""
     return UserScope(db, getattr(user, "id", None))
+
+
+def require_scope(obj: Any) -> UserScope:
+    """Reject a Session passed where a scope was expected.
+
+    `Session` also has `.query()`, so handing one to a function typed for
+    UserScope does not raise — it runs, returns rows, and silently omits the
+    user filter. That is the worst possible failure: correct-looking output
+    with the tenancy boundary quietly removed. A type hint alone does not catch
+    it at runtime, so functions that receive a scope from elsewhere check.
+    """
+    if not isinstance(obj, UserScope):
+        raise TypeError(
+            f"expected UserScope, got {type(obj).__name__}. A Session has .query() "
+            "too, so this would have executed without a user filter."
+        )
+    return obj

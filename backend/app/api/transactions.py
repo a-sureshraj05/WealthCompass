@@ -8,9 +8,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.app.core import process
+from backend.app.api.auth import get_current_user
+from backend.app.api.brokerage import require_provider_access
 from backend.app.api.deps import get_user_scope
 from backend.app.core.database import get_db
-from backend.app.core.scoping import UserScope
+from backend.app.core.scoping import UserScope, require_scope
 from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 from backend.app.db.schema import \
     Holding as DBHolding  # Alias to avoid name collision
@@ -19,6 +21,7 @@ from backend.app.db.schema import RealizedGain as DBRealizedGain
 from backend.app.db.schema import SnaptradeTransaction as DBSnaptradeTransaction
 from backend.app.db.schema import Transaction as DBTransaction
 from backend.app.db.schema import UnrealizedGain as DBUnrealizedGain
+from backend.app.db.schema import User
 
 router = APIRouter()
 
@@ -587,103 +590,109 @@ def get_cash_balance(db: Session = Depends(get_db),
 
 
 @router.get("/buying-power")
-def get_buying_power():
+def get_buying_power(
+    scope: UserScope = Depends(get_user_scope),
+    current_user: User = Depends(get_current_user),
+):
     """Return net cash per brokerage.
     Computed as: account total_value (brokerage-reported equity) minus sum of
     stock/option positions market value. Goes negative when margin is in use.
     Falls back to the balance cash field if total_value is unavailable.
+
+    This is a live SnapTrade call, so it carries the same guard as the routes in
+    brokerage.py. It previously took no dependencies at all and opened its own
+    session, which put it outside every check: a test account could reach the
+    operator's credentials through it, and passing that bare Session where a
+    scope was expected ran the account lookup with no user filter — Session has
+    .query() too, so nothing raised.
     """
+    require_provider_access(current_user)
     try:
         from backend.app.api.snaptrade import get_client, get_accounts
-        from backend.app.core.database import SessionLocal
-        db = SessionLocal()
-        try:
-            client = get_client()
-            from backend.app.api.snaptrade import USER_ID, USER_SECRET
-            accounts = get_accounts(db)
-            result: dict = {}
-            for account in accounts:
-                brokerage = account["brokerage"]
-                account_name = account.get("name") or ""
-                result_key = f"{brokerage} · {account_name}" if account_name else brokerage
-                try:
-                    resp = client.account_information.get_user_holdings(
-                        query_params={"userId": USER_ID, "userSecret": USER_SECRET},
-                        path_params={"accountId": account["id"]},
+        db = scope.db
+        client = get_client()
+        from backend.app.api.snaptrade import USER_ID, USER_SECRET
+        accounts = get_accounts(scope)
+        result: dict = {}
+        for account in accounts:
+            brokerage = account["brokerage"]
+            account_name = account.get("name") or ""
+            result_key = f"{brokerage} · {account_name}" if account_name else brokerage
+            try:
+                resp = client.account_information.get_user_holdings(
+                    query_params={"userId": USER_ID, "userSecret": USER_SECRET},
+                    path_params={"accountId": account["id"]},
+                )
+                body = resp.body
+
+                def _get(obj, key, default=None):
+                    if obj is None:
+                        return default
+                    return obj.get(key, default) if hasattr(obj, "get") else getattr(obj, key, default)
+
+                # Primary: sum the cash field from USD balance entries (direct brokerage-reported cash)
+                balances = _get(body, "balances") or []
+                usd_cash_values = []
+                for b in balances:
+                    curr = _get(b, "currency")
+                    code = _get(curr, "code", "USD") or "USD"
+                    cash_val = _get(b, "cash")
+                    print(f"[buying-power] {result_key} balance: currency={code} cash={cash_val} buying_power={_get(b,'buying_power')}")
+                    if code == "USD" and cash_val is not None:
+                        usd_cash_values.append(float(cash_val))
+
+                if usd_cash_values:
+                    net_cash = sum(usd_cash_values)
+                    print(f"[buying-power] {result_key}: balance.cash={net_cash:.2f}")
+                    result[result_key] = round(result.get(result_key, 0.0) + net_cash, 2)
+                else:
+                    # Fallback: account total minus positions market value
+                    acct = _get(body, "account")
+                    acct_bal = _get(acct, "balance")
+                    acct_total_raw = _get(acct_bal, "total")
+                    acct_total = _get(acct_total_raw, "amount") if isinstance(acct_total_raw, dict) else acct_total_raw
+                    tv = _get(body, "total_value")
+                    tv_value = _get(tv, "value")
+                    total = acct_total if acct_total is not None else tv_value
+                    positions_value = sum(
+                        float(_get(pos, "units") or 0) * float(_get(pos, "price") or 0)
+                        for pos in (_get(body, "positions") or [])
                     )
-                    body = resp.body
-
-                    def _get(obj, key, default=None):
-                        if obj is None:
-                            return default
-                        return obj.get(key, default) if hasattr(obj, "get") else getattr(obj, key, default)
-
-                    # Primary: sum the cash field from USD balance entries (direct brokerage-reported cash)
-                    balances = _get(body, "balances") or []
-                    usd_cash_values = []
-                    for b in balances:
-                        curr = _get(b, "currency")
-                        code = _get(curr, "code", "USD") or "USD"
-                        cash_val = _get(b, "cash")
-                        print(f"[buying-power] {result_key} balance: currency={code} cash={cash_val} buying_power={_get(b,'buying_power')}")
-                        if code == "USD" and cash_val is not None:
-                            usd_cash_values.append(float(cash_val))
-
-                    if usd_cash_values:
-                        net_cash = sum(usd_cash_values)
-                        print(f"[buying-power] {result_key}: balance.cash={net_cash:.2f}")
+                    if total is not None:
+                        net_cash = float(total) - positions_value
+                        print(f"[buying-power] {result_key}: fallback total={float(total):.2f} - positions={positions_value:.2f} → net_cash={net_cash:.2f}")
                         result[result_key] = round(result.get(result_key, 0.0) + net_cash, 2)
                     else:
-                        # Fallback: account total minus positions market value
-                        acct = _get(body, "account")
-                        acct_bal = _get(acct, "balance")
-                        acct_total_raw = _get(acct_bal, "total")
-                        acct_total = _get(acct_total_raw, "amount") if isinstance(acct_total_raw, dict) else acct_total_raw
-                        tv = _get(body, "total_value")
-                        tv_value = _get(tv, "value")
-                        total = acct_total if acct_total is not None else tv_value
-                        positions_value = sum(
-                            float(_get(pos, "units") or 0) * float(_get(pos, "price") or 0)
-                            for pos in (_get(body, "positions") or [])
-                        )
-                        if total is not None:
-                            net_cash = float(total) - positions_value
-                            print(f"[buying-power] {result_key}: fallback total={float(total):.2f} - positions={positions_value:.2f} → net_cash={net_cash:.2f}")
-                            result[result_key] = round(result.get(result_key, 0.0) + net_cash, 2)
-                        else:
-                            print(f"[buying-power] {result_key}: no cash or total available, skipping")
-                except Exception as e:
-                    import traceback
-                    print(f"[buying-power] error for {result_key}: {e}")
-                    traceback.print_exc()
-        finally:
-            db.close()
+                        print(f"[buying-power] {result_key}: no cash or total available, skipping")
+            except Exception as e:
+                import traceback
+                print(f"[buying-power] error for {result_key}: {e}")
+                traceback.print_exc()
         print(f"[buying-power] result: {result}")
         # Cache result so /buying-power/cached can serve it instantly next time
-        _save_buying_power_cache(result)
+        _save_buying_power_cache(scope, result)
         return result
     except Exception as e:
         print(f"[buying-power] top-level error: {e}")
         return {}
 
 
-def _save_buying_power_cache(result: dict):
+def _save_buying_power_cache(scope: UserScope, result: dict):
+    """Cache this user's buying power. Takes the request scope rather than
+    opening its own session — a second session would write outside the user
+    filter and, being unscoped, could overwrite another user's cached row."""
     import json
     from backend.app.db.schema import PortfolioSummary
-    from backend.app.core.database import SessionLocal
-    _db = SessionLocal()
+    require_scope(scope)
     try:
-        summary = _scope.query(PortfolioSummary).first()
+        summary = scope.query(PortfolioSummary).first()
         if summary:
             summary.buying_power_json = json.dumps(result)
         else:
-            summary = PortfolioSummary(cash_balance=0.0, buying_power_json=json.dumps(result))
-            _scope.add(summary)
-        _db.commit()
+            scope.add(PortfolioSummary(cash_balance=0.0, buying_power_json=json.dumps(result)))
+        scope.db.commit()
     except Exception:
-        _db.rollback()
-    finally:
-        _db.close()
+        scope.db.rollback()
 
 
 @router.get("/buying-power/cached")
