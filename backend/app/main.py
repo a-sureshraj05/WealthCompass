@@ -211,18 +211,11 @@ def startup_event():
                 conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN ui_prefs_json TEXT"))
                 conn.commit()
 
-    # Bootstrap portfolio_summary if empty (first run after adding the table)
-    from backend.app.core.database import SessionLocal
-    from backend.app.db.schema import PortfolioSummary, Transaction as _DBTxn
-    _sum_db = SessionLocal()
-    try:
-        if not _sum_db.query(PortfolioSummary).first():
-            cash_txns = _sum_db.query(_DBTxn).filter(_DBTxn.assetType == "Cash", _DBTxn.is_deleted == False).all()
-            balance = sum(t.totalCost if t.action.upper() == "BUY" else -t.totalCost for t in cash_txns)
-            _sum_db.add(PortfolioSummary(id=1, cash_balance=round(balance, 2)))
-            _sum_db.commit()
-    finally:
-        _sum_db.close()
+    # portfolio_summary is no longer a singleton pinned at id=1 — it is one row
+    # per user, created by process_transactions() the first time that user's
+    # data is processed. Bootstrapping a row here would have to invent a
+    # user_id, and inventing one is exactly the fail-open write the NOT NULL
+    # constraint exists to prevent.
 
     # Seed stock_splits with well-known historical splits (safe to run every startup — skips duplicates)
     from backend.app.core.stock_split_seeds import SEED_SPLITS

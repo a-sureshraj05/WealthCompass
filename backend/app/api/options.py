@@ -3,7 +3,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.app.api.deps import get_user_scope
 from backend.app.core.database import get_db
+from backend.app.core.scoping import UserScope
 from backend.app.db.schema import UnrealizedGain, RealizedGain, OptionsRetain
 from backend.app.core.utils.ticker import underlying_ticker as _underlying_ticker
 
@@ -22,15 +24,16 @@ class RetainUpdate(BaseModel):
 def _retain_map(db: Session) -> dict:
     return {
         (r.brokerage, r.ticker, r.buy_date): r.retain_quantity
-        for r in db.query(OptionsRetain).all()
+        for r in scope.query(OptionsRetain).all()
     }
 
 
 @router.get("/options/positions")
-def get_open_options(db: Session = Depends(get_db)):
+def get_open_options(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Return all open options lots with their retain quantities."""
     lots = (
-        db.query(UnrealizedGain)
+        scope.query(UnrealizedGain)
         .filter(UnrealizedGain.assetType == "Options")
         .order_by(UnrealizedGain.ticker, UnrealizedGain.buyDate)
         .all()
@@ -62,11 +65,12 @@ def get_open_options(db: Session = Depends(get_db)):
 
 
 @router.put("/options/retain")
-def update_retain(payload: RetainUpdate, db: Session = Depends(get_db)):
+def update_retain(payload: RetainUpdate, db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Upsert the retain quantity for an open options lot."""
     buy_date = datetime.fromisoformat(payload.buy_date)
     existing = (
-        db.query(OptionsRetain)
+        scope.query(OptionsRetain)
         .filter(
             OptionsRetain.brokerage == payload.brokerage,
             OptionsRetain.ticker == payload.ticker,
@@ -77,7 +81,7 @@ def update_retain(payload: RetainUpdate, db: Session = Depends(get_db)):
     if existing:
         existing.retain_quantity = payload.retain_quantity
     else:
-        db.add(OptionsRetain(
+        scope.add(OptionsRetain(
             brokerage=payload.brokerage,
             ticker=payload.ticker,
             buy_date=buy_date,
@@ -88,7 +92,8 @@ def update_retain(payload: RetainUpdate, db: Session = Depends(get_db)):
 
 
 @router.get("/options/calculator")
-def get_calculator(db: Session = Depends(get_db)):
+def get_calculator(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """
     Compute how much the sellable contracts need to gain to cover:
       1. Total outstanding options premium (cost of ALL open positions)
@@ -98,7 +103,7 @@ def get_calculator(db: Session = Depends(get_db)):
     current_year = datetime.now().year
 
     # --- Open options positions ---
-    lots = db.query(UnrealizedGain).filter(UnrealizedGain.assetType == "Options").all()
+    lots = scope.query(UnrealizedGain).filter(UnrealizedGain.assetType == "Options").all()
     retains = _retain_map(db)
 
     outstanding_premium = 0.0
@@ -115,7 +120,7 @@ def get_calculator(db: Session = Depends(get_db)):
         total_sellable_value += sellable_qty * OPTIONS_MULTIPLIER * lot.currentPrice
 
     # --- Realized gains/losses (options only) ---
-    all_realized = db.query(RealizedGain).all()
+    all_realized = scope.query(RealizedGain).all()
     options_realized = [g for g in all_realized if (g.assetType or "").lower() == "options"]
     realized_losses = abs(sum(g.gain for g in options_realized if g.gain < 0))
 

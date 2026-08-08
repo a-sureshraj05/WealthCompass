@@ -15,7 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.app.api.deps import get_user_scope
 from backend.app.core.database import get_db
+from backend.app.core.scoping import UserScope
 from backend.app.core.stock_fetcher import get_stock_quote, is_expired_option
 from backend.app.core.table_loader import holding_loader
 from backend.app.core.table_loader.holding_loader import _multiplier
@@ -48,7 +50,8 @@ class PriceRefreshResult(BaseModel):
 
 
 @router.post("/prices/refresh", response_model=PriceRefreshResult)
-def refresh_prices(db: Session = Depends(get_db)):
+def refresh_prices(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Re-quote every open lot and rebuild holdings from the new prices.
 
     Serialised on _refresh_lock — see the comment there; concurrent runs
@@ -63,7 +66,7 @@ def refresh_prices(db: Session = Depends(get_db)):
 
 
 def _refresh_prices_locked(db: Session) -> PriceRefreshResult:
-    lots = db.query(UnrealizedGain).all()
+    lots = scope.query(UnrealizedGain).all()
     if not lots:
         return PriceRefreshResult(symbols=0, lotsUpdated=0, failed=[])
 
@@ -111,7 +114,7 @@ def _refresh_prices_locked(db: Session) -> PriceRefreshResult:
 
     # Holdings are a pure aggregate of the lots above, so rebuild rather than
     # letting the two views drift apart.
-    holding_loader.load(db, prev_close_cache=prev_close_cache)
+    holding_loader.load(scope, prev_close_cache=prev_close_cache)
 
     logger.info("Price refresh: %d symbols, %d lots updated, %d failed",
                 len(symbols), lots_updated, len(failed))

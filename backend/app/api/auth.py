@@ -19,6 +19,11 @@ SECRET_KEY = os.getenv("JWT_SECRET") or secrets.token_hex(32)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24h
 
+# Open locally so a first account can be created; closed in demo mode, where the
+# only accounts are the seeded ones.
+_demo = os.getenv("WC_DEMO_MODE", "").lower() == "true"
+ALLOW_REGISTRATION = (not _demo) and os.getenv("WC_ALLOW_REGISTRATION", "true").lower() == "true"
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
@@ -68,8 +73,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 @router.post("/auth/register", response_model=TokenResponse)
 def register(request: RegisterRequest, db: Session = Depends(get_db)):
-    if db.query(User).first():
-        raise HTTPException(status_code=400, detail="An account already exists. This app is single-user only.")
+    # The app is no longer single-user, so registration is gated by policy
+    # rather than by "a user already exists". Default-closed on a hosted
+    # instance: an open signup form on someone's portfolio tracker is an
+    # invitation, so ALLOW_REGISTRATION must be set deliberately.
+    if not ALLOW_REGISTRATION:
+        raise HTTPException(status_code=403, detail="Registration is closed on this instance.")
+    if db.query(User).filter(User.email == request.email).first():
+        raise HTTPException(status_code=400, detail="An account with that email already exists.")
     user = User(email=request.email, hashed_password=hash_password(request.password))
     db.add(user)
     db.commit()
