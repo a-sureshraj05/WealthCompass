@@ -27,6 +27,10 @@ import os
 import sys
 from datetime import datetime
 
+# Addresses rather than bare usernames: the login form is type="email",
+# so the browser rejects anything without an @ before the request is sent.
+DEMO_EMAIL = "demouser@gmail.com"
+TEST_EMAIL = "testuser@gmail.com"
 DEMO_PASSWORD = "welcome"
 
 # --- demouser: the full-coverage portfolio -----------------------------------
@@ -190,8 +194,8 @@ def main() -> None:
         db.commit()
         print("[seed] cleared existing rows")
 
-        demo = User(email="demouser", hashed_password=hash_password(DEMO_PASSWORD))
-        test = User(email="testuser", hashed_password=hash_password(DEMO_PASSWORD))
+        demo = User(email=DEMO_EMAIL, hashed_password=hash_password(DEMO_PASSWORD))
+        test = User(email=TEST_EMAIL, hashed_password=hash_password(DEMO_PASSWORD))
         db.add_all([demo, test])
         db.flush()
 
