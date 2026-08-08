@@ -30,7 +30,7 @@ class PreferencesPayload(BaseModel):
     preferences: Dict[str, Any]
 
 
-def _load(db: Session) -> Dict[str, Any]:
+def _load(scope: UserScope) -> Dict[str, Any]:
     summary = scope.query(PortfolioSummary).first()
     if not summary or not summary.ui_prefs_json:
         return {}
@@ -46,7 +46,7 @@ def _load(db: Session) -> Dict[str, Any]:
 @router.get("/preferences", response_model=PreferencesPayload)
 def get_preferences(db: Session = Depends(get_db),
     scope: UserScope = Depends(get_user_scope)):
-    return PreferencesPayload(preferences=_load(db))
+    return PreferencesPayload(preferences=_load(scope))
 
 
 @router.put("/preferences", response_model=PreferencesPayload)
@@ -58,7 +58,7 @@ def update_preferences(payload: PreferencesPayload, db: Session = Depends(get_db
     shouldn't clobber each other, and a client that only knows about column
     order shouldn't wipe a setting added later.
     """
-    merged = {**_load(db), **payload.preferences}
+    merged = {**_load(scope), **payload.preferences}
     blob = json.dumps(merged)
 
     summary = scope.query(PortfolioSummary).first()

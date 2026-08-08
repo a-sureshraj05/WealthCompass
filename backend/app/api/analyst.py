@@ -24,6 +24,20 @@ class AnalystData(BaseModel):
     sector: Optional[str] = None
 
 
+@router.get("/analyst/cached", response_model=List[AnalystData])
+def get_analyst_cached(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
+    """Return last cached analyst data — instant, no yfinance call."""
+    from backend.app.db.schema import PortfolioSummary
+    summary = scope.query(PortfolioSummary).first()
+    if summary and summary.analyst_json:
+        return json.loads(summary.analyst_json)
+    return []
+
+
+# Declared after /analyst/cached deliberately: a path parameter matches any
+# literal segment, so registering it first makes every more specific
+# /analyst/... route below it unreachable.
 @router.get("/analyst/{ticker}", response_model=AnalystData)
 def get_analyst_data(ticker: str):
     try:
@@ -41,17 +55,6 @@ def get_analyst_data(ticker: str):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch analyst data for {ticker}: {str(e)}")
-
-
-@router.get("/analyst/cached", response_model=List[AnalystData])
-def get_analyst_cached(db: Session = Depends(get_db),
-    scope: UserScope = Depends(get_user_scope)):
-    """Return last cached analyst data — instant, no yfinance call."""
-    from backend.app.db.schema import PortfolioSummary
-    summary = scope.query(PortfolioSummary).first()
-    if summary and summary.analyst_json:
-        return json.loads(summary.analyst_json)
-    return []
 
 
 @router.post("/analyst/batch", response_model=List[AnalystData])

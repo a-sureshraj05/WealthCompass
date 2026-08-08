@@ -21,7 +21,7 @@ class RetainUpdate(BaseModel):
     retain_quantity: float
 
 
-def _retain_map(db: Session) -> dict:
+def _retain_map(scope: UserScope) -> dict:
     return {
         (r.brokerage, r.ticker, r.buy_date): r.retain_quantity
         for r in scope.query(OptionsRetain).all()
@@ -38,7 +38,7 @@ def get_open_options(db: Session = Depends(get_db),
         .order_by(UnrealizedGain.ticker, UnrealizedGain.buyDate)
         .all()
     )
-    retains = _retain_map(db)
+    retains = _retain_map(scope)
 
     result = []
     for lot in lots:
@@ -104,7 +104,7 @@ def get_calculator(db: Session = Depends(get_db),
 
     # --- Open options positions ---
     lots = scope.query(UnrealizedGain).filter(UnrealizedGain.assetType == "Options").all()
-    retains = _retain_map(db)
+    retains = _retain_map(scope)
 
     outstanding_premium = 0.0
     total_sellable_qty = 0.0

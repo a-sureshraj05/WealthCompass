@@ -62,10 +62,11 @@ def refresh_prices(db: Session = Depends(get_db),
     be re-derived here. Those are recomputed on the next full reprocess.
     """
     with _refresh_lock:
-        return _refresh_prices_locked(db)
+        return _refresh_prices_locked(scope)
 
 
-def _refresh_prices_locked(db: Session) -> PriceRefreshResult:
+def _refresh_prices_locked(scope: UserScope) -> PriceRefreshResult:
+    db = scope.db
     lots = scope.query(UnrealizedGain).all()
     if not lots:
         return PriceRefreshResult(symbols=0, lotsUpdated=0, failed=[])
