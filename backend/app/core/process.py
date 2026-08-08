@@ -17,7 +17,16 @@ _CONFIG_PATH = os.path.join(
 
 
 def _load_tracked_tickers() -> Optional[Set[str]]:
-    """Return the set of tickers from config/tickers.yml, or None if file missing."""
+    """Return the set of tickers from config/tickers.yml, or None if file missing.
+
+    Ignored in demo mode. The allowlist is a personal filter listing one
+    person's holdings; applied to seeded demo data it silently drops every
+    position that is not on it, leaving a portfolio with missing rows and no
+    indication why. The cloud image ships without the file at all — this makes
+    a local `./server.sh demo` behave the same way.
+    """
+    if os.getenv("WC_DEMO_MODE", "").lower() == "true":
+        return None
     if not os.path.exists(_CONFIG_PATH):
         return None
     with open(_CONFIG_PATH) as f:
