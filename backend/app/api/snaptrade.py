@@ -5,6 +5,7 @@ from snaptrade_client import SnapTrade
 from sqlalchemy.orm import Session
 
 from backend.app.db.schema import BrokerageAccount, SnaptradeConnection, SnaptradeIgnoredAccount, SnaptradeTransaction, Transaction as DBTransaction
+from backend.app.core.scoping import UserScope
 from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 
 # --- Snaptrade client setup ---
@@ -90,16 +91,18 @@ def get_connect_url(brokerage: str) -> str:
     return resp.body.get("redirectURI") or resp.body.get("loginLink", "")
 
 
-def ignore_account(account_id: str, db: Session) -> None:
-    """Add an account to the ignore list."""
-    if not db.query(SnaptradeIgnoredAccount).filter(SnaptradeIgnoredAccount.account_id == account_id).first():
-        db.add(SnaptradeIgnoredAccount(account_id=account_id))
-        db.commit()
+def ignore_account(account_id: str, scope: UserScope) -> None:
+    """Add an account to this user's ignore list."""
+    if not scope.query(SnaptradeIgnoredAccount).filter(
+        SnaptradeIgnoredAccount.account_id == account_id
+    ).first():
+        scope.add(SnaptradeIgnoredAccount(account_id=account_id))
+        scope.db.commit()
 
 
-def get_accounts(db: Session) -> list:
+def get_accounts(scope: UserScope) -> list:
     """Return list of user accounts from Snaptrade API, excluding ignored accounts."""
-    ignored_ids = {row.account_id for row in db.query(SnaptradeIgnoredAccount).all()}
+    ignored_ids = {row.account_id for row in scope.query(SnaptradeIgnoredAccount).all()}
     client = get_client()
     auth_brokerage_map = _build_auth_brokerage_map(client)
 
@@ -127,7 +130,7 @@ def get_accounts(db: Session) -> list:
     return result
 
 
-def get_connections(db: Session) -> list:
+def get_connections(scope: UserScope) -> list:
     """Return list of connected brokerages directly from Snaptrade API."""
     client = get_client()
     resp = client.connections.list_brokerage_authorizations(
@@ -141,7 +144,7 @@ def get_connections(db: Session) -> list:
     return result
 
 
-def delete_connection(authorization_id: str, db: Session) -> None:
+def delete_connection(authorization_id: str, scope: UserScope) -> None:
     """Delete a brokerage connection from Snaptrade and local DB."""
     client = get_client()
     # Remove from Snaptrade
@@ -149,20 +152,22 @@ def delete_connection(authorization_id: str, db: Session) -> None:
         query_params={"userId": USER_ID, "userSecret": USER_SECRET},
         path_params={"authorizationId": authorization_id},
     )
-    # Remove from local DB if present
-    row = db.query(SnaptradeConnection).filter(
+    # Remove from local DB if present — scoped, so one user cannot delete
+    # another user's stored connection by guessing an authorization id.
+    row = scope.query(SnaptradeConnection).filter(
         SnaptradeConnection.authorization_id == authorization_id
     ).first()
     if row:
-        db.delete(row)
-        db.commit()
+        scope.db.delete(row)
+        scope.db.commit()
 
 
-def sync(db: Session, start_date: str = None, end_date: str = None, account_ids: list = None, tickers: list = None) -> int:
+def sync(scope: UserScope, start_date: str = None, end_date: str = None, account_ids: list = None, tickers: list = None) -> int:
     """Fetch latest connections and transactions from Snaptrade, store in DB."""
+    db = scope.db
     client = get_client()
     total_synced = 0
-    ignored_ids = {row.account_id for row in db.query(SnaptradeIgnoredAccount).all()}
+    ignored_ids = {row.account_id for row in scope.query(SnaptradeIgnoredAccount).all()}
 
     # Refresh connections from Snaptrade and build auth → brokerage map
     auth_brokerage_map = _build_auth_brokerage_map(client)
@@ -175,11 +180,11 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
         brokerage_name = brokerage_info.get("name", "Unknown") if isinstance(brokerage_info, dict) else str(brokerage_info)
         brokerage_slug = brokerage_info.get("slug", "") if isinstance(brokerage_info, dict) else ""
 
-        existing = db.query(SnaptradeConnection).filter(
+        existing = scope.query(SnaptradeConnection).filter(
             SnaptradeConnection.authorization_id == auth_id
         ).first()
         if not existing:
-            db.add(SnaptradeConnection(
+            scope.add(SnaptradeConnection(
                 brokerage=brokerage_name,
                 brokerage_slug=brokerage_slug,
                 authorization_id=auth_id,
@@ -203,7 +208,7 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
         print(f"[SnapTrade Account] id={snaptrade_account_id} brokerage={brokerage_name} name={account.get('name')} auth_id={account_auth_id}")
 
         # Upsert into brokerage_accounts reference table
-        db_acct = db.query(BrokerageAccount).filter(
+        db_acct = scope.query(BrokerageAccount).filter(
             BrokerageAccount.snaptrade_account_id == snaptrade_account_id
         ).first()
         if db_acct:
@@ -214,7 +219,7 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                 brokerage=brokerage_name,
                 name=account_display_name,
             )
-            db.add(db_acct)
+            scope.add(db_acct)
         db.flush()  # ensure db_acct.id is set
 
         # Skip ignored accounts
@@ -251,12 +256,12 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                 if not txn_id:
                     continue
 
-                existing_st = db.query(SnaptradeTransaction).filter(
+                existing_st = scope.query(SnaptradeTransaction).filter(
                     SnaptradeTransaction.snaptrade_transaction_id == txn_id
                 ).first()
                 if existing_st:
                     if existing_st.account_id is None and db_acct.id:
-                        linked = db.query(DBTransaction).filter(
+                        linked = scope.query(DBTransaction).filter(
                             DBTransaction.raw_id == existing_st.id,
                             DBTransaction.source == "snaptrade",
                         ).first()
@@ -324,7 +329,7 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                     option_symbol=occ_symbol or None,
                     snaptrade_transaction_id=txn_id,
                 )
-                db.add(db_snaptrade)
+                scope.add(db_snaptrade)
                 db.flush()  # Get db_snaptrade.id before inserting transaction
 
                 # Mark as duplicate if an authoritative transaction already exists:
@@ -333,7 +338,7 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                 # This covers both the CSV-import workflow and the existing
                 # is_backend_verified setup for tickers like NVDA/GOOGL/AAPL.
                 from sqlalchemy import or_
-                manual_exists = db.query(DBTransaction).filter(
+                manual_exists = scope.query(DBTransaction).filter(
                     DBTransaction.ticker == ticker,
                     DBTransaction.date == date,
                     DBTransaction.action == action,
@@ -346,7 +351,7 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
                     DBTransaction.is_duplicate == False,
                 ).first()
 
-                db.add(DBTransaction(
+                scope.add(DBTransaction(
                     brokerage=brokerage_name,
                     account_id=db_acct.id,
                     date=date,
@@ -374,11 +379,12 @@ def sync(db: Session, start_date: str = None, end_date: str = None, account_ids:
     return total_synced
 
 
-def backfill_verified_account_ids(db: Session) -> int:
+def backfill_verified_account_ids(scope: UserScope) -> int:
     """One-time: read every account's transactions from SnapTrade and set account_id
     on is_backend_verified transactions. Never touches any other field."""
+    db = scope.db
     client = get_client()
-    ignored_ids = {row.account_id for row in db.query(SnaptradeIgnoredAccount).all()}
+    ignored_ids = {row.account_id for row in scope.query(SnaptradeIgnoredAccount).all()}
     auth_brokerage_map = _build_auth_brokerage_map(client)
 
     accounts_resp = client.account_information.list_user_accounts(
@@ -400,7 +406,7 @@ def backfill_verified_account_ids(db: Session) -> int:
         display_name = raw_name or brokerage_name
 
         # Upsert into brokerage_accounts
-        db_acct = db.query(BrokerageAccount).filter(
+        db_acct = scope.query(BrokerageAccount).filter(
             BrokerageAccount.snaptrade_account_id == snaptrade_account_id
         ).first()
         if db_acct:
@@ -411,7 +417,7 @@ def backfill_verified_account_ids(db: Session) -> int:
                 brokerage=brokerage_name,
                 name=display_name,
             )
-            db.add(db_acct)
+            scope.add(db_acct)
         db.flush()
 
         try:
@@ -423,7 +429,7 @@ def backfill_verified_account_ids(db: Session) -> int:
                 if not txn_id:
                     continue
 
-                existing_st = db.query(SnaptradeTransaction).filter(
+                existing_st = scope.query(SnaptradeTransaction).filter(
                     SnaptradeTransaction.snaptrade_transaction_id == txn_id
                 ).first()
                 if not existing_st:
@@ -434,7 +440,7 @@ def backfill_verified_account_ids(db: Session) -> int:
                     existing_st.account_id = db_acct.id
 
                 # Update linked DBTransaction only if is_backend_verified=True and account_id is null
-                updated = db.query(DBTransaction).filter(
+                updated = scope.query(DBTransaction).filter(
                     DBTransaction.raw_id == existing_st.id,
                     DBTransaction.is_backend_verified == True,
                     DBTransaction.account_id == None,
