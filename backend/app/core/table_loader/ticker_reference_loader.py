@@ -1,20 +1,23 @@
-from sqlalchemy.orm import Session
 from sqlalchemy import func
-from ...db.schema import Transaction, TickerReference
+
+from backend.app.core.scoping import UserScope
 from backend.app.core.stock_fetcher import get_stock_price
+from ...db.schema import TickerReference, Transaction
 
-def delete(db: Session):
-    # Delete existing ticker references
-    db.query(TickerReference).delete()
-    db.commit()
 
-def load(db: Session):
+def delete(scope: UserScope):
+    # Scoped delete — unscoped, this clears every user's ticker references.
+    scope.delete_all(TickerReference)
+    scope.db.commit()
+
+
+def load(scope: UserScope):
     # First, delete existing ticker references
-    delete(db)
+    delete(scope)
 
-    # Find the first addition date for each ticker from transactions
+    # Find the first addition date for each ticker from this user's transactions
     first_addition_dates = (
-        db.query(
+        scope.query(
             Transaction.ticker,
             func.min(Transaction.date).label("first_date")
         )
@@ -25,11 +28,11 @@ def load(db: Session):
     # Insert new ticker references
     for ticker, first_date in first_addition_dates:
         latest_price = get_stock_price(ticker, period='1d')
-        
+
         ticker_ref = TickerReference(
             ticker=ticker,
             first_addition_date=first_date.date(),
             price=latest_price
         )
-        db.add(ticker_ref)
-    db.commit()
+        scope.add(ticker_ref)  # stamps user_id
+    scope.db.commit()

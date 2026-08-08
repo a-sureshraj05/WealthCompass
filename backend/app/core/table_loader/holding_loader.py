@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, Tuple
 from sqlalchemy.orm import Session
 from backend.app.db.schema import Holding, UnrealizedGain
+from backend.app.core.scoping import UserScope
 from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 
 logger = logging.getLogger(__name__)
@@ -13,19 +14,17 @@ def _multiplier(asset_type: str) -> int:
     return _OPTIONS_MULTIPLIER if (asset_type or "").lower() == "options" else 1
 
 
-def delete(db: Session, brokerage_name: str = None) -> None:
-    if brokerage_name:
-        db.query(Holding).filter(Holding.brokerage == brokerage_name).delete()
-    else:
-        db.query(Holding).delete()
-    db.commit()
+def delete(scope: UserScope, brokerage_name: str = None) -> None:
+    # Scoped delete: unscoped, this clears every user's holdings.
+    scope.delete_all(Holding, brokerage=brokerage_name)
+    scope.db.commit()
 
 
-def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, float] = None) -> None:
-    logger.info("Starting load for brokerage: %s", brokerage_name)
-    delete(db, brokerage_name)
+def load(scope: UserScope, brokerage_name: str = None, prev_close_cache: Dict[str, float] = None) -> None:
+    logger.info("Starting load for user %s, brokerage: %s", scope.user_id, brokerage_name)
+    delete(scope, brokerage_name)
 
-    query = db.query(UnrealizedGain)
+    query = scope.query(UnrealizedGain)
     if brokerage_name:
         query = query.filter(UnrealizedGain.brokerage == brokerage_name)
     unrealized_rows = query.all()
@@ -93,10 +92,10 @@ def load(db: Session, brokerage_name: str = None, prev_close_cache: Dict[str, fl
 
     try:
         logger.info("Adding %d aggregated holdings to DB.", len(holdings_list))
-        db.add_all(holdings_list)
-        db.commit()
+        scope.add_all(holdings_list)  # stamps user_id
+        scope.db.commit()
         logger.info("Successfully committed aggregated holdings.")
     except Exception as e:
-        db.rollback()
+        scope.db.rollback()
         logger.error("ERROR committing aggregated holdings: %s", e)
         raise
