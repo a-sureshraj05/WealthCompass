@@ -17,6 +17,47 @@ from .api.auth import get_current_user
 app = FastAPI()
 
 
+def _assert_schema_current():
+    """Refuse to serve a database whose tables predate this build.
+
+    `create_all()` only creates *missing tables* — it never adds a column to an
+    existing one. So a database written before a new column was introduced opens
+    without complaint and then fails on the first query that mentions it, which
+    surfaces as 500s behind a working login page rather than as a schema problem.
+
+    Checking up front turns that into one legible message. It is deliberately
+    generic: it compares every model column against the live table, so a column
+    added later is caught without anyone remembering to update this function.
+    """
+    from sqlalchemy import inspect
+
+    inspector = inspect(engine)
+    existing = set(inspector.get_table_names())
+
+    drift = []
+    for table_name, table in Base.metadata.tables.items():
+        if table_name not in existing:
+            continue  # create_all() just made it — nothing to compare against
+        actual = {col["name"] for col in inspector.get_columns(table_name)}
+        missing = [c.name for c in table.columns if c.name not in actual]
+        if missing:
+            drift.append((table_name, missing))
+
+    if not drift:
+        return
+
+    detail = "\n".join(f"    {t} is missing: {', '.join(cols)}" for t, cols in drift)
+    raise SystemExit(
+        "\nREFUSED TO START: this database predates the current schema.\n\n"
+        f"  database: {engine.url}\n{detail}\n\n"
+        "  Nothing was modified. Choose one:\n\n"
+        "    ./server.sh demo        run against db/demo.db instead\n"
+        "    git checkout main       run the build this database was written for\n\n"
+        "  To migrate this database, run the migration explicitly — it is never\n"
+        "  applied as a side effect of starting the server.\n"
+    )
+
+
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
@@ -196,6 +237,10 @@ def startup_event():
         _seed_db.commit()
     finally:
         _seed_db.close()
+
+    # Last: the legacy ALTER blocks above are allowed to bring an older SQLite
+    # file up to date first, so this only fires on drift they do not cover.
+    _assert_schema_current()
 
 
 app.include_router(auth.router, prefix="/api/v1")
