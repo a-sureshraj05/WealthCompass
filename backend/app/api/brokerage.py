@@ -39,7 +39,17 @@ class AccountRenameRequest(BaseModel):
 
 
 def _require_provider_access(user: User) -> None:
-    """Guard every route that talks to SnapTrade."""
+    """Guard every route that talks to SnapTrade.
+
+    Three independent gates, in order of how much they can be trusted. The flag
+    is checked first because it is the only one carried by the data itself —
+    config can be missing or wrong on a machine nobody thought about.
+    """
+    if getattr(user, "is_test_user", False):
+        raise HTTPException(
+            status_code=503,
+            detail="This is a test account. Brokerage sync is disabled for it.",
+        )
     if PROVIDER != "snaptrade":
         raise HTTPException(status_code=400, detail=f"Unknown provider: {PROVIDER}")
     if DEMO_MODE:

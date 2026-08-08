@@ -33,6 +33,15 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    # Seeded demo/test accounts. Blocks operations that spend the operator's
+    # credentials against a third party — brokerage sync today, the AI chat when
+    # it lands. Public market data (quotes, analyst targets) stays available, or
+    # the demo would show a portfolio with no prices.
+    #
+    # Deliberately a column rather than config: it travels with the row, so it
+    # still holds if a demo database is ever started without WC_DEMO_MODE set.
+    # Defaults to False so a real account is never mistaken for a fixture.
+    is_test_user = Column(Boolean, default=False, nullable=False, server_default="0")
 
 
 class Transaction(Base):

@@ -194,8 +194,12 @@ def main() -> None:
         db.commit()
         print("[seed] cleared existing rows")
 
-        demo = User(email=DEMO_EMAIL, hashed_password=hash_password(DEMO_PASSWORD))
-        test = User(email=TEST_EMAIL, hashed_password=hash_password(DEMO_PASSWORD))
+        # Both are fixtures: is_test_user blocks brokerage sync for them even if
+        # this database is later started without WC_DEMO_MODE.
+        demo = User(email=DEMO_EMAIL, hashed_password=hash_password(DEMO_PASSWORD),
+                    is_test_user=True)
+        test = User(email=TEST_EMAIL, hashed_password=hash_password(DEMO_PASSWORD),
+                    is_test_user=True)
         db.add_all([demo, test])
         db.flush()
 
