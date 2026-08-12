@@ -1,7 +1,22 @@
 import os
 from datetime import datetime
 
-from snaptrade_client import SnapTrade
+try:
+    from snaptrade_client import SnapTrade
+except ImportError:  # pragma: no cover - only hit on the demo image
+    # The demo deployment ships without the SnapTrade SDK. Its every route is
+    # already closed there (brokerage.py returns 503 for is_test_user accounts
+    # and for any user that is not SNAPTRADE_OWNER_USER_ID), so the package is
+    # dead weight in that image — and pinning it forces a dependency conflict:
+    # snaptrade-python-sdk 11.x hard-pins typing_extensions==4.13.2, which
+    # pydantic 2.12.5 (>=4.14.1) cannot satisfy.
+    #
+    # Import-time tolerance rather than a version bump, because upgrading the
+    # SDK a major version would change the code path that really does sync this
+    # machine's brokerage accounts, to benefit a demo that never calls it.
+    # get_client() below fails loudly if anything ever does reach it.
+    SnapTrade = None
+
 from sqlalchemy.orm import Session
 
 from backend.app.db.schema import BrokerageAccount, SnaptradeConnection, SnaptradeIgnoredAccount, SnaptradeTransaction, Transaction as DBTransaction
@@ -47,7 +62,12 @@ def _build_occ_symbol(option_symbol) -> str:
     return occ
 
 
-def get_client() -> SnapTrade:
+def get_client() -> "SnapTrade":
+    if SnapTrade is None:
+        raise RuntimeError(
+            "snaptrade-python-sdk is not installed. Brokerage sync is disabled on "
+            "this instance; nothing should be calling get_client() here."
+        )
     return SnapTrade(client_id=CLIENT_ID, consumer_key=CONSUMER_KEY)
 
 

@@ -6,10 +6,16 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".gemini", ".env"))
 load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
 
-from fastapi import FastAPI, Depends
+from pathlib import Path
+
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.app.core.database import engine
 from backend.app.db.schema import Base
+
+DEMO_MODE = os.getenv("WC_DEMO_MODE", "").lower() == "true"
 
 from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, prices, preferences
 from .api.auth import get_current_user
@@ -235,6 +241,12 @@ def startup_event():
     # file up to date first, so this only fires on drift they do not cover.
     _assert_schema_current()
 
+    # Demo instance only — both are no-ops unless WC_DEMO_MODE=true.
+    from backend.app.core.demo_reset import seed_if_empty, start_reset_loop
+
+    seed_if_empty()
+    start_reset_loop()
+
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(transactions.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
@@ -248,6 +260,46 @@ app.include_router(prices.router, prefix="/api/v1", dependencies=[Depends(get_cu
 app.include_router(preferences.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
+@app.get("/healthz")
+def healthz():
+    """Liveness for the platform health check.
+
+    Deliberately touches the database. A health check that only proves the
+    process is accepting sockets reports green while every real request 500s on
+    a broken connection, which is the failure mode worth catching.
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database unreachable: {exc}")
+    return {"status": "ok", "demo": DEMO_MODE}
+
+
+# ── Static SPA ────────────────────────────────────────────────────────────
+# Registered LAST, after every router, because the catch-all below matches any
+# path — mounted earlier it would swallow /api/v1/*.
+#
+# Only wired up when a build exists. Locally there is no frontend/dist: Vite
+# serves the app on :5173 and proxies the API here, so the mount must not be a
+# hard requirement or `./server.sh start` would break.
+_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+if _DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=_DIST / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    def spa(full_path: str):
+        # The app has no client-side router, so every non-API path resolves to
+        # the same document. Real files under /assets are already handled above.
+        candidate = _DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_DIST / "index.html")
+
+else:
+    @app.get("/")
+    def read_root():
+        return {"Hello": "World", "spa": "not built — run `npm run build` in frontend/"}

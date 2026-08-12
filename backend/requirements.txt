@@ -1,9 +1,44 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-google-cloud-aiplatform
-python-dotenv
-yfinance
-bcrypt
-python-jose[cryptography]
-python-multipart
+# Pinned to the versions this app is known to run against locally. An image that
+# builds differently next month is not reproducible, and a demo that breaks
+# because a transitive release changed is a demo nobody trusts.
+#
+# Deliberately ABSENT: google-cloud-aiplatform. Its only importer is
+# backend/app/api/archive/ai_import.py, which is not registered as a router and
+# is excluded from the image by .dockerignore. It pulled in hundreds of MB.
+
+# ── Web layer ────────────────────────────────────────────────────────
+fastapi==0.128.0
+uvicorn[standard]==0.39.0
+pydantic==2.12.5
+python-multipart==0.0.20          # CSV upload endpoints parse multipart form data
+
+# ── Auth ─────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.5.0
+bcrypt==5.0.0
+
+# ── Data / persistence ───────────────────────────────────────────────
+SQLAlchemy==2.0.46
+python-dotenv==1.2.1
+PyYAML==6.0.3                     # config/tickers.yml loader (absent in the image; import still runs)
+pandas==2.3.3
+
+# ── External data ────────────────────────────────────────────────────
+yfinance==1.1.0
+
+# snaptrade-python-sdk is DELIBERATELY ABSENT.
+#
+# 11.0.169 (the version installed locally) hard-pins typing_extensions==4.13.2,
+# which pydantic 2.12.5 cannot satisfy — it needs >=4.14.1. That is an
+# unsatisfiable resolve, not a preference. Notably the local environment has
+# typing_extensions 4.15.0 installed, so the local combination already violates
+# that pin and merely happens to work; pip would not reproduce it.
+#
+# 13.0.1 relaxes the pin to <5,>=4.13.2 and would resolve cleanly, but bumping
+# the brokerage SDK two major versions to ship a demo that never calls it puts
+# the one code path that syncs real accounts at risk for no benefit.
+#
+# So the image ships without it. backend/app/api/snaptrade.py tolerates the
+# missing import, and every brokerage route on the demo returns 503 before it
+# could matter. Local development is unaffected — keep 11.0.169 installed there.
+# Revisit only if the hosted instance ever needs real brokerage sync (Stage 3),
+# which requires per-user credentials anyway.
