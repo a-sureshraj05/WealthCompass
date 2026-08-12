@@ -104,6 +104,24 @@ def me(current_user: User = Depends(get_current_user)):
 
 @router.get("/auth/status")
 def auth_status(db: Session = Depends(get_db)):
-    """Check if any user account has been created yet."""
+    """Unauthenticated instance description, read by the login page.
+
+    Carries the demo flag so the UI can label itself. The demo credentials are
+    returned only in demo mode, where they are published on purpose — they
+    unlock fabricated data on a database that is wiped hourly. On a non-demo
+    instance the keys are absent entirely rather than null, so there is no shape
+    for a real deployment to accidentally populate.
+    """
     has_user = db.query(User).first() is not None
-    return {"registered": has_user}
+    status = {
+        "registered": has_user,
+        "registration_open": ALLOW_REGISTRATION,
+        "demo": _demo,
+    }
+    if _demo:
+        status["demo_accounts"] = [
+            {"email": "demouser@gmail.com", "label": "Full portfolio — two brokerages, options, splits"},
+            {"email": "testuser@gmail.com", "label": "Small portfolio — a second, isolated tenant"},
+        ]
+        status["demo_password"] = os.getenv("DEMO_PASSWORD", "welcome")
+    return status

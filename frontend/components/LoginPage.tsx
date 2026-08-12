@@ -1,7 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface Props {
   onLogin: (token: string) => void;
+}
+
+interface DemoAccount {
+  email: string;
+  label: string;
+}
+
+interface InstanceStatus {
+  registered: boolean;
+  registration_open: boolean;
+  demo: boolean;
+  demo_accounts?: DemoAccount[];
+  demo_password?: string;
 }
 
 const LoginPage: React.FC<Props> = ({ onLogin }) => {
@@ -10,6 +23,27 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [instance, setInstance] = useState<InstanceStatus | null>(null);
+
+  // Unauthenticated, and the only thing gating the first paint of the banner.
+  // Failure is non-fatal: the form still works, it just isn't labelled as demo.
+  useEffect(() => {
+    fetch('/api/v1/auth/status')
+      .then(res => (res.ok ? res.json() : null))
+      .then(setInstance)
+      .catch(() => setInstance(null));
+  }, []);
+
+  const useDemoAccount = (account: DemoAccount) => {
+    setEmail(account.email);
+    setPassword(instance?.demo_password ?? '');
+    setError('');
+    setIsRegistering(false);
+  };
+
+  // Default true so the toggle doesn't flicker out and back while /auth/status
+  // is still in flight on a normal instance.
+  const registrationOpen = instance ? instance.registration_open : true;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,6 +102,38 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
           <p className="text-sm text-slate-500 mt-1">Your personal portfolio tracker</p>
         </div>
 
+        {/* Demo banner. Only rendered on an instance that reports demo mode, so
+            it cannot appear on a real deployment even if this build ships there. */}
+        {instance?.demo && (
+          <div className="mb-6 rounded border border-amber-200 bg-amber-50 p-4">
+            <p className="text-xs font-black uppercase tracking-widest text-amber-800">Demo instance</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-amber-900">
+              Every figure here is fabricated and unrelated to any real portfolio.
+              The database resets hourly, brokerage syncing is disabled, and
+              accounts are shared — anything you change may be edited or wiped by
+              the next visitor.
+            </p>
+            {instance.demo_accounts && instance.demo_accounts.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {instance.demo_accounts.map(account => (
+                  <button
+                    key={account.email}
+                    type="button"
+                    onClick={() => useDemoAccount(account)}
+                    className="w-full rounded border border-amber-300 bg-white px-3 py-2 text-left transition-colors hover:bg-amber-100"
+                  >
+                    <span className="block text-xs font-bold text-slate-900">{account.email}</span>
+                    <span className="block text-[11px] text-slate-500">{account.label}</span>
+                  </button>
+                ))}
+                <p className="pt-1 text-[11px] text-amber-800">
+                  Password <code className="font-bold">{instance.demo_password}</code> — click an account to fill the form.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Card */}
         <div className="bg-white rounded border shadow-sm p-8">
           <h2 className="text-lg font-bold text-slate-900 mb-6">
@@ -112,19 +178,23 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            {isRegistering ? (
-              <p className="text-xs text-slate-500">
-                Already have an account?{' '}
-                <button onClick={() => { setIsRegistering(false); setError(''); }} className="text-[#0F52BA] font-bold hover:underline">Sign in</button>
-              </p>
-            ) : (
-              <p className="text-xs text-slate-500">
-                First time here?{' '}
-                <button onClick={() => { setIsRegistering(true); setError(''); }} className="text-[#0F52BA] font-bold hover:underline">Create account</button>
-              </p>
-            )}
-          </div>
+          {/* Offering a signup link the server will reject with a 403 is worse
+              than offering nothing, so the toggle follows the server's policy. */}
+          {registrationOpen && (
+            <div className="mt-6 text-center">
+              {isRegistering ? (
+                <p className="text-xs text-slate-500">
+                  Already have an account?{' '}
+                  <button onClick={() => { setIsRegistering(false); setError(''); }} className="text-[#0F52BA] font-bold hover:underline">Sign in</button>
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  First time here?{' '}
+                  <button onClick={() => { setIsRegistering(true); setError(''); }} className="text-[#0F52BA] font-bold hover:underline">Create account</button>
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

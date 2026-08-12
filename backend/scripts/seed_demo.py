@@ -162,11 +162,14 @@ def _pick_option_symbol(underlying: str, fallback: str) -> str:
         return fallback
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Seed the demo database.")
-    ap.add_argument("--yes", action="store_true", help="confirm truncation")
-    args = ap.parse_args()
+def seed(assume_yes: bool = False) -> None:
+    """Truncate and re-seed the demo database.
 
+    Split out of `main()` so the hosted instance can call it directly for the
+    periodic reset (see backend/app/core/demo_reset.py) instead of shelling out.
+    The guards in `_guard` run identically on both paths — the in-process caller
+    gets no exemption from them, which is the whole point of them being here.
+    """
     from backend.app.api.auth import hash_password
     from backend.app.core import process
     from backend.app.core.database import SessionLocal, engine
@@ -180,7 +183,7 @@ def main() -> None:
                                        TransactionSplitConfig, UnrealizedGain, User)
     from backend.app.core.stock_split_seeds import SEED_SPLITS
 
-    _guard(engine, args.yes)
+    _guard(engine, assume_yes)
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
@@ -296,6 +299,13 @@ def main() -> None:
             print()
     finally:
         db.close()
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Seed the demo database.")
+    ap.add_argument("--yes", action="store_true", help="confirm truncation")
+    args = ap.parse_args()
+    seed(assume_yes=args.yes)
 
 
 if __name__ == "__main__":

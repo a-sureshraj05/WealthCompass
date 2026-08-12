@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -15,6 +17,38 @@ from backend.app.db.schema import \
 
 router = APIRouter()
 
+DEMO_MODE = os.getenv("WC_DEMO_MODE", "").lower() == "true"
+
+
+def require_import_access(user: User) -> None:
+    """Guard CSV upload on the public demo.
+
+    The demo publishes its passwords, so its accounts are shared by every
+    visitor at once. This endpoint *persists* what it parses — so without this
+    guard, one visitor uploading a real brokerage statement would have it
+    written to a shared account and shown to the next visitor who signed in.
+    The hourly reset bounds that window; it does not close it.
+
+    That is a hazard for visitors rather than for the instance owner, which is
+    exactly why it is easy to miss: nothing about the operator's own data is at
+    risk, so nothing complains.
+
+    Checked in the same order as brokerage.py's guard — the row-level flag
+    first, because it travels with the data and holds even if this database is
+    started without WC_DEMO_MODE set.
+    """
+    if getattr(user, "is_test_user", False):
+        raise HTTPException(
+            status_code=503,
+            detail="This is a shared demo account. Statement import is disabled "
+                   "for it — anything uploaded would be visible to other visitors.",
+        )
+    if DEMO_MODE:
+        raise HTTPException(
+            status_code=503,
+            detail="Statement import is disabled in demo mode.",
+        )
+
 
 class StatementRequest(BaseModel):
     text: str
@@ -27,6 +61,7 @@ def parse_statement_import_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_import_access(current_user)
     # An upload belongs to whoever is logged in. Every row written below is
     # stamped through the scope rather than by hand, so an added field or an
     # extra insert cannot quietly land in another account.
