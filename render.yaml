@@ -10,8 +10,15 @@
 # migrate, because there is no persistent database.
 
 services:
+  # Becomes the public hostname: https://wealthcompass.onrender.com
+  #
+  # Render subdomains are globally unique across all customers, and there is no
+  # way to check availability from outside — onrender.com answers every unclaimed
+  # name with the same 404, so a probe cannot distinguish "free" from "taken".
+  # If the dashboard rejects this at creation time, edit the name here and push;
+  # nothing else in the deployment depends on it.
   - type: web
-    name: wealthcompass-demo
+    name: wealthcompass
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
