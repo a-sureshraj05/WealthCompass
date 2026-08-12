@@ -1,0 +1,46 @@
+# Render blueprint for the WealthCompass PUBLIC DEMO.
+#
+# Free plan, no payment details required. Fabricated data only — see
+# docs/CLOUD_LAUNCH.md and the guards in .dockerignore, Dockerfile, and
+# backend/scripts/seed_demo.py.
+#
+# Nothing here locks the project to Render. The Dockerfile is the whole
+# deployment; moving to Koyeb, Cloud Run or Fly means writing that platform's
+# config file and pointing it at the same image. There is no database to
+# migrate, because there is no persistent database.
+
+services:
+  - type: web
+    name: wealthcompass-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # Render injects PORT and requires the container to listen on it. The
+    # Dockerfile's CMD reads ${PORT:-8000} for exactly this reason.
+    healthCheckPath: /healthz
+
+    envVars:
+      - key: WC_DEMO_MODE
+        value: "true"
+
+      # The free plan sleeps after ~15 minutes of inactivity, so a wall-clock
+      # hourly reset rarely fires — the process is usually not running to fire
+      # it. That is fine: a cold start restores the baked template, so waking up
+      # IS the reset. The loop stays enabled for the case where traffic keeps
+      # the instance alive long enough to matter.
+      - key: WC_DEMO_RESET_MINUTES
+        value: "60"
+
+      # Without a stable secret, auth.py generates a random signing key per
+      # process and every visitor is logged out on each restart — which, on a
+      # plan that sleeps, means constantly. generateValue makes Render create
+      # one once and keep it.
+      - key: JWT_SECRET
+        generateValue: true
+
+      # Shorter than the local 24h default. A demo session has no reason to
+      # outlive the instance that issued it.
+      - key: JWT_EXPIRE_MINUTES
+        value: "120"
