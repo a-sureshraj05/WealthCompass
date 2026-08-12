@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Everything below moved out of index.html's inline <style> block when the
+   Tailwind CDN was replaced with a real build. The rules are unchanged — only
+   their location — so the behaviour each one describes still holds. */
+
+@layer base {
+    /* The app shell is h-screen and scrolls internally via <main>, so the
+       document itself must never scroll. Without an explicit height chain
+       down to #root, the shell's 100vh is the only anchor and anything that
+       makes the document even slightly taller lets the body scroll — which
+       drags the whole shell up and exposes page background beneath it. */
+    html, body, #root {
+        height: 100%;
+    }
+
+    body {
+        margin: 0;
+        overflow: hidden;
+        font-family: 'Inter', sans-serif;
+        background-color: #F5F5F7;
+    }
+
+    html {
+        font-size: 90%;
+    }
+
+    /* iOS Safari zooms the whole page in when a form control smaller than
+       16px takes focus, and never zooms back out. In a single-page app that
+       zoom then follows you to every other tab, which reads as a broken
+       layout rather than as zoom. Forcing 16px at touch widths prevents the
+       gesture from ever firing.
+       !important because Tailwind's text-sm / text-[11px] sit on the
+       elements themselves and would win on specificity. Checkboxes and
+       radios are excluded — font-size doesn't affect them and changing it
+       would only shift their alignment. */
+    @media (max-width: 1023px) {
+        input:not([type="checkbox"]):not([type="radio"]),
+        select,
+        textarea {
+            font-size: 16px !important;
+        }
+    }
+}
+
+@layer components {
+    .font-display {
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    /* Clears the fixed MobileTabBar: its 56px row plus the home-indicator
+       inset, plus a little breathing room. Derived from the bar's real
+       height rather than a round number, so there's no dead space under
+       the last card. Uses px for the bar because the root font-size is 90%
+       above, which would make a rem-based figure ~10% short.
+       Written here rather than as a Tailwind class because `md:p-8` on the
+       same element is a shorthand that resets every side, and would knock
+       the bottom clearance out between md and lg — where the bar is still
+       visible. */
+    .pb-tabbar {
+        padding-bottom: calc(56px + env(safe-area-inset-bottom) + 1rem);
+    }
+
+    @media (min-width: 1024px) {
+        /* Tab bar is lg:hidden, so fall back to the normal page padding. */
+        .pb-tabbar { padding-bottom: 2rem; }
+    }
+}
