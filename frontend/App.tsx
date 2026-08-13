@@ -48,6 +48,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [unrealizedGains, setUnrealizedGains] = useState<UnrealizedLot[]>([]);
   const [loading, setLoading] = useState(false);
   const [numbersVisible, setNumbersVisible] = useState(true);
+  // Incremented by an explicit refresh so the insights panel knows to
+  // regenerate. A deliberate user action, unlike a page load, so it is a safe
+  // thing to spend on — and the backend cooldown still bounds repeat clicks.
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [activeTab, setActiveTab] = useState<'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses'>('dashboardView');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const transactionsDirty = React.useRef(false);
@@ -365,7 +369,8 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             unrealizedGains={unrealizedGains}
             stats={stats}
             onAddTransactions={handleAddTransactions}
-            onRefresh={() => { Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower()]); refreshAnalystData(); refreshLivePrices(); }}
+            refreshNonce={refreshNonce}
+            onRefresh={() => { Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower()]); refreshAnalystData(); refreshLivePrices(); setRefreshNonce(n => n + 1); }}
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
             onSoftDeleteTransaction={handleSoftDeleteTransaction}

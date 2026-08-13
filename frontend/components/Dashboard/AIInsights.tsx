@@ -5,6 +5,13 @@ import AIChat from './AIChat';
 
 interface Props {
   holdings: StockHolding[];
+  /**
+   * Bumped when the user explicitly refreshes data. Distinct from the staleness
+   * check: that one fires when the *portfolio* changed, while this fires because
+   * the person asked for fresh everything — including after a price-only refresh,
+   * which deliberately does not count as a portfolio change.
+   */
+  refreshNonce?: number;
 }
 
 /**
@@ -15,7 +22,7 @@ interface Props {
  * generated from a useEffect on `holdings`, which would bill once per page load
  * per visitor — untenable on an instance whose credentials are published.
  */
-const AIInsights: React.FC<Props> = ({ holdings }) => {
+const AIInsights: React.FC<Props> = ({ holdings, refreshNonce = 0 }) => {
   const [insights, setInsights] = useState<string>('');
   const [generatedAt, setGeneratedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,6 +85,17 @@ const AIInsights: React.FC<Props> = ({ holdings }) => {
       setGenerating(false);
     }
   }, []);
+
+  // An explicit refresh regenerates regardless of staleness — the user asked for
+  // current everything. Skips the first run so mounting does not double up with
+  // the staleness check above.
+  const lastRefresh = useRef(refreshNonce);
+  useEffect(() => {
+    if (refreshNonce === lastRefresh.current) return;
+    lastRefresh.current = refreshNonce;
+    if (holdings.length > 0) void handleGenerate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshNonce]);
 
   const insightLines = insights
     .split('\n')

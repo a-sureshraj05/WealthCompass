@@ -21,6 +21,8 @@ interface Props {
   stats: PortfolioStats;
   onAddTransactions: (t: Transaction[]) => void;
   onRefresh: () => void | Promise<unknown>;
+  /** Bumped on an explicit refresh; AIInsights regenerates when it changes. */
+  refreshNonce: number;
   onRemoveHolding: (id: string) => void;
   onRemoveTransaction: (id: string) => void;
   onSoftDeleteTransaction: (id: string, isDeleted: boolean) => void;
@@ -54,6 +56,7 @@ const DashboardView: React.FC<Props> = ({
   stats,
   onAddTransactions,
   onRefresh,
+  refreshNonce,
   onRemoveHolding,
   onRemoveTransaction,
   onSoftDeleteTransaction,
@@ -209,7 +212,7 @@ const DashboardView: React.FC<Props> = ({
         </div>
 
         <div>
-          <AIInsights holdings={holdings} />
+          <AIInsights holdings={holdings} refreshNonce={refreshNonce} />
         </div>
       </div>
 

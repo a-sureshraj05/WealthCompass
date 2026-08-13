@@ -128,7 +128,7 @@ class InsightsUnavailable(Exception):
 
 
 def fingerprint(holdings: List[Any], realized_count: int = 0,
-                long_term_lots: int = 0) -> str:
+                long_term_lots: int = 0, sectors_known: int = 0) -> str:
     """Identify the portfolio a cached insight describes, so staleness is detectable.
 
     Deliberately built from data that does **not** move with price: which
@@ -161,6 +161,11 @@ def fingerprint(holdings: List[Any], realized_count: int = 0,
         # A lot crossing into long-term changes the tax answer with no trade and
         # no price move, so the calendar has to be part of the identity.
         "long_term_lots": long_term_lots,
+        # Sectors arrive asynchronously from the analyst cache. Until they do,
+        # the analysis can only reason by ticker; once they land it can discuss
+        # sector concentration, which is a genuinely better answer and worth
+        # regenerating for.
+        "sectors_known": sectors_known,
     }
     return hashlib.sha256(
         json.dumps(structure, sort_keys=True, default=str).encode()

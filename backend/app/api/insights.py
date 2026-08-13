@@ -93,11 +93,14 @@ def _fingerprint(scope: UserScope) -> Optional[str]:
     holdings = scope.query(Holding).all()
     if not holdings:
         return None
+    summary = scope.query(PortfolioSummary).first()
+    sectors = insights_core._sector_map(summary.analyst_json if summary else None)
     return insights_core.fingerprint(
         holdings,
         realized_count=scope.query(RealizedGain).count(),
         long_term_lots=scope.query(UnrealizedGain).filter(
             UnrealizedGain.isLongTerm == True).count(),  # noqa: E712
+        sectors_known=sum(1 for h in holdings if sectors.get(h.ticker)),
     )
 
 
