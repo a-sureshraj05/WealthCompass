@@ -169,7 +169,7 @@ must not be a hard requirement.
 **3.9 — the import hazard (new).** `manual_import` *persists* what it parses, and the demo publishes
 its passwords, so its accounts are shared by every visitor at once. Without a guard, one visitor
 uploading a real brokerage statement would have it written to a shared account and shown to the next
-visitor who signed in. The hourly reset bounds that window without closing it.
+visitor who signed in. The periodic reset bounds that window without closing it.
 
 This is easy to miss because nothing about the *operator's* data is at risk — the exposure is
 between visitors, so nothing complains. The guard sits above the endpoint's opening `delete_all()`,
@@ -212,7 +212,7 @@ price — the option would silently vanish from the demo.
 
 - **On boot:** `demo_reset.seed_if_empty()` restores the baked template if the database has no users.
   Falls back to a live seed if no template exists, which is what happens locally.
-- **On an interval:** `WC_DEMO_RESET_MINUTES` (default 60) re-runs the full seed in a daemon thread.
+- **On an interval:** `WC_DEMO_RESET_MINUTES` (default 720 — 12 hours) re-runs the full seed in a daemon thread.
   Exceptions are logged rather than propagated — a failed reset should leave the previous data in
   place and retry next interval, not kill the thread and silently stop resetting.
 
@@ -229,7 +229,7 @@ Set in `render.yaml`:
 | Name | Value | Notes |
 |---|---|---|
 | `WC_DEMO_MODE` | `true` | Gates brokerage (503), import (503), registration (403); disables the `tickers.yml` allowlist; unlocks the seed script |
-| `WC_DEMO_RESET_MINUTES` | `60` | 0 disables the loop, leaving boot restore in place |
+| `WC_DEMO_RESET_MINUTES` | `720` | 12 hours. 0 disables the loop, leaving boot restore in place |
 | `JWT_SECRET` | `generateValue: true` | **Required.** Without it `auth.py` generates a random key per process and every visitor is logged out on each restart — constantly, on a plan that sleeps |
 | `JWT_EXPIRE_MINUTES` | `120` | Shorter than the local 24h; a demo session has no reason to outlive its instance |
 | `DATABASE_URL` | set in the Dockerfile | Must be explicit: the app default contains `wealthcompass.db`, which the seed guard refuses by design |

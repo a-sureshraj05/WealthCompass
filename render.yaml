@@ -38,13 +38,14 @@ services:
       - key: WC_DEMO_MODE
         value: "true"
 
-      # The free plan sleeps after ~15 minutes of inactivity, so a wall-clock
-      # hourly reset rarely fires — the process is usually not running to fire
-      # it. That is fine: a cold start restores the baked template, so waking up
-      # IS the reset. The loop stays enabled for the case where traffic keeps
-      # the instance alive long enough to matter.
+      # 720 minutes = 12 hours. The free plan sleeps after ~15 minutes of
+      # inactivity, so this wall-clock timer almost never fires — the process is
+      # usually not running to fire it. That is fine: a cold start restores the
+      # baked template, so waking up IS the reset, and in practice the demo
+      # resets far more often than every 12 hours. The timer only matters when
+      # traffic keeps the instance alive continuously.
       - key: WC_DEMO_RESET_MINUTES
-        value: "60"
+        value: "720"
 
       # Without a stable secret, auth.py generates a random signing key per
       # process and every visitor is logged out on each restart — which, on a

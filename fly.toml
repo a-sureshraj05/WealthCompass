@@ -2,7 +2,7 @@
 #
 # This deploys fabricated data only. There is no volume and no Postgres: the
 # database is SQLite on the machine's ephemeral filesystem, re-seeded at boot and
-# hourly thereafter. Nothing here persists across a restart, which is the point.
+# every 12 hours thereafter. Nothing here persists across a restart, which is the point.
 #
 # `app` must be globally unique across Fly. Change it if `fly launch` reports the
 # name is taken. Kept in step with render.yaml so the hostname does not change
@@ -22,7 +22,7 @@ primary_region = "iad"
   # (auth.py), blocks brokerage routes, disables the tickers.yml allowlist, and
   # unlocks the seed script's guards.
   WC_DEMO_MODE = "true"
-  WC_DEMO_RESET_MINUTES = "60"
+  WC_DEMO_RESET_MINUTES = "720"
 
 [http_service]
   internal_port = 8000

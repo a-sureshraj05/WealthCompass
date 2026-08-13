@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 DEMO_MODE = os.getenv("WC_DEMO_MODE", "").lower() == "true"
 # 0 disables the loop and leaves boot-time seeding in place — useful locally,
 # where `./server.sh demo` wants a stable database to poke at.
-RESET_MINUTES = int(os.getenv("WC_DEMO_RESET_MINUTES", "60"))
+RESET_MINUTES = int(os.getenv("WC_DEMO_RESET_MINUTES", "720"))
 
 # Set by the Dockerfile to the database baked at build time. Absent locally,
 # where seeding live is fine and there is no cold start to optimise for.

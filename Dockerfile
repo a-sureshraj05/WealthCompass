@@ -72,7 +72,7 @@ RUN set -eu; \
 # Yahoo Finance for live quotes. Baked, the container is serving immediately.
 #
 # Prices in this file are as of build time. That is cosmetic — the app refreshes
-# quotes on demand, and the hourly reset re-seeds live (see demo_reset.py).
+# quotes on demand, and the periodic reset re-seeds live (see demo_reset.py).
 RUN mkdir -p /app/seed \
     && WC_DEMO_MODE=true \
        DATABASE_URL=sqlite:////app/seed/demo.db \
@@ -93,7 +93,7 @@ RUN mkdir -p /app/seed \
 ENV WC_DEMO_MODE=true \
     DATABASE_URL=sqlite:////app/rundata/demo.db \
     WC_DEMO_TEMPLATE_DB=/app/seed/demo.db \
-    WC_DEMO_RESET_MINUTES=60 \
+    WC_DEMO_RESET_MINUTES=720 \
     PYTHONPATH=/app
 
 # Non-root. The app writes only to rundata/, which is chowned to match. The
