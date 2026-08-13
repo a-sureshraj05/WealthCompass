@@ -32,6 +32,39 @@ interface Props {
  */
 const CURRENCY_PATTERN = /(\$\s?\d|\d[\d,]*\s?(dollars|usd|k\b|million|m\b)|\b\d{4,}\b)/i;
 
+/**
+ * Render an assistant line, tolerating markdown the model was asked not to use.
+ *
+ * The prompt says plain text, and mostly that holds — but "mostly" renders as
+ * literal `**TSLA**` in the bubble when it doesn't, which looks broken. Rather
+ * than pull in a markdown library for a side panel, this handles the two things
+ * that actually show up: bold spans become bold, and leftover heading marks and
+ * backticks are dropped.
+ *
+ * Anything it doesn't recognise falls through as plain text, so an unexpected
+ * construct degrades to readable rather than mangled.
+ */
+const renderLine = (line: string, key: number) => {
+  const cleaned = line.replace(/^#{1,6}\s*/, '').replace(/`/g, '');
+  const parts = cleaned.split(/\*\*(.+?)\*\*/g);
+  return (
+    <span key={key}>
+      {parts.map((part, i) =>
+        // split() puts captured groups at odd indices — those were bold.
+        i % 2 === 1 ? <strong key={i} className="font-semibold">{part}</strong> : part
+      )}
+    </span>
+  );
+};
+
+const renderContent = (content: string) =>
+  content.split('\n').map((line, i, all) => (
+    <React.Fragment key={i}>
+      {renderLine(line, i)}
+      {i < all.length - 1 && <br />}
+    </React.Fragment>
+  ));
+
 const AIChat: React.FC<Props> = ({ open, onClose }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -130,10 +163,10 @@ const AIChat: React.FC<Props> = ({ open, onClose }) => {
                 className={
                   m.role === 'user'
                     ? 'max-w-[85%] rounded-lg bg-[#0F52BA] px-3 py-2 text-xs leading-relaxed text-white'
-                    : 'max-w-[85%] rounded-lg border border-[#D2D2D7] bg-[#F5F5F7] px-3 py-2 text-xs leading-relaxed text-slate-700 whitespace-pre-wrap'
+                    : 'max-w-[85%] rounded-lg border border-[#D2D2D7] bg-[#F5F5F7] px-3 py-2 text-xs leading-relaxed text-slate-700'
                 }
               >
-                {m.content}
+                {m.role === 'assistant' ? renderContent(m.content) : m.content}
               </div>
             </div>
           ))}

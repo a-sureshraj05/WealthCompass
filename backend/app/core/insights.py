@@ -55,10 +55,14 @@ sector or brokerage clustering, the spread between the best and worst performers
 how much of the portfolio a few names account for. Be specific and quantitative,
 citing the percentages you were given.
 
-When `holding_periods` is present and something there is genuinely notable — a
+When holding-period data is present and something there is genuinely notable — a
 sizeable position days away from long-term treatment, or an unusually large share
 still short-term — it is worth one of your observations. Do not spend one on it
 when nothing is close.
+
+Write plain text and never mention the data's structure: no field or section
+names, no markdown, no bullet characters. Each line is rendered verbatim as its
+own card, so any syntax you add shows up literally.
 
 Do not give buy, sell, or hold advice, and do not predict prices. Describe what
 the data shows, not what the person should do about it. Where something is
@@ -78,12 +82,22 @@ Answer from the data you were given. Be specific and cite the percentages. When 
 question cannot be answered from this digest — anything needing cost basis in
 dollars, or market data you were not given — say so plainly instead of guessing.
 
-`holding_periods` covers tax timing when it is present. It gives the share of the
-portfolio already long-term, and for each still-short-term lot how many days it
-has been held, how many remain, and the date it converts. Answer those questions
-directly from it. Note the same ticker can appear as several lots bought at
-different times, each converting on its own date, and that a written option never
-converts regardless of the calendar.
+Tax timing is covered when holding-period data is present: the share already
+long-term, and for each still-short-term lot how long it has been held, how many
+days remain, and the date it converts. Answer those questions directly. The same
+ticker can appear as several lots bought at different times, each converting on
+its own date, and a written option never converts regardless of the calendar.
+
+Never mention the data's structure. No field or section names, no "the digest
+says", no "I have/don't have that field". The person cannot see any of it and
+those names mean nothing to them — write as though you simply know their
+portfolio. When something genuinely is not available, say what is missing in
+their terms ("I don't have purchase prices"), not which key is absent.
+
+Write plain text. The panel renders exactly what you send, so markdown syntax
+appears literally: no **bold**, no ## headings, no tables, no backticks. For
+several items, one short line each is ideal — a dash and a plain sentence.
+Leading with the answer beats leading with a list.
 
 Do not give buy, sell, or hold recommendations, do not predict prices, and do not
 present yourself as a financial adviser. Describing what the composition shows,
@@ -249,7 +263,11 @@ def build_digest(
         positions.append({
             "ticker": h.ticker,
             "brokerage": h.brokerage,
-            "sector": sectors.get(h.ticker, "Unknown"),
+            # Omitted rather than sent as "Unknown": a placeholder is something
+            # the model has to notice, interpret, and then explain to the user
+            # ("sector data isn't itemized beyond Unknown"), which is worse than
+            # the field simply not being there.
+            **({"sector": sectors[h.ticker]} if sectors.get(h.ticker) else {}),
             "asset_type": h.assetType or "Equity",
             "portfolio_pct": round(market_value / total * 100, 1),
             "gain_pct": round(gain_pct, 1) if gain_pct is not None else None,
@@ -266,7 +284,8 @@ def build_digest(
     by_sector: Dict[str, float] = {}
     for p in positions:
         by_brokerage[p["brokerage"]] = by_brokerage.get(p["brokerage"], 0.0) + p["portfolio_pct"]
-        by_sector[p["sector"]] = by_sector.get(p["sector"], 0.0) + p["portfolio_pct"]
+        if p.get("sector"):
+            by_sector[p["sector"]] = by_sector.get(p["sector"], 0.0) + p["portfolio_pct"]
 
     digest: Dict[str, Any] = {
         "position_count": len(positions),
@@ -276,8 +295,10 @@ def build_digest(
             sum(p["portfolio_pct"] for p in positions[:5]), 1),
         "by_brokerage_pct": {k: round(v, 1) for k, v in
                              sorted(by_brokerage.items(), key=lambda kv: -kv[1])},
-        "by_sector_pct": {k: round(v, 1) for k, v in
-                          sorted(by_sector.items(), key=lambda kv: -kv[1])},
+        # Absent entirely when no sector is known — see the note above.
+        **({"by_sector_pct": {k: round(v, 1) for k, v in
+                              sorted(by_sector.items(), key=lambda kv: -kv[1])}}
+           if by_sector else {}),
         "positions": positions,
     }
 
