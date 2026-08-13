@@ -22,8 +22,11 @@ next reset clears it.
 """
 
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 MODEL = os.getenv("WC_INSIGHTS_MODEL", "claude-sonnet-5")
 
@@ -188,14 +191,30 @@ def generate(digest: Dict) -> str:
             }],
         )
     except anthropic.APIStatusError as exc:
-        # Distinguish the two the operator can actually act on; everything else
-        # is a generic message with the detail left to the server log.
+        # Always log the provider's own message. Collapsing it to a status code
+        # hides the one thing that says what to do — a 400 here is far more
+        # often "no credit balance" than a malformed request, and the operator
+        # cannot tell those apart from the number alone.
+        detail = getattr(exc, "message", "") or str(exc)
+        logger.warning("[insights] provider %s: %s", exc.status_code, detail)
+
         if exc.status_code == 401:
             raise InsightsUnavailable("The configured API key was rejected.")
         if exc.status_code == 429:
             raise InsightsUnavailable("Rate limited by the AI service — try again shortly.")
-        raise InsightsUnavailable(f"The AI service returned an error ({exc.status_code}).")
-    except anthropic.APIConnectionError:
+        if "credit balance" in detail.lower():
+            # Deliberately vague to the visitor. On the public demo the reader is
+            # a stranger, and "the owner is out of credit" is not their business —
+            # the actionable version is in the server log above.
+            raise InsightsUnavailable(
+                "AI insights are temporarily unavailable. Please try again later."
+            )
+        raise InsightsUnavailable(
+            f"The AI service rejected the request ({exc.status_code}). "
+            "Details are in the server log."
+        )
+    except anthropic.APIConnectionError as exc:
+        logger.warning("[insights] connection failure: %s", exc)
         raise InsightsUnavailable("Could not reach the AI service.")
 
     # A refusal is HTTP 200 with empty or partial content, so indexing content[0]
