@@ -99,10 +99,25 @@ appears literally: no **bold**, no ## headings, no tables, no backticks. For
 several items, one short line each is ideal — a dash and a plain sentence.
 Leading with the answer beats leading with a list.
 
-Do not give buy, sell, or hold recommendations, do not predict prices, and do not
-present yourself as a financial adviser. Describing what the composition shows,
-including risks visible in it, is fine and useful. Telling them what to do about
-it is not.
+Tax questions deserve real analysis, not a referral. When asked about harvesting
+losses, offsetting this year's gains, or the cost of selling something, do the
+arithmetic and lay out the consequences concretely: which lots are at a loss,
+what share of the year's realized gains they would offset, whether a loss is
+short- or long-term, and whether any wash-sale window blocks it. Compare the
+options and say which is mechanically more efficient and why.
+
+Weigh timing too. A position days away from long-term treatment is more expensive
+to sell now than shortly after, and a lot's size relative to the portfolio decides
+whether selling it materially changes the concentration picture. Say so.
+
+What you cannot know is their tax bracket, income, other accounts, and goals — so
+frame conclusions as what the numbers favour, not as instruction. Say it once, at
+the end, in a single clause; do not open with a disclaimer or repeat it. Never
+predict prices.
+
+You do not have dollar amounts, so you cannot say how many shares make up a given
+sum. Convert the other way instead: give the position's share of the portfolio and
+let them map it to the figure they have in mind.
 
 Keep answers short — a few sentences unless genuinely more is needed. This is a
 side panel, not a document."""
@@ -234,6 +249,102 @@ def _holding_periods(open_lots: List[Any]) -> Optional[Dict]:
     }
 
 
+def _tax_position(
+    realized: List[Any],
+    open_lots: List[Any],
+    total_value: float,
+    year: Optional[int] = None,
+) -> Optional[Dict]:
+    """This tax year's booked gains, and the open losses that could offset them.
+
+    Everything is expressed as a percentage of portfolio value — including the
+    realized figures. That common denominator is what makes the section useful
+    without dollars: a loss and a gain measured against the same base can be
+    compared directly, so "this loss covers most of that gain" is answerable
+    while neither number reveals what the portfolio is worth.
+
+    Short- and long-term are kept apart because they are taxed differently and
+    losses offset their own character first. Wash-sale flags ride along, since a
+    loss that cannot currently be claimed is not really harvestable.
+    """
+    if total_value <= 0:
+        return None
+
+    year = year or datetime.now().year
+    pct = lambda amount: round(amount / total_value * 100, 2)
+
+    booked_short = 0.0
+    booked_long = 0.0
+    disallowed = 0.0
+    for row in realized or []:
+        sell_date = getattr(row, "sellDate", None)
+        if sell_date is None or sell_date.year != year:
+            continue
+        gain = row.gain or 0.0
+        if row.isLongTerm:
+            booked_long += gain
+        else:
+            booked_short += gain
+        disallowed += getattr(row, "wash_sale_disallowed_amount", 0.0) or 0.0
+
+    harvestable = []
+    for lot in open_lots or []:
+        unrealized = lot.unrealizedGain or 0.0
+        if unrealized >= 0:
+            continue
+        value = _lot_value(lot)
+        cost = value - unrealized  # what it would have been worth flat
+        harvestable.append({
+            "ticker": lot.ticker,
+            "brokerage": lot.brokerage,
+            "asset_type": lot.assetType or "Equity",
+            "term": "long" if lot.isLongTerm else "short",
+            "portfolio_pct": round(value / total_value * 100, 1),
+            "loss_pct_of_position": round(unrealized / cost * 100, 1) if cost > 0 else None,
+            "loss_pct_of_portfolio": pct(abs(unrealized)),
+            # A loss inside its wash-sale window cannot be claimed now — the date
+            # is when it becomes claimable again.
+            "wash_sale_blocked": bool(getattr(lot, "wash_sale_at_risk", False)),
+            "wash_sale_clear_date": (
+                lot.wash_sale_clear_date.strftime("%Y-%m-%d")
+                if getattr(lot, "wash_sale_clear_date", None) else None
+            ),
+        })
+
+    harvestable.sort(key=lambda lot: -lot["loss_pct_of_portfolio"])
+
+    if not harvestable and not booked_short and not booked_long:
+        return None
+
+    claimable = sum(
+        lot["loss_pct_of_portfolio"] for lot in harvestable if not lot["wash_sale_blocked"]
+    )
+    net_booked = pct(booked_short + booked_long)
+
+    return {
+        "note": (
+            "All figures are percentages of current portfolio value, so gains and "
+            "losses can be compared directly. Losses offset gains of their own "
+            "character first (short against short, long against long) before "
+            "crossing over. A wash-sale-blocked loss cannot be claimed until its "
+            "clear date."
+        ),
+        "tax_year": year,
+        "realized_short_term_pct_of_portfolio": pct(booked_short),
+        "realized_long_term_pct_of_portfolio": pct(booked_long),
+        "realized_net_pct_of_portfolio": net_booked,
+        "wash_sale_disallowed_pct_of_portfolio": pct(disallowed) if disallowed else 0.0,
+        "claimable_loss_pct_of_portfolio": round(claimable, 2),
+        # The single number the "can I neutralise this year's gains" question
+        # turns on. None when nothing was booked — there is nothing to offset.
+        "claimable_losses_cover_pct_of_realized_gain": (
+            round(claimable / net_booked * 100, 1)
+            if net_booked > 0 and claimable > 0 else None
+        ),
+        "harvestable_losses": harvestable,
+    }
+
+
 def build_digest(
     holdings: List[Any],
     sectors: Optional[Dict[str, str]] = None,
@@ -305,6 +416,10 @@ def build_digest(
     periods = _holding_periods(open_lots or [])
     if periods:
         digest["holding_periods"] = periods
+
+    tax = _tax_position(realized or [], open_lots or [], total)
+    if tax:
+        digest["tax_position"] = tax
 
     # Realized history as counts and ratios only — how many closed lots, and how
     # they split by tax character. Never the amounts.

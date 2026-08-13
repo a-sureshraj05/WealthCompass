@@ -175,6 +175,125 @@ def test_holding_periods_absent_when_no_lots(scope):
     assert "holding_periods" not in digest
 
 
+# --- tax position ---------------------------------------------------------
+
+def _realized(ticker, gain, is_long_term, year=None, disallowed=0.0):
+    from datetime import datetime
+    year = year or datetime.now().year
+    return RealizedGain(
+        user_id=1, ticker=ticker, brokerage="Robinhood", gain=gain,
+        isLongTerm=is_long_term, sellDate=datetime(year, 6, 1),
+        wash_sale_disallowed_amount=disallowed,
+    )
+
+
+def _losing_lot(ticker, unrealized, is_long_term=False, blocked=False, price=100.0):
+    from datetime import date, datetime, timedelta
+    return UnrealizedGain(
+        user_id=1, ticker=ticker, brokerage="Robinhood",
+        buyDate=datetime.now() - timedelta(days=30),
+        quantity=1.0, buyPrice=price, currentPrice=price,
+        unrealizedGain=unrealized, isLongTerm=is_long_term, assetType="Equity",
+        wash_sale_at_risk=blocked,
+        wash_sale_clear_date=date(2027, 1, 1) if blocked else None,
+    )
+
+
+def test_tax_position_separates_short_and_long_term_realized(scope):
+    """They are taxed differently and losses offset their own character first."""
+    digest = insights.build_digest(
+        scope.query(Holding).all(),
+        realized=[_realized("A", 500.0, True), _realized("B", 200.0, False)],
+        open_lots=[_losing_lot("C", -100.0)],
+    )
+    tax = digest["tax_position"]
+
+    # Fixture portfolio totals $10,000.
+    assert tax["realized_long_term_pct_of_portfolio"] == 5.0    # 500/10000
+    assert tax["realized_short_term_pct_of_portfolio"] == 2.0   # 200/10000
+    assert tax["realized_net_pct_of_portfolio"] == 7.0
+
+
+def test_tax_position_ignores_prior_years(scope):
+    """'This year's gains' must not silently include last year's."""
+    from datetime import datetime
+    digest = insights.build_digest(
+        scope.query(Holding).all(),
+        realized=[
+            _realized("THIS", 300.0, False),
+            _realized("LAST", 900.0, False, year=datetime.now().year - 1),
+        ],
+        open_lots=[_losing_lot("C", -100.0)],
+    )
+    assert digest["tax_position"]["realized_short_term_pct_of_portfolio"] == 3.0
+
+
+def test_wash_sale_blocked_losses_are_not_counted_as_claimable(scope):
+    """A loss inside its wash-sale window cannot be claimed, so it isn't harvestable."""
+    digest = insights.build_digest(
+        scope.query(Holding).all(),
+        realized=[_realized("A", 1000.0, False)],
+        open_lots=[
+            _losing_lot("FREE", -200.0),
+            _losing_lot("BLOCKED", -800.0, blocked=True),
+        ],
+    )
+    tax = digest["tax_position"]
+
+    # Both are listed — the user should see the blocked one and its clear date —
+    # but only the claimable one counts toward the offset.
+    assert len(tax["harvestable_losses"]) == 2
+    assert tax["claimable_loss_pct_of_portfolio"] == 2.0        # 200/10000 only
+    blocked = next(h for h in tax["harvestable_losses"] if h["ticker"] == "BLOCKED")
+    assert blocked["wash_sale_blocked"] is True
+    assert blocked["wash_sale_clear_date"] == "2027-01-01"
+
+
+def test_coverage_ratio_answers_can_i_neutralise_this_years_gains(scope):
+    """The single number the harvesting question turns on."""
+    digest = insights.build_digest(
+        scope.query(Holding).all(),
+        realized=[_realized("A", 1000.0, False)],          # 10% of portfolio
+        open_lots=[_losing_lot("C", -400.0)],              # 4% of portfolio
+    )
+    assert digest["tax_position"]["claimable_losses_cover_pct_of_realized_gain"] == 40.0
+
+
+def test_coverage_is_none_when_nothing_was_realized(scope):
+    """No gains booked means there is nothing to offset — not 0%, not infinity."""
+    digest = insights.build_digest(
+        scope.query(Holding).all(), realized=[], open_lots=[_losing_lot("C", -400.0)])
+    assert digest["tax_position"]["claimable_losses_cover_pct_of_realized_gain"] is None
+
+
+def test_tax_position_carries_no_dollar_amounts(scope):
+    """Same privacy rule as the rest of the digest."""
+    digest = insights.build_digest(
+        scope.query(Holding).all(),
+        realized=[_realized("A", 1234.0, True)],
+        open_lots=[_losing_lot("C", -567.0)],
+    )
+    flat = repr(digest["tax_position"])
+    assert "1234" not in flat and "567" not in flat
+
+
+def test_profitable_lots_are_not_offered_as_harvestable(scope):
+    from datetime import datetime, timedelta
+    winner = UnrealizedGain(
+        user_id=1, ticker="WIN", brokerage="Robinhood",
+        buyDate=datetime.now() - timedelta(days=30), quantity=1.0,
+        buyPrice=50.0, currentPrice=100.0, unrealizedGain=50.0,
+        isLongTerm=False, assetType="Equity",
+    )
+    digest = insights.build_digest(
+        scope.query(Holding).all(),
+        realized=[_realized("A", 100.0, False)],
+        open_lots=[winner, _losing_lot("LOSS", -10.0)],
+    )
+    tickers = {h["ticker"] for h in digest["tax_position"]["harvestable_losses"]}
+    assert tickers == {"LOSS"}
+
+
 def test_realized_history_is_counts_and_ratios_only(scope):
     """Closed lots may inform the analysis, but never by their amounts."""
     realized = [
