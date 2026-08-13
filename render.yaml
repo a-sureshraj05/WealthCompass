@@ -10,15 +10,21 @@
 # migrate, because there is no persistent database.
 
 services:
-  # Becomes the public hostname: https://wealthcompass.onrender.com
+  # Becomes the public hostname: https://wealthcompass-demo.onrender.com
   #
-  # Render subdomains are globally unique across all customers, and there is no
-  # way to check availability from outside — onrender.com answers every unclaimed
-  # name with the same 404, so a probe cannot distinguish "free" from "taken".
-  # If the dashboard rejects this at creation time, edit the name here and push;
-  # nothing else in the deployment depends on it.
+  # Plain "wealthcompass" was already claimed by another Render customer — the
+  # first deploy silently became wealthcompass-iy9v.onrender.com, which is what
+  # Render does on a collision rather than failing.
+  #
+  # Subdomains are globally unique across all customers and cannot be checked
+  # from outside: onrender.com answers every unclaimed name with the same 404 as
+  # a claimed one. So this name may collide too and pick up its own suffix.
+  #
+  # Changing this renames the service in the Blueprint; the URL follows the name,
+  # and the previous URL stops resolving. Nothing else in the deployment depends
+  # on it.
   - type: web
-    name: wealthcompass
+    name: wealthcompass-demo
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile

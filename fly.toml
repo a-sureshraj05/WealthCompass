@@ -7,7 +7,7 @@
 # `app` must be globally unique across Fly. Change it if `fly launch` reports the
 # name is taken. Kept in step with render.yaml so the hostname does not change
 # if this ever becomes the live platform.
-app = "wealthcompass"
+app = "wealthcompass-demo"
 
 # Ashburn, Virginia. Change to the region nearest your audience — `fly platform
 # regions` lists them. Latency is the only thing this affects.
