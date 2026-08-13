@@ -310,6 +310,63 @@ def test_realized_history_is_counts_and_ratios_only(scope):
     assert "1234" not in repr(digest) and "99.99" not in repr(digest)
 
 
+# --- staleness fingerprint ------------------------------------------------
+#
+# This decides whether the app regenerates per data change or per price
+# refresh. Getting it wrong is not a visible bug — it just quietly bills more.
+
+def test_price_changes_do_not_invalidate_the_cache(scope):
+    """A quote tick must not look like a new portfolio.
+
+    An earlier version hashed rounded percentages; a 0.2% move was enough to flip
+    it, because every weight is a share of the same total and one only has to sit
+    near a rounding boundary.
+    """
+    holdings = scope.query(Holding).all()
+    before = insights.fingerprint(holdings)
+
+    for h in holdings:
+        h.marketValue = (h.marketValue or 0) * 1.002   # small drift
+        h.currentPrice = (h.currentPrice or 0) * 1.002
+    scope.db.commit()
+    assert insights.fingerprint(scope.query(Holding).all()) == before
+
+    for h in scope.query(Holding).all():
+        h.marketValue = (h.marketValue or 0) * 3       # and a large move
+    scope.db.commit()
+    assert insights.fingerprint(scope.query(Holding).all()) == before
+
+
+def test_trading_invalidates_the_cache(scope):
+    before = insights.fingerprint(scope.query(Holding).all())
+
+    aapl = scope.query(Holding).filter(Holding.ticker == "AAPL").first()
+    aapl.quantity = (aapl.quantity or 0) + 1
+    scope.db.commit()
+
+    assert insights.fingerprint(scope.query(Holding).all()) != before
+
+
+def test_a_new_position_invalidates_the_cache(scope):
+    before = insights.fingerprint(scope.query(Holding).all())
+    scope.add(_holding(1, "TSLA", "Schwab", 1000.0, 800.0))
+    scope.db.commit()
+    assert insights.fingerprint(scope.query(Holding).all()) != before
+
+
+def test_a_lot_turning_long_term_invalidates_the_cache(scope):
+    """The tax answer changes with the calendar, with no trade and no price move."""
+    holdings = scope.query(Holding).all()
+    assert (insights.fingerprint(holdings, long_term_lots=3)
+            != insights.fingerprint(holdings, long_term_lots=4))
+
+
+def test_closing_a_lot_invalidates_the_cache(scope):
+    holdings = scope.query(Holding).all()
+    assert (insights.fingerprint(holdings, realized_count=2)
+            != insights.fingerprint(holdings, realized_count=3))
+
+
 # --- cost controls --------------------------------------------------------
 
 @pytest.fixture()

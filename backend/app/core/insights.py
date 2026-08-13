@@ -127,6 +127,46 @@ class InsightsUnavailable(Exception):
     """Insights cannot be produced. The message is shown to the user verbatim."""
 
 
+def fingerprint(holdings: List[Any], realized_count: int = 0,
+                long_term_lots: int = 0) -> str:
+    """Identify the portfolio a cached insight describes, so staleness is detectable.
+
+    Deliberately built from data that does **not** move with price: which
+    positions exist, at which brokerage, in what quantity, plus how many lots are
+    closed and how many have crossed into long-term. Trading, importing, syncing
+    or resetting changes those; a quote tick does not.
+
+    An earlier version hashed rounded percentages, on the theory that coarse
+    buckets would absorb drift. They do not. Every position's weight is a share
+    of the same total, so a fraction-of-a-percent move in the largest holding
+    nudges all of them, and it only takes one sitting near a rounding boundary to
+    flip the hash. Measured: a 0.2% tick invalidated the cache. Coarser buckets
+    move the boundaries without removing them — the fix is to not depend on
+    prices at all.
+
+    The cost of that choice: a large price move alone will not trigger a refresh.
+    That is the right trade for a composition summary, and the button is still
+    there for anyone who disagrees in the moment.
+    """
+    import hashlib
+
+    structure = {
+        "positions": sorted(
+            (h.ticker, h.brokerage, h.assetType or "Equity",
+             # Rounded only to absorb float representation noise, not real change.
+             round(h.quantity or 0.0, 6))
+            for h in holdings
+        ),
+        "closed_lots": realized_count,
+        # A lot crossing into long-term changes the tax answer with no trade and
+        # no price move, so the calendar has to be part of the identity.
+        "long_term_lots": long_term_lots,
+    }
+    return hashlib.sha256(
+        json.dumps(structure, sort_keys=True, default=str).encode()
+    ).hexdigest()[:16]
+
+
 def _sector_map(analyst_json: Optional[str]) -> Dict[str, str]:
     """ticker → sector, from the cached analyst payload.
 

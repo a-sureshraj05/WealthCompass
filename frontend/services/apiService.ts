@@ -184,6 +184,8 @@ export interface PortfolioInsights {
   generated_at: number | null;
   available: boolean;
   reason: string | null;
+  /** The portfolio changed since this text was written (or nothing is cached). */
+  stale: boolean;
 }
 
 /**

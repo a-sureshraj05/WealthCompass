@@ -65,9 +65,40 @@ class InsightsResponse(BaseModel):
     text: Optional[str] = None
     generated_at: Optional[float] = None
     available: bool = True
+    # True when the portfolio has changed since this text was written, so the UI
+    # can refresh it once rather than showing an answer about a portfolio that no
+    # longer exists. Also true when nothing is cached at all.
+    stale: bool = False
     # Populated instead of `text` when generation is impossible — no API key
     # configured, nothing to analyse. The UI shows this rather than an error.
     reason: Optional[str] = None
+
+
+def _build_digest(scope: UserScope):
+    """The digest for this user, or None when there is nothing to analyse."""
+    holdings = scope.query(Holding).all()
+    if not holdings:
+        return None
+    summary = scope.query(PortfolioSummary).first()
+    return insights_core.build_digest(
+        holdings,
+        sectors=insights_core._sector_map(summary.analyst_json if summary else None),
+        realized=scope.query(RealizedGain).all(),
+        open_lots=scope.query(UnrealizedGain).all(),
+    )
+
+
+def _fingerprint(scope: UserScope) -> Optional[str]:
+    """Identity of the current portfolio, for detecting a stale cached insight."""
+    holdings = scope.query(Holding).all()
+    if not holdings:
+        return None
+    return insights_core.fingerprint(
+        holdings,
+        realized_count=scope.query(RealizedGain).count(),
+        long_term_lots=scope.query(UnrealizedGain).filter(
+            UnrealizedGain.isLongTerm == True).count(),  # noqa: E712
+    )
 
 
 def _read_cache(scope: UserScope) -> Optional[dict]:
@@ -93,12 +124,18 @@ def _write_cache(scope: UserScope, payload: dict) -> None:
 def get_insights_cached(scope: UserScope = Depends(get_user_scope)):
     """Last generated insights, or an empty response. Never calls the AI service."""
     cached = _read_cache(scope)
-    if cached:
-        return InsightsResponse(
-            text=cached.get("text"),
-            generated_at=cached.get("generated_at"),
-        )
-    return InsightsResponse(text=None)
+    if not cached:
+        return InsightsResponse(text=None, stale=True)
+
+    # Three cheap counting queries — no digest build, no network, no model call.
+    current = _fingerprint(scope)
+    stale = bool(current) and cached.get("fingerprint") != current
+
+    return InsightsResponse(
+        text=cached.get("text"),
+        generated_at=cached.get("generated_at"),
+        stale=stale,
+    )
 
 
 @router.post("/insights/generate", response_model=InsightsResponse)
@@ -126,13 +163,7 @@ def generate_insights(scope: UserScope = Depends(get_user_scope)):
             reason="Add holdings to generate AI insights.",
         )
 
-    summary = scope.query(PortfolioSummary).first()
-    sectors = insights_core._sector_map(summary.analyst_json if summary else None)
-    realized = scope.query(RealizedGain).all()
-
-    digest = insights_core.build_digest(
-        holdings, sectors=sectors, realized=realized,
-        open_lots=scope.query(UnrealizedGain).all())
+    digest = _build_digest(scope)
     if digest is None:
         return InsightsResponse(
             available=False,
@@ -157,9 +188,13 @@ def generate_insights(scope: UserScope = Depends(get_user_scope)):
             reason="Insights could not be generated. Please try again.",
         )
 
-    payload = {"text": text, "generated_at": now}
+    payload = {
+        "text": text,
+        "generated_at": now,
+        "fingerprint": _fingerprint(scope),
+    }
     _write_cache(scope, payload)
-    return InsightsResponse(text=text, generated_at=now)
+    return InsightsResponse(text=text, generated_at=now, stale=False)
 
 
 # --- chat -----------------------------------------------------------------
@@ -234,11 +269,7 @@ def chat(request: ChatRequest, scope: UserScope = Depends(get_user_scope)):
     if not holdings:
         return ChatResponse(available=False, reason="Add holdings before using AI chat.")
 
-    summary = scope.query(PortfolioSummary).first()
-    sectors = insights_core._sector_map(summary.analyst_json if summary else None)
-    digest = insights_core.build_digest(
-        holdings, sectors=sectors, realized=scope.query(RealizedGain).all(),
-        open_lots=scope.query(UnrealizedGain).all())
+    digest = _build_digest(scope)
     if digest is None:
         return ChatResponse(
             available=False,
