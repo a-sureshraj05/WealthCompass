@@ -25,6 +25,11 @@ pandas==2.3.3
 # ── External data ────────────────────────────────────────────────────
 yfinance==1.1.0
 
+# AI portfolio insights (backend/app/core/insights.py). Imported lazily inside
+# generate(), so the app still starts and every other route still works if this
+# is missing — the insights panel just reports itself unavailable.
+anthropic==0.121.0
+
 # snaptrade-python-sdk is DELIBERATELY ABSENT.
 #
 # 11.0.169 (the version installed locally) hard-pins typing_extensions==4.13.2,

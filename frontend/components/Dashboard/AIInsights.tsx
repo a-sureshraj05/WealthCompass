@@ -1,32 +1,77 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StockHolding } from '../../types';
-import { getPortfolioInsights } from '../../services/apiService';
+import { fetchInsightsCached, generateInsights } from '../../services/apiService';
 
 interface Props {
   holdings: StockHolding[];
 }
 
+/**
+ * AI portfolio insights.
+ *
+ * The load/generate split is deliberate and load-bearing: mounting reads the
+ * cache (free, instant), and only the button spends money. An earlier version
+ * generated from a useEffect on `holdings`, which would bill once per page load
+ * per visitor — untenable on an instance whose credentials are published.
+ */
 const AIInsights: React.FC<Props> = ({ holdings }) => {
   const [insights, setInsights] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const [generatedAt, setGeneratedAt] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string>('');
 
+  // Cache read only. Deliberately does not depend on `holdings` — re-reading
+  // whenever a price tick changes the array would be pointless, and making this
+  // effect generate anything would reintroduce per-load billing.
   useEffect(() => {
-    if (holdings.length > 0) {
-      setLoading(true);
-      getPortfolioInsights(holdings).then(text => {
-        setInsights(text);
-        setLoading(false);
+    let cancelled = false;
+    fetchInsightsCached()
+      .then(data => {
+        if (cancelled) return;
+        setInsights(data.text ?? '');
+        setGeneratedAt(data.generated_at);
+      })
+      .catch(() => {
+        if (!cancelled) setInsights('');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
-    } else {
-      setInsights('Add assets to see AI wealth insights.');
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleGenerate = useCallback(async () => {
+    setGenerating(true);
+    setError('');
+    try {
+      const data = await generateInsights();
+      if (data.available === false) {
+        setError(data.reason ?? 'Insights are unavailable.');
+      } else {
+        setInsights(data.text ?? '');
+        setGeneratedAt(data.generated_at);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Could not generate insights.');
+    } finally {
+      setGenerating(false);
     }
-  }, [holdings]);
+  }, []);
 
   const insightLines = insights
     .split('\n')
     .map(l => l.trim())
     .filter(Boolean);
+
+  const hasHoldings = holdings.length > 0;
+  const busy = loading || generating;
+
+  const buttonLabel = generating
+    ? 'Analyzing…'
+    : insightLines.length > 0
+      ? 'Regenerate Insights'
+      : 'View Detailed Insights';
 
   return (
     <div
@@ -45,7 +90,7 @@ const AIInsights: React.FC<Props> = ({ holdings }) => {
         </svg>
       </div>
 
-      {loading ? (
+      {busy ? (
         <div className="space-y-3 flex-1">
           {[1, 2, 3].map(i => (
             <div key={i} className="border border-[#D2D2D7] rounded p-3 space-y-1.5 animate-pulse">
@@ -56,23 +101,43 @@ const AIInsights: React.FC<Props> = ({ holdings }) => {
         </div>
       ) : (
         <div className="flex-1 space-y-2">
-          {insightLines.length > 1 ? (
+          {error && (
+            <div className="border border-amber-200 bg-amber-50 rounded p-3">
+              <p className="text-xs text-amber-900 leading-relaxed">{error}</p>
+            </div>
+          )}
+
+          {insightLines.length > 0 ? (
             insightLines.map((line, i) => (
               <div key={i} className="border border-[#D2D2D7] rounded p-3">
                 <p className="text-xs text-slate-600 leading-relaxed">{line}</p>
               </div>
             ))
-          ) : (
-            <div className="border border-[#D2D2D7] rounded p-3">
-              <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{insights}</p>
+          ) : !error && (
+            <div className="border border-dashed border-[#D2D2D7] rounded p-3">
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {hasHoldings
+                  ? 'No insights generated yet. Use the button below to analyze your current portfolio.'
+                  : 'Add holdings to generate AI insights.'}
+              </p>
             </div>
           )}
         </div>
       )}
 
-      <button className="mt-4 pt-4 border-t border-[#D2D2D7] text-[11px] font-semibold text-[#0F52BA] uppercase tracking-[0.05em] text-right hover:text-[#0A3E8F] transition-colors w-full text-right">
-        View Detailed Insights
+      <button
+        onClick={handleGenerate}
+        disabled={busy || !hasHoldings}
+        className="mt-4 pt-4 border-t border-[#D2D2D7] text-[11px] font-semibold text-[#0F52BA] uppercase tracking-[0.05em] text-right hover:text-[#0A3E8F] transition-colors w-full disabled:text-slate-400 disabled:cursor-not-allowed"
+      >
+        {buttonLabel}
       </button>
+
+      {generatedAt && !busy && (
+        <p className="mt-1.5 text-[10px] text-slate-400 text-right">
+          Generated {new Date(generatedAt * 1000).toLocaleString()}
+        </p>
+      )}
     </div>
   );
 };

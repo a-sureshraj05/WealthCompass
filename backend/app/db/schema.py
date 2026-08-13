@@ -181,6 +181,10 @@ class PortfolioSummary(Base):
     # JSON: {key: value} — UI preferences that should follow the user between
     # devices rather than living in one browser's localStorage.
     ui_prefs_json = Column(String, nullable=True)
+    # JSON: {text, generated_at} — last AI portfolio insights. Cached for the
+    # same reason as the two above, and one more: generating it costs money, so
+    # the stored copy serves every subsequent view until it is regenerated.
+    insights_json = Column(String, nullable=True)
 
 
 class TickerReference(Base):

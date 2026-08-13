@@ -17,7 +17,7 @@ from backend.app.db.schema import Base
 
 DEMO_MODE = os.getenv("WC_DEMO_MODE", "").lower() == "true"
 
-from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, prices, preferences
+from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, prices, preferences, insights
 from .api.auth import get_current_user
 
 app = FastAPI()
@@ -216,6 +216,10 @@ def startup_event():
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN ui_prefs_json TEXT"))
                 conn.commit()
+        if "insights_json" not in ps_cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN insights_json TEXT"))
+                conn.commit()
 
     # portfolio_summary is no longer a singleton pinned at id=1 — it is one row
     # per user, created by process_transactions() the first time that user's
@@ -258,6 +262,7 @@ app.include_router(options.router, prefix="/api/v1", dependencies=[Depends(get_c
 app.include_router(splits.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(prices.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(preferences.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(insights.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
 @app.get("/healthz")
