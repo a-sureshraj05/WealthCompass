@@ -26,7 +26,8 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.app.core import insights
 from backend.app.core.scoping import UserScope
-from backend.app.db.schema import Base, Holding, RealizedGain, User
+from backend.app.db.schema import (Base, Holding, RealizedGain, UnrealizedGain,
+                                   User)
 
 
 def _holding(user_id, ticker, brokerage, market_value, total_cost, asset_type="Equity"):
@@ -97,6 +98,81 @@ def test_digest_skips_unpriced_positions(scope):
 
 def test_digest_is_none_when_nothing_to_analyse():
     assert insights.build_digest([]) is None
+
+
+# --- holding periods ------------------------------------------------------
+
+def _lot(ticker, days_ago, is_long_term, quantity=1.0, price=100.0, asset_type="Equity"):
+    from datetime import datetime, timedelta
+    return UnrealizedGain(
+        user_id=1, ticker=ticker, brokerage="Robinhood",
+        buyDate=datetime.now() - timedelta(days=days_ago),
+        quantity=quantity, buyPrice=price, currentPrice=price,
+        isLongTerm=is_long_term, assetType=asset_type,
+    )
+
+
+def test_holding_periods_counts_down_to_the_long_term_threshold(scope):
+    """The question this exists to answer: which lots convert, and when."""
+    lots = [
+        _lot("AAPL", days_ago=300, is_long_term=False),
+        _lot("NVDA", days_ago=400, is_long_term=True),
+    ]
+    digest = insights.build_digest(scope.query(Holding).all(), open_lots=lots)
+    periods = digest["holding_periods"]
+
+    upcoming = periods["upcoming"]
+    assert [u["ticker"] for u in upcoming] == ["AAPL"], "long-term lots are not 'upcoming'"
+    # 365 is the threshold and the rule is *more than* 365, so day 366 converts.
+    assert upcoming[0]["days_until_long_term"] == 66
+    assert upcoming[0]["days_held"] == 300
+
+
+def test_holding_periods_applies_the_option_contract_multiplier(scope):
+    """An options lot is quoted per underlying share but held as contracts.
+
+    Without the 100x, an options lot is understated a hundredfold: it rounds to
+    0.0% of the portfolio and the long/short-term split stops summing to 100.
+    """
+    lots = [
+        _lot("SPY", days_ago=10, is_long_term=False, quantity=1.0, price=100.0),
+        _lot("AAPL260101C00100000", days_ago=10, is_long_term=False,
+             quantity=1.0, price=100.0, asset_type="Options"),
+    ]
+    digest = insights.build_digest(scope.query(Holding).all(), open_lots=lots)
+    upcoming = {u["ticker"]: u for u in digest["holding_periods"]["upcoming"]}
+
+    # Same quantity and price, so the option must be worth 100x the equity lot.
+    assert upcoming["AAPL260101C00100000"]["portfolio_pct"] == pytest.approx(
+        upcoming["SPY"]["portfolio_pct"] * 100, rel=0.01)
+
+
+def test_holding_periods_split_sums_to_the_whole_portfolio(scope):
+    lots = [
+        _lot("A", days_ago=400, is_long_term=True, price=50.0),
+        _lot("B", days_ago=100, is_long_term=False, price=30.0),
+        _lot("C", days_ago=10, is_long_term=False, price=20.0, asset_type="Options"),
+    ]
+    digest = insights.build_digest(scope.query(Holding).all(), open_lots=lots)
+    periods = digest["holding_periods"]
+    total = periods["long_term_pct_of_portfolio"] + periods["short_term_pct_of_portfolio"]
+    assert total == pytest.approx(100.0, abs=0.2)
+
+
+def test_written_options_get_no_countdown(scope):
+    """A short position never converts, so a countdown for one would be wrong."""
+    lots = [_lot("SHORTCALL", days_ago=200, is_long_term=False,
+                 quantity=-1.0, asset_type="Options")]
+    digest = insights.build_digest(scope.query(Holding).all(), open_lots=lots)
+
+    assert digest["holding_periods"]["upcoming"] == []
+    # It still counts toward the short-term share — it is held, just never converting.
+    assert digest["holding_periods"]["short_term_pct_of_portfolio"] > 0
+
+
+def test_holding_periods_absent_when_no_lots(scope):
+    digest = insights.build_digest(scope.query(Holding).all())
+    assert "holding_periods" not in digest
 
 
 def test_realized_history_is_counts_and_ratios_only(scope):

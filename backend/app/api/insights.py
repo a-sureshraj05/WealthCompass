@@ -25,7 +25,8 @@ from pydantic import BaseModel
 from backend.app.api.deps import get_user_scope
 from backend.app.core import insights as insights_core
 from backend.app.core.scoping import UserScope
-from backend.app.db.schema import Holding, PortfolioSummary, RealizedGain
+from backend.app.db.schema import (Holding, PortfolioSummary, RealizedGain,
+                                   UnrealizedGain)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -129,7 +130,9 @@ def generate_insights(scope: UserScope = Depends(get_user_scope)):
     sectors = insights_core._sector_map(summary.analyst_json if summary else None)
     realized = scope.query(RealizedGain).all()
 
-    digest = insights_core.build_digest(holdings, sectors=sectors, realized=realized)
+    digest = insights_core.build_digest(
+        holdings, sectors=sectors, realized=realized,
+        open_lots=scope.query(UnrealizedGain).all())
     if digest is None:
         return InsightsResponse(
             available=False,
@@ -234,7 +237,8 @@ def chat(request: ChatRequest, scope: UserScope = Depends(get_user_scope)):
     summary = scope.query(PortfolioSummary).first()
     sectors = insights_core._sector_map(summary.analyst_json if summary else None)
     digest = insights_core.build_digest(
-        holdings, sectors=sectors, realized=scope.query(RealizedGain).all())
+        holdings, sectors=sectors, realized=scope.query(RealizedGain).all(),
+        open_lots=scope.query(UnrealizedGain).all())
     if digest is None:
         return ChatResponse(
             available=False,

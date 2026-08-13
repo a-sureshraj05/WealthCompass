@@ -24,6 +24,7 @@ next reset clears it.
 import json
 import logging
 import os
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,11 @@ sector or brokerage clustering, the spread between the best and worst performers
 how much of the portfolio a few names account for. Be specific and quantitative,
 citing the percentages you were given.
 
+When `holding_periods` is present and something there is genuinely notable — a
+sizeable position days away from long-term treatment, or an unusually large share
+still short-term — it is worth one of your observations. Do not spend one on it
+when nothing is close.
+
 Do not give buy, sell, or hold advice, and do not predict prices. Describe what
 the data shows, not what the person should do about it. Where something is
 notable, say it plainly rather than softening it into "consider reviewing"
@@ -69,9 +75,15 @@ only have relative figures; the interface shows them the real numbers alongside
 this conversation.
 
 Answer from the data you were given. Be specific and cite the percentages. When a
-question cannot be answered from this digest — anything needing individual trade
-dates, cost basis in dollars, or market data you were not given — say so plainly
-instead of guessing.
+question cannot be answered from this digest — anything needing cost basis in
+dollars, or market data you were not given — say so plainly instead of guessing.
+
+`holding_periods` covers tax timing when it is present. It gives the share of the
+portfolio already long-term, and for each still-short-term lot how many days it
+has been held, how many remain, and the date it converts. Answer those questions
+directly from it. Note the same ticker can appear as several lots bought at
+different times, each converting on its own date, and that a written option never
+converts regardless of the calendar.
 
 Do not give buy, sell, or hold recommendations, do not predict prices, and do not
 present yourself as a financial adviser. Describing what the composition shows,
@@ -108,10 +120,111 @@ def _sector_map(analyst_json: Optional[str]) -> Dict[str, str]:
     return out
 
 
+#: A lot is long-term once held *more* than 365 days, matching
+#: unrealized_gain_loader's `diff_days > 365`. Duplicating the threshold here
+#: rather than importing it keeps this module free of loader imports, but the two
+#: must agree — a mismatch would have the chat contradict the Holdings table.
+LONG_TERM_DAYS = 365
+
+#: Shares per option contract. Options are quoted per underlying share, so a
+#: lot's value is quantity x price x this. Mirrors the loaders.
+OPTION_CONTRACT_SIZE = 100
+
+
+def _lot_value(lot: Any) -> float:
+    """Market value of one open lot.
+
+    Options are quoted per underlying share while quantity counts contracts, so a
+    contract is worth 100x the quoted price — the same multiplier the loaders
+    apply. Without it an options lot is understated a hundredfold: it rounds to
+    0.0% of the portfolio and the long/short-term split stops summing to 100.
+    """
+    quantity = lot.quantity or 0.0
+    price = lot.currentPrice or 0.0
+    asset_type = (lot.assetType or "Equity").lower()
+    multiplier = OPTION_CONTRACT_SIZE if asset_type == "options" else 1
+    return abs(quantity * price) * multiplier
+
+
+def _holding_periods(open_lots: List[Any]) -> Optional[Dict]:
+    """When short-term lots convert to long-term.
+
+    Dates are not dollar amounts, so this stays inside the privacy model: it says
+    *when* something was bought and what share of the portfolio it represents,
+    never what it cost or is worth.
+
+    Percentages are taken against the lots' own total rather than the holdings
+    total. Both are rebuilt by the same recompute and should agree, but keying
+    off the holdings figure means any drift between the two tables silently
+    produces a long/short split that does not sum to 100 — a number the model
+    would then repeat with confidence. Normalising within the section makes it
+    self-consistent by construction.
+    """
+    if not open_lots:
+        return None
+
+    priced = [(lot, _lot_value(lot)) for lot in open_lots]
+    priced = [(lot, value) for lot, value in priced if value > 0]
+    if not priced:
+        return None
+
+    total_value = sum(value for _, value in priced)
+    if total_value <= 0:
+        return None
+
+    today = datetime.now()
+    upcoming = []
+    long_term_value = 0.0
+    short_term_value = 0.0
+
+    for lot, value in priced:
+        if lot.isLongTerm:
+            long_term_value += value
+            continue
+
+        short_term_value += value
+
+        # A written (short) option has no holding period to run — it is
+        # short-term whatever the calendar says. Reporting a countdown for one
+        # would be wrong, not merely unhelpful.
+        buy_date = getattr(lot, "buyDate", None)
+        if (lot.quantity or 0.0) < 0 or buy_date is None:
+            continue
+
+        days_held = (today - buy_date).days
+        days_remaining = (LONG_TERM_DAYS + 1) - days_held
+        if days_remaining < 0:
+            continue  # loader will reclassify on next recompute
+
+        upcoming.append({
+            "ticker": lot.ticker,
+            "brokerage": lot.brokerage,
+            "asset_type": lot.assetType or "Equity",
+            "portfolio_pct": round(value / total_value * 100, 1),
+            "days_held": days_held,
+            "days_until_long_term": days_remaining,
+            "becomes_long_term_on":
+                (buy_date + timedelta(days=LONG_TERM_DAYS + 1)).strftime("%Y-%m-%d"),
+        })
+
+    upcoming.sort(key=lambda lot: lot["days_until_long_term"])
+
+    return {
+        "note": (
+            "A lot becomes long-term after more than 365 days held. "
+            "`upcoming` lists only lots that are still short-term, soonest first."
+        ),
+        "long_term_pct_of_portfolio": round(long_term_value / total_value * 100, 1),
+        "short_term_pct_of_portfolio": round(short_term_value / total_value * 100, 1),
+        "upcoming": upcoming[:20],
+    }
+
+
 def build_digest(
     holdings: List[Any],
     sectors: Optional[Dict[str, str]] = None,
     realized: Optional[List[Any]] = None,
+    open_lots: Optional[List[Any]] = None,
 ) -> Optional[Dict]:
     """Scale holdings into percentages. Returns None when there is nothing to say."""
     sectors = sectors or {}
@@ -167,6 +280,10 @@ def build_digest(
                           sorted(by_sector.items(), key=lambda kv: -kv[1])},
         "positions": positions,
     }
+
+    periods = _holding_periods(open_lots or [])
+    if periods:
+        digest["holding_periods"] = periods
 
     # Realized history as counts and ratios only — how many closed lots, and how
     # they split by tax character. Never the amounts.
