@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StockHolding } from '../../types';
 import { fetchInsightsCached, generateInsights } from '../../services/apiService';
+import AIChat from './AIChat';
 
 interface Props {
   holdings: StockHolding[];
@@ -20,6 +21,7 @@ const AIInsights: React.FC<Props> = ({ holdings }) => {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string>('');
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Cache read only. Deliberately does not depend on `holdings` — re-reading
   // whenever a price tick changes the array would be pointless, and making this
@@ -125,13 +127,24 @@ const AIInsights: React.FC<Props> = ({ holdings }) => {
         </div>
       )}
 
-      <button
-        onClick={handleGenerate}
-        disabled={busy || !hasHoldings}
-        className="mt-4 pt-4 border-t border-[#D2D2D7] text-[11px] font-semibold text-[#0F52BA] uppercase tracking-[0.05em] text-right hover:text-[#0A3E8F] transition-colors w-full disabled:text-slate-400 disabled:cursor-not-allowed"
-      >
-        {buttonLabel}
-      </button>
+      <div className="mt-4 pt-4 border-t border-[#D2D2D7] flex items-center justify-between gap-3">
+        <button
+          onClick={() => setChatOpen(true)}
+          disabled={!hasHoldings}
+          className="text-[11px] font-semibold text-[#0F52BA] uppercase tracking-[0.05em] hover:text-[#0A3E8F] transition-colors disabled:text-slate-400 disabled:cursor-not-allowed"
+        >
+          Ask a Question
+        </button>
+        <button
+          onClick={handleGenerate}
+          disabled={busy || !hasHoldings}
+          className="text-[11px] font-semibold text-[#0F52BA] uppercase tracking-[0.05em] text-right hover:text-[#0A3E8F] transition-colors disabled:text-slate-400 disabled:cursor-not-allowed"
+        >
+          {buttonLabel}
+        </button>
+      </div>
+
+      <AIChat open={chatOpen} onClose={() => setChatOpen(false)} />
 
       {generatedAt && !busy && (
         <p className="mt-1.5 text-[10px] text-slate-400 text-right">

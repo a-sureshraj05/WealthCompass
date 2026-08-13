@@ -17,7 +17,7 @@ import logging
 import os
 import threading
 import time
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -41,6 +41,23 @@ router = APIRouter()
 COOLDOWN_SECONDS = int(os.getenv("WC_INSIGHTS_COOLDOWN_SECONDS", "60"))
 _last_generated: dict[int, float] = {}
 _cooldown_lock = threading.Lock()
+
+# Chat cannot use the trick that makes insights cheap. Insights are identical for
+# every visitor, so one generation serves everyone until the data changes; a
+# question is unique to whoever asked it, so every message is a paid call with
+# nothing to reuse. The controls are therefore quantity-based instead:
+#
+#   messages/hour  bounds how much one visitor can spend
+#   history turns  bounds the input tokens each of those messages costs
+#   message length bounds a single oversized paste
+#
+# Without the history cap in particular, a long conversation re-sends everything
+# said so far on every turn, so cost per message grows with conversation length.
+CHAT_MAX_PER_HOUR = int(os.getenv("WC_CHAT_MAX_PER_HOUR", "20"))
+CHAT_MAX_HISTORY = int(os.getenv("WC_CHAT_MAX_HISTORY", "12"))
+CHAT_MAX_MESSAGE_CHARS = int(os.getenv("WC_CHAT_MAX_MESSAGE_CHARS", "2000"))
+_chat_calls: dict[int, list[float]] = {}
+_chat_lock = threading.Lock()
 
 
 class InsightsResponse(BaseModel):
@@ -140,3 +157,108 @@ def generate_insights(scope: UserScope = Depends(get_user_scope)):
     payload = {"text": text, "generated_at": now}
     _write_cache(scope, payload)
     return InsightsResponse(text=text, generated_at=now)
+
+
+# --- chat -----------------------------------------------------------------
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+
+class ChatResponse(BaseModel):
+    reply: Optional[str] = None
+    available: bool = True
+    reason: Optional[str] = None
+    # Messages left this hour, so the UI can warn before the limit rather than
+    # only when it is hit.
+    remaining: Optional[int] = None
+
+
+def _claim_chat_slot(user_id: int) -> int:
+    """Reserve one message against the hourly budget. Returns remaining after it.
+
+    Raises HTTPException(429) when the budget is exhausted. The slot is taken
+    before the paid call, so simultaneous requests cannot both pass the check.
+    """
+    now = time.time()
+    with _chat_lock:
+        recent = [t for t in _chat_calls.get(user_id, []) if now - t < 3600]
+        if len(recent) >= CHAT_MAX_PER_HOUR:
+            oldest = min(recent)
+            wait_minutes = int((3600 - (now - oldest)) / 60) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=(f"Message limit reached ({CHAT_MAX_PER_HOUR}/hour). "
+                        f"Try again in about {wait_minutes} minute(s)."),
+            )
+        recent.append(now)
+        _chat_calls[user_id] = recent
+        return CHAT_MAX_PER_HOUR - len(recent)
+
+
+def _release_chat_slot(user_id: int) -> None:
+    """Hand back the most recent slot when nothing was actually spent."""
+    with _chat_lock:
+        if _chat_calls.get(user_id):
+            _chat_calls[user_id].pop()
+
+
+@router.post("/insights/chat", response_model=ChatResponse)
+def chat(request: ChatRequest, scope: UserScope = Depends(get_user_scope)):
+    """Answer a question about the signed-in user's portfolio."""
+    if not request.messages:
+        raise HTTPException(status_code=400, detail="No message provided.")
+
+    # Trust nothing about the client's history: it round-trips through the
+    # browser, so roles and length are validated here rather than assumed.
+    for m in request.messages:
+        if m.role not in ("user", "assistant"):
+            raise HTTPException(status_code=400, detail=f"Invalid role: {m.role}")
+        if len(m.content) > CHAT_MAX_MESSAGE_CHARS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Message too long (limit {CHAT_MAX_MESSAGE_CHARS} characters).",
+            )
+    if request.messages[-1].role != "user":
+        raise HTTPException(status_code=400, detail="The last message must be from the user.")
+
+    holdings = scope.query(Holding).all()
+    if not holdings:
+        return ChatResponse(available=False, reason="Add holdings before using AI chat.")
+
+    summary = scope.query(PortfolioSummary).first()
+    sectors = insights_core._sector_map(summary.analyst_json if summary else None)
+    digest = insights_core.build_digest(
+        holdings, sectors=sectors, realized=scope.query(RealizedGain).all())
+    if digest is None:
+        return ChatResponse(
+            available=False,
+            reason="No priced positions to discuss yet — refresh prices and try again.",
+        )
+
+    remaining = _claim_chat_slot(scope.user_id)
+
+    # Keep the most recent turns. Trimming from the front preserves the current
+    # question; trimming from the back would drop it.
+    history = [m.model_dump() for m in request.messages][-CHAT_MAX_HISTORY:]
+
+    try:
+        reply = insights_core.chat(digest, history)
+    except insights_core.InsightsUnavailable as exc:
+        _release_chat_slot(scope.user_id)
+        logger.warning("[chat] unavailable for user %s: %s", scope.user_id, exc)
+        return ChatResponse(available=False, reason=str(exc))
+    except Exception:
+        _release_chat_slot(scope.user_id)
+        logger.exception("[chat] unexpected failure for user %s", scope.user_id)
+        return ChatResponse(
+            available=False,
+            reason="That message could not be answered. Please try again.",
+        )
+
+    return ChatResponse(reply=reply, remaining=remaining)

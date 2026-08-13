@@ -60,6 +60,28 @@ notable, say it plainly rather than softening it into "consider reviewing"
 language that carries no information."""
 
 
+CHAT_SYSTEM_PROMPT = """You are helping someone understand their own investment portfolio.
+
+Their portfolio is given below as percentages and ratios — never dollar amounts.
+That is deliberate. Do not ask for absolute values and do not speculate about how
+much the portfolio is worth. If asked directly what something is worth, say you
+only have relative figures; the interface shows them the real numbers alongside
+this conversation.
+
+Answer from the data you were given. Be specific and cite the percentages. When a
+question cannot be answered from this digest — anything needing individual trade
+dates, cost basis in dollars, or market data you were not given — say so plainly
+instead of guessing.
+
+Do not give buy, sell, or hold recommendations, do not predict prices, and do not
+present yourself as a financial adviser. Describing what the composition shows,
+including risks visible in it, is fine and useful. Telling them what to do about
+it is not.
+
+Keep answers short — a few sentences unless genuinely more is needed. This is a
+side panel, not a document."""
+
+
 class InsightsUnavailable(Exception):
     """Insights cannot be produced. The message is shown to the user verbatim."""
 
@@ -221,6 +243,77 @@ def generate(digest: Dict) -> str:
     # unconditionally would raise here instead of producing a readable message.
     if response.stop_reason == "refusal":
         raise InsightsUnavailable("The AI service declined to analyse this portfolio.")
+
+    text = "\n".join(
+        block.text for block in response.content if block.type == "text"
+    ).strip()
+
+    if not text:
+        raise InsightsUnavailable("The AI service returned an empty response.")
+
+    return text
+
+
+def chat(digest: Dict, messages: List[Dict[str, str]]) -> str:
+    """Answer a question about the digest, given prior conversation turns.
+
+    `messages` is the client's conversation — this feature is deliberately
+    stateless server-side, per the design decision not to persist chat. The
+    caller is responsible for having already bounded its length; unbounded
+    history is the main way a chat feature's cost runs away.
+    """
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise InsightsUnavailable("AI chat is not configured on this instance.")
+
+    try:
+        import anthropic
+    except ImportError:
+        raise InsightsUnavailable(
+            "AI chat is unavailable — the anthropic package is not installed."
+        )
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    # The portfolio rides in the system prompt rather than as a user turn: it is
+    # context, not something the person said, and keeping it out of the
+    # conversation means a later turn cannot appear to have "quoted" it.
+    system = (
+        CHAT_SYSTEM_PROMPT
+        + "\n\nThe portfolio, in percentages:\n\n"
+        + json.dumps(digest, indent=2)
+    )
+
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=MAX_TOKENS,
+            system=system,
+            thinking={"type": "adaptive"},
+            output_config={"effort": EFFORT},
+            messages=messages,
+        )
+    except anthropic.APIStatusError as exc:
+        detail = getattr(exc, "message", "") or str(exc)
+        logger.warning("[chat] provider %s: %s", exc.status_code, detail)
+        if exc.status_code == 401:
+            raise InsightsUnavailable("The configured API key was rejected.")
+        if exc.status_code == 429:
+            raise InsightsUnavailable("Rate limited by the AI service — try again shortly.")
+        if "credit balance" in detail.lower():
+            raise InsightsUnavailable(
+                "AI chat is temporarily unavailable. Please try again later."
+            )
+        raise InsightsUnavailable(
+            f"The AI service rejected the request ({exc.status_code}). "
+            "Details are in the server log."
+        )
+    except anthropic.APIConnectionError as exc:
+        logger.warning("[chat] connection failure: %s", exc)
+        raise InsightsUnavailable("Could not reach the AI service.")
+
+    if response.stop_reason == "refusal":
+        raise InsightsUnavailable("The AI service declined to answer that.")
 
     text = "\n".join(
         block.text for block in response.content if block.type == "text"

@@ -203,6 +203,39 @@ export const fetchInsightsCached = async (): Promise<PortfolioInsights> => {
  * The backend builds the digest from the database itself; nothing about the
  * portfolio is sent from here.
  */
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatReply {
+  reply: string | null;
+  available: boolean;
+  reason: string | null;
+  remaining: number | null;
+}
+
+/**
+ * Ask a question about the portfolio.
+ *
+ * The conversation lives in React state and is posted each time — deliberately
+ * not persisted anywhere. The backend rebuilds the portfolio digest itself and
+ * caps how much of this history it will actually send on.
+ */
+export const sendChatMessage = async (messages: ChatMessage[]): Promise<ChatReply> => {
+  const response = await apiFetch("/api/v1/insights/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+  });
+  if (response.status === 429 || response.status === 400) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Message could not be sent.");
+  }
+  if (!response.ok) throw new Error(`Chat failed: ${response.status}`);
+  return response.json();
+};
+
 export const generateInsights = async (): Promise<PortfolioInsights> => {
   const response = await apiFetch("/api/v1/insights/generate", { method: "POST" });
   if (response.status === 429) {
