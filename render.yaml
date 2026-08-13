@@ -58,3 +58,16 @@ services:
       # outlive the instance that issued it.
       - key: JWT_EXPIRE_MINUTES
         value: "120"
+
+      # AI insights and portfolio chat. `sync: false` declares that the service
+      # needs this variable while leaving the value to the dashboard — the key
+      # never enters the repository, and a Blueprint sync will not overwrite or
+      # flag a value set by hand.
+      #
+      # Without it the app still runs: both AI features report themselves
+      # unconfigured and everything else is unaffected.
+      #
+      # Set it under Environment → Environment Variables (not Environment
+      # Groups, which are for sharing one set across several services).
+      - key: ANTHROPIC_API_KEY
+        sync: false
