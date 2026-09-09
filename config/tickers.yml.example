@@ -1,0 +1,12 @@
+# Tickers tracked by the processing pipeline.
+# Only these tickers will appear in transactions, gains, and holdings.
+# Add a ticker here to start tracking it; remove to exclude it from all views.
+#
+# Copy this file to config/tickers.yml and edit it — that file is gitignored
+# since it discloses your real holdings. If config/tickers.yml is absent, the
+# pipeline tracks every ticker with no filtering.
+
+tickers:
+  - AAPL
+  - MSFT
+  - NVDA

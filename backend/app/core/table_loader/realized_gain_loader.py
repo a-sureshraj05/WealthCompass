@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from backend.app.db.schema import LotAssignment, RealizedGain, Transaction as DBTransaction
 from backend.app.core.utils.ticker import underlying_ticker
 from backend.app.core.transaction_actions import BUY_ACTIONS, SELL_ACTIONS, OPTION_EXPIRY_ACTIONS, OPTION_EXERCISE_ACTIONS, TRANSFER_OUT_ACTIONS
+from backend.app.core.scoping import UserScope
 from backend.app.core.stock_split_utils import build_split_map, apply_splits_to_lot
 
 
@@ -21,19 +22,18 @@ def is_long_term_holding(buy_date, sell_date, is_short_position: bool) -> bool:
     return (sell_date - buy_date).days > 365
 
 
-def delete(db: Session, brokerage_name: str = None):
-    if brokerage_name:
-        db.query(RealizedGain).filter(RealizedGain.brokerage == brokerage_name).delete()
-    else:
-        db.query(RealizedGain).delete()
-    db.commit()
+def delete(scope: UserScope, brokerage_name: str = None):
+    # Scoped delete — unscoped, this clears every user's realized gains.
+    scope.delete_all(RealizedGain, brokerage=brokerage_name)
+    scope.db.commit()
 
 
-def load(db: Session, brokerage_name: str = None, tracked_tickers: Optional[Set[str]] = None) -> Dict[str, List[Dict[str, Any]]]:
-    delete(db, brokerage_name)
+def load(scope: UserScope, brokerage_name: str = None, tracked_tickers: Optional[Set[str]] = None) -> Dict[str, List[Dict[str, Any]]]:
+    db = scope.db
+    delete(scope, brokerage_name)
 
     # Fetch all active transactions — exclude soft-deleted and flagged duplicates
-    q = db.query(DBTransaction).filter(
+    q = scope.query(DBTransaction).filter(
         DBTransaction.is_deleted == False,
         DBTransaction.is_duplicate == False,
     )
@@ -47,7 +47,7 @@ def load(db: Session, brokerage_name: str = None, tracked_tickers: Optional[Set[
     sell_ids = [t.id for t in transactions if t.action.upper() in SELL_ACTIONS]
     all_assignments: Dict[int, List[LotAssignment]] = {}
     if sell_ids:
-        for a in db.query(LotAssignment).filter(LotAssignment.sell_transaction_id.in_(sell_ids)).all():
+        for a in scope.query(LotAssignment).filter(LotAssignment.sell_transaction_id.in_(sell_ids)).all():
             all_assignments.setdefault(a.sell_transaction_id, []).append(a)
 
     realized_gains_list = []
@@ -314,7 +314,7 @@ def load(db: Session, brokerage_name: str = None, tracked_tickers: Optional[Set[
 
     _detect_wash_sales(transactions, realized_gains_list, open_lots_by_ticker)
 
-    db.add_all(realized_gains_list)
+    scope.add_all(realized_gains_list)  # stamps user_id
     db.commit()
 
     print(f"[realized_gain_loader] Returning open_lots_by_ticker: {open_lots_by_ticker}")

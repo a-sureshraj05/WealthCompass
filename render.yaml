@@ -1,0 +1,79 @@
+# Render blueprint for the WealthCompass PUBLIC DEMO.
+#
+# Free plan, no payment details required. Fabricated data only — see
+# docs/CLOUD_LAUNCH.md and the guards in .dockerignore, Dockerfile, and
+# backend/scripts/seed_demo.py.
+#
+# Nothing here locks the project to Render. The Dockerfile is the whole
+# deployment; moving to Koyeb, Cloud Run or Fly means writing that platform's
+# config file and pointing it at the same image. There is no database to
+# migrate, because there is no persistent database.
+
+services:
+  # Becomes the public hostname: https://wealthcompass-demo.onrender.com
+  #
+  # Plain "wealthcompass" was already claimed by another Render customer — the
+  # first deploy silently became wealthcompass-iy9v.onrender.com, which is what
+  # Render does on a collision rather than failing.
+  #
+  # Subdomains are globally unique across all customers and cannot be checked
+  # from outside: onrender.com answers every unclaimed name with the same 404 as
+  # a claimed one. So this name may collide too and pick up its own suffix.
+  #
+  # Changing this renames the service in the Blueprint; the URL follows the name,
+  # and the previous URL stops resolving. Nothing else in the deployment depends
+  # on it.
+  - type: web
+    name: wealthcompass-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # Render injects PORT and requires the container to listen on it. The
+    # Dockerfile's CMD reads ${PORT:-8000} for exactly this reason.
+    healthCheckPath: /healthz
+
+    envVars:
+      - key: WC_DEMO_MODE
+        value: "true"
+
+      # 720 minutes = 12 hours. The free plan sleeps after ~15 minutes of
+      # inactivity, so this wall-clock timer almost never fires — the process is
+      # usually not running to fire it. That is fine: a cold start restores the
+      # baked template, so waking up IS the reset, and in practice the demo
+      # resets far more often than every 12 hours. The timer only matters when
+      # traffic keeps the instance alive continuously.
+      - key: WC_DEMO_RESET_MINUTES
+        value: "720"
+
+      # Without a stable secret, auth.py generates a random signing key per
+      # process and every visitor is logged out on each restart — which, on a
+      # plan that sleeps, means constantly. generateValue makes Render create
+      # one once and keep it.
+      - key: JWT_SECRET
+        generateValue: true
+
+      # Shorter than the local 24h default. A demo session has no reason to
+      # outlive the instance that issued it.
+      - key: JWT_EXPIRE_MINUTES
+        value: "120"
+
+      # ANTHROPIC_API_KEY (AI insights and portfolio chat) comes from the
+      # "WealthCompass" environment group, created in the dashboard. The value
+      # lives there and never enters this repository.
+      #
+      # Declared here rather than left as a dashboard-only link because the
+      # service is Blueprint-managed: Render reconciles the service's
+      # environment against this file, so a link made only in the UI can be
+      # dropped on a later sync — silently switching the AI features off with
+      # nothing in any diff to explain it.
+      #
+      # Note this replaced a service-level `- key: ANTHROPIC_API_KEY` with
+      # `sync: false`. Service-level variables take precedence over group ones,
+      # so that entry would have shadowed the group's value with an empty one —
+      # the group would be correctly linked and the key still would not arrive.
+      #
+      # Absent the group the app is unaffected: both AI features report
+      # themselves unconfigured and every other route works normally.
+      - fromGroup: WealthCompass

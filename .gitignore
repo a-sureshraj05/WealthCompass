@@ -40,6 +40,10 @@ sql/*.sql
 # Local data files (personal brokerage CSVs — never commit)
 data/
 
+# Personal session notes and ticker allowlist — real holdings, never commit
+/context.md
+/config/tickers.yml
+
 # One-time migration scripts (depend on local data/ files).
 # Uses scripts/* rather than scripts/ so the exceptions below can re-include
 # individual files — git can't un-ignore a file whose parent directory is excluded.

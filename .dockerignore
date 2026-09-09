@@ -1,0 +1,76 @@
+# Docker does NOT read .gitignore. Everything excluded there has to be repeated
+# here or it lands in the build context and then in an image layer — which is
+# public, immutable, and not deletable after the fact.
+#
+# The hard requirement this file exists to enforce: no local portfolio data and
+# no secrets reach the cloud image. Dockerfile also asserts on this (see the
+# guard stage) rather than trusting these patterns to stay correct.
+
+# ── Real portfolio data ──────────────────────────────────────────────
+# db/ holds wealthcompass.db plus four backups. None of it belongs in an image.
+#
+# The `**/` prefixes are load-bearing, not decoration. .dockerignore matches with
+# Go's filepath.Match, where `*` never crosses a `/` — so a bare `*.db` matches
+# only at the context root and silently misses nested ones. Running the app from
+# the wrong directory has already left empty stray databases at
+# backend/wealthcompass.db and backend/app/db/wealthcompass.db; those happened to
+# be 0 bytes, but the pattern that let them through would pass a real one too.
+# (git's `*.db` DOES match at any depth, which is why .gitignore looks correct
+# and this file needs to be written differently.)
+# Directory patterns are ROOT-ANCHORED with a leading slash. A bare `db/` (or
+# worse, `**/db/`) also matches backend/app/db/ — which is source code, not data,
+# and excluding it breaks the image with `No module named 'backend.app.db'`.
+# The three data directories all live at the repo root; the only `db` elsewhere
+# holds schema.py.
+/db/
+/data/
+
+# File patterns stay recursive: stray databases turn up outside /db/ when the app
+# is run from the wrong directory (backend/wealthcompass.db and
+# backend/app/db/wealthcompass.db both exist). These exclude the files while
+# leaving their directories — and therefore schema.py — in place.
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# The personal ticker allowlist. Discloses the real holdings on its own, with
+# no database attached. process.py ignores it in demo mode, but the safest
+# version of that is for the file to not exist in the image.
+/config/
+
+# ── Secrets ──────────────────────────────────────────────────────────
+.env
+.env.*
+*.env
+.gemini/
+GoogleAIStudio/
+
+# ── Build noise ──────────────────────────────────────────────────────
+.git/
+.gitignore
+node_modules/
+frontend/node_modules/
+frontend/dist/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# Not a registered router, and its `import vertexai` would drag in
+# google-cloud-aiplatform. Excluded so the image cannot grow a dependency on it.
+backend/app/api/archive/
+
+# ── Local-only tooling and notes ─────────────────────────────────────
+.claude/
+.vscode/
+.DS_Store
+scripts/
+server.sh
+test_manual_parser.sh
+*.md
+!README.md
+docs/
+backend/tests/
+last_commit_hash.txt

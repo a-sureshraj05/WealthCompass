@@ -8,7 +8,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.app.core import process
+from backend.app.api.auth import get_current_user
+from backend.app.api.brokerage import require_provider_access
+from backend.app.api.deps import get_user_scope
 from backend.app.core.database import get_db
+from backend.app.core.scoping import UserScope, require_scope
 from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 from backend.app.db.schema import \
     Holding as DBHolding  # Alias to avoid name collision
@@ -17,6 +21,7 @@ from backend.app.db.schema import RealizedGain as DBRealizedGain
 from backend.app.db.schema import SnaptradeTransaction as DBSnaptradeTransaction
 from backend.app.db.schema import Transaction as DBTransaction
 from backend.app.db.schema import UnrealizedGain as DBUnrealizedGain
+from backend.app.db.schema import User
 
 router = APIRouter()
 
@@ -139,6 +144,7 @@ def _assert_mutable(transaction):
 @router.get("/transactions", response_model=List[Transaction])
 def get_transactions(
     db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope),
     brokerages: Optional[List[str]] = Query(None),
     tickers: Optional[List[str]] = Query(None),
     start_date: Optional[datetime.date] = Query(None),
@@ -146,7 +152,7 @@ def get_transactions(
     source: Optional[str] = Query("all"),  # "all" | "manual" | "snaptrade"
     visibility: Optional[str] = Query("active"),  # "active" | "hidden" | "all"
 ):
-    query = db.query(DBTransaction)
+    query = scope.query(DBTransaction)
 
     if visibility == "active":
         query = query.filter(DBTransaction.is_deleted == False, DBTransaction.is_duplicate == False)
@@ -173,8 +179,9 @@ def get_transactions(
 
 
 @router.patch("/transactions/{transaction_id}")
-def update_transaction(transaction_id: int, updates: TransactionUpdate, db: Session = Depends(get_db)):
-    transaction = db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
+def update_transaction(transaction_id: int, updates: TransactionUpdate, db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
+    transaction = scope.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     _assert_mutable(transaction)
@@ -223,8 +230,9 @@ def update_transaction(transaction_id: int, updates: TransactionUpdate, db: Sess
 
 
 @router.post("/transactions/{transaction_id}/revert")
-def revert_transaction(transaction_id: int, db: Session = Depends(get_db)):
-    transaction = db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
+def revert_transaction(transaction_id: int, db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
+    transaction = scope.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     _assert_mutable(transaction)
@@ -235,7 +243,7 @@ def revert_transaction(transaction_id: int, db: Session = Depends(get_db)):
     raw = None
     if transaction.raw_id:
         if transaction.source == "manual":
-            raw = db.query(DBManualRawTransaction).filter(DBManualRawTransaction.id == transaction.raw_id).first()
+            raw = scope.query(DBManualRawTransaction).filter(DBManualRawTransaction.id == transaction.raw_id).first()
             if raw:
                 transaction.date = raw.date
                 transaction.brokerage = raw.brokerage
@@ -248,7 +256,7 @@ def revert_transaction(transaction_id: int, db: Session = Depends(get_db)):
                 transaction.totalCost = raw.totalCost
                 transaction.assetType = raw.assetType
         elif transaction.source == "snaptrade":
-            raw = db.query(DBSnaptradeTransaction).filter(DBSnaptradeTransaction.id == transaction.raw_id).first()
+            raw = scope.query(DBSnaptradeTransaction).filter(DBSnaptradeTransaction.id == transaction.raw_id).first()
             if raw:
                 transaction.date = raw.date
                 transaction.brokerage = raw.brokerage
@@ -284,9 +292,10 @@ def revert_transaction(transaction_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/transactions/{transaction_id}/split")
-def split_transaction(transaction_id: int, body: SplitRequest, db: Session = Depends(get_db)):
+def split_transaction(transaction_id: int, body: SplitRequest, db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Split a BUY lot into two. The split is persisted in transaction_split_configs so it survives resets."""
-    transaction = db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
+    transaction = scope.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     _assert_mutable(transaction)
@@ -318,7 +327,7 @@ def split_transaction(transaction_id: int, body: SplitRequest, db: Session = Dep
     transaction.totalCost = round(transaction.totalCost * (remaining_qty / original_qty), 2)
     transaction.is_override = True
 
-    db.add(split_txn)
+    scope.add(split_txn)
     db.commit()
     db.refresh(transaction)
     db.refresh(split_txn)
@@ -326,23 +335,25 @@ def split_transaction(transaction_id: int, body: SplitRequest, db: Session = Dep
 
 
 @router.patch("/transactions/account/bulk")
-def bulk_set_account(req: BulkAccountRequest, db: Session = Depends(get_db)):
+def bulk_set_account(req: BulkAccountRequest, db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Set account_id on all transactions for a brokerage. Defaults to verified-only."""
-    query = db.query(DBTransaction).filter(DBTransaction.brokerage == req.brokerage)
+    query = scope.query(DBTransaction).filter(DBTransaction.brokerage == req.brokerage)
     if req.verified_only:
         query = query.filter(DBTransaction.is_backend_verified == True)
     updated = query.update({"account_id": req.account_id}, synchronize_session=False)
     db.commit()
     from backend.app.core.process import process_transactions
-    process_transactions(db, brokerage_name=req.brokerage)
+    process_transactions(db, scope.user_id, brokerage_name=req.brokerage)
     return {"updated": updated}
 
 
 @router.patch("/transactions/{transaction_id}/verify")
-def set_transaction_verified(transaction_id: int, is_backend_verified: bool, db: Session = Depends(get_db)):
+def set_transaction_verified(transaction_id: int, is_backend_verified: bool, db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Manually mark a transaction as backend-verified. Only called explicitly by the user.
     No automated process, sync, or loader should ever call this endpoint."""
-    transaction = db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
+    transaction = scope.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     transaction.is_backend_verified = is_backend_verified
@@ -351,9 +362,10 @@ def set_transaction_verified(transaction_id: int, is_backend_verified: bool, db:
 
 
 @router.patch("/transactions/{transaction_id}/hidden")
-def set_transaction_hidden(transaction_id: int, is_deleted: bool, db: Session = Depends(get_db)):
+def set_transaction_hidden(transaction_id: int, is_deleted: bool, db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     transaction = (
-        db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
+        scope.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
     )
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -364,32 +376,34 @@ def set_transaction_hidden(transaction_id: int, is_deleted: bool, db: Session = 
 
 
 @router.delete("/transactions/raw")
-def delete_raw_data(source: Optional[str] = None, brokerage: Optional[str] = None, db: Session = Depends(get_db)):
+def delete_raw_data(source: Optional[str] = None, brokerage: Optional[str] = None, db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Delete raw source data. source=manual|snaptrade|None(both). Optionally filter by brokerage."""
     if source in (None, "manual"):
-        q = db.query(DBManualRawTransaction)
+        q = scope.query(DBManualRawTransaction)
         if brokerage:
             q = q.filter(DBManualRawTransaction.brokerage == brokerage)
         q.delete(synchronize_session=False)
     if source in (None, "snaptrade"):
-        q = db.query(DBSnaptradeTransaction)
+        q = scope.query(DBSnaptradeTransaction)
         if brokerage:
             q = q.filter(DBSnaptradeTransaction.brokerage == brokerage)
         q.delete(synchronize_session=False)
     # Also clear processed data that was derived from the deleted raw rows
-    db.query(DBTransaction).delete(synchronize_session=False)
-    db.query(DBHolding).delete(synchronize_session=False)
-    db.query(DBRealizedGain).delete(synchronize_session=False)
-    db.query(DBUnrealizedGain).delete(synchronize_session=False)
+    scope.query(DBTransaction).delete(synchronize_session=False)
+    scope.query(DBHolding).delete(synchronize_session=False)
+    scope.query(DBRealizedGain).delete(synchronize_session=False)
+    scope.query(DBUnrealizedGain).delete(synchronize_session=False)
     db.commit()
     label = source or "all"
     return {"message": f"Deleted {label} raw data and all processed data."}
 
 
 @router.delete("/transactions/{transaction_id}")
-def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
+def delete_transaction(transaction_id: int, db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     transaction = (
-        db.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
+        scope.query(DBTransaction).filter(DBTransaction.id == transaction_id).first()
     )
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -400,18 +414,20 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/transactions/clear")
-def clear_processed_data(db: Session = Depends(get_db)):
+def clear_processed_data(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Clear only derived tables (holdings, gains). Transactions table is never touched here —
     use Reset to re-seed transactions from raw sources."""
-    db.query(DBHolding).delete()
-    db.query(DBRealizedGain).delete()
-    db.query(DBUnrealizedGain).delete()
+    scope.query(DBHolding).delete()
+    scope.query(DBRealizedGain).delete()
+    scope.query(DBUnrealizedGain).delete()
     db.commit()
     return {"message": "Processed data cleared. Transactions preserved."}
 
 
 @router.post("/transactions/reset")
-def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(get_db)):
+def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Clear transactions table and re-seed from raw source tables. Optionally filter by brokerage.
     Manual customisations (current_brokerage, is_deleted, field edits) are snapshotted before
     the wipe and replayed onto the freshly-seeded rows so they survive the reset.
@@ -419,7 +435,7 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
     # Snapshot all customised rows keyed by (raw_id, source).
     # Also capture is_backend_verified and is_duplicate so manual corrections survive the reset.
     overrides: dict = {}
-    for t in db.query(DBTransaction).all():
+    for t in scope.query(DBTransaction).all():
         is_customised = (
             t.is_deleted
             or t.is_override
@@ -450,21 +466,21 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
 
     # Delete only non-verified transactions. Rows with is_backend_verified=1 are
     # manually curated (ACATS lots, corrected data) and must survive the reset.
-    db.query(DBTransaction).filter(
+    scope.query(DBTransaction).filter(
         DBTransaction.is_backend_verified == False
     ).delete(synchronize_session=False)
     db.commit()
 
     # Build sets of raw_ids already covered by surviving verified rows — skip re-seeding these.
     verified_manual_ids = {
-        t.raw_id for t in db.query(DBTransaction).filter(
+        t.raw_id for t in scope.query(DBTransaction).filter(
             DBTransaction.is_backend_verified == True,
             DBTransaction.source == "manual",
             DBTransaction.raw_id.isnot(None),
         ).all()
     }
     verified_snaptrade_ids = {
-        t.raw_id for t in db.query(DBTransaction).filter(
+        t.raw_id for t in scope.query(DBTransaction).filter(
             DBTransaction.is_backend_verified == True,
             DBTransaction.source == "snaptrade",
             DBTransaction.raw_id.isnot(None),
@@ -472,13 +488,13 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
     }
 
     # Re-seed from manual raw transactions
-    manual_q = db.query(DBManualRawTransaction)
+    manual_q = scope.query(DBManualRawTransaction)
     if brokerage:
         manual_q = manual_q.filter(DBManualRawTransaction.brokerage == brokerage)
     for raw in manual_q.all():
         if raw.id in verified_manual_ids:
             continue  # verified row already exists for this raw entry
-        db.add(DBTransaction(
+        scope.add(DBTransaction(
             brokerage=raw.brokerage,
             date=raw.date,
             ticker=raw.ticker,
@@ -498,7 +514,7 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
     # Intra-brokerage transfers (e.g. Schwab account A → Schwab account B) produce
     # two identical rows with different IDs. Flag ALL rows whose key appears more
     # than once so both sides of the internal transfer are excluded from P&L.
-    snaptrade_q = db.query(DBSnaptradeTransaction)
+    snaptrade_q = scope.query(DBSnaptradeTransaction)
     if brokerage:
         snaptrade_q = snaptrade_q.filter(DBSnaptradeTransaction.brokerage == brokerage)
     snaptrade_rows = snaptrade_q.all()
@@ -511,7 +527,7 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
             continue  # verified row already exists for this raw entry
         key = (raw.brokerage, raw.ticker, raw.action, raw.quantity, raw.price, raw.date)
         is_dup = key_counts[key] > 1
-        db.add(DBTransaction(
+        scope.add(DBTransaction(
             brokerage=raw.brokerage,
             account_id=raw.account_id,
             date=raw.date,
@@ -534,7 +550,7 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
 
     # Replay manual customisations onto the freshly-seeded rows
     if overrides:
-        for t in db.query(DBTransaction).filter(DBTransaction.is_backend_verified == False).all():
+        for t in scope.query(DBTransaction).filter(DBTransaction.is_backend_verified == False).all():
             ov = overrides.get((t.raw_id, t.source))
             if not ov:
                 continue
@@ -559,146 +575,158 @@ def reset_transactions(brokerage: Optional[str] = None, db: Session = Depends(ge
                 t.assetType = ov["assetType"]
         db.commit()
 
-    process.process_transactions(db, brokerage_name=brokerage)
+    process.process_transactions(db, scope.user_id, brokerage_name=brokerage)
     label = brokerage if brokerage else "all brokerages"
     return {"message": f"Transactions reset and reprocessed for {label}."}
 
 
 @router.get("/cash-balance")
-def get_cash_balance(db: Session = Depends(get_db)):
+def get_cash_balance(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Return precomputed cash balance from portfolio_summary (updated on every reprocess)."""
     from backend.app.db.schema import PortfolioSummary
-    summary = db.query(PortfolioSummary).first()
+    summary = scope.query(PortfolioSummary).first()
     return {"balance": summary.cash_balance if summary else 0.0}
 
 
 @router.get("/buying-power")
-def get_buying_power():
+def get_buying_power(
+    scope: UserScope = Depends(get_user_scope),
+    current_user: User = Depends(get_current_user),
+):
     """Return net cash per brokerage.
     Computed as: account total_value (brokerage-reported equity) minus sum of
     stock/option positions market value. Goes negative when margin is in use.
     Falls back to the balance cash field if total_value is unavailable.
+
+    This is a live SnapTrade call, so it carries the same guard as the routes in
+    brokerage.py. It previously took no dependencies at all and opened its own
+    session, which put it outside every check: a test account could reach the
+    operator's credentials through it, and passing that bare Session where a
+    scope was expected ran the account lookup with no user filter — Session has
+    .query() too, so nothing raised.
     """
+    require_provider_access(current_user)
     try:
         from backend.app.api.snaptrade import get_client, get_accounts
-        from backend.app.core.database import SessionLocal
-        db = SessionLocal()
-        try:
-            client = get_client()
-            from backend.app.api.snaptrade import USER_ID, USER_SECRET
-            accounts = get_accounts(db)
-            result: dict = {}
-            for account in accounts:
-                brokerage = account["brokerage"]
-                account_name = account.get("name") or ""
-                result_key = f"{brokerage} · {account_name}" if account_name else brokerage
-                try:
-                    resp = client.account_information.get_user_holdings(
-                        query_params={"userId": USER_ID, "userSecret": USER_SECRET},
-                        path_params={"accountId": account["id"]},
+        db = scope.db
+        client = get_client()
+        from backend.app.api.snaptrade import USER_ID, USER_SECRET
+        accounts = get_accounts(scope)
+        result: dict = {}
+        for account in accounts:
+            brokerage = account["brokerage"]
+            account_name = account.get("name") or ""
+            result_key = f"{brokerage} · {account_name}" if account_name else brokerage
+            try:
+                resp = client.account_information.get_user_holdings(
+                    query_params={"userId": USER_ID, "userSecret": USER_SECRET},
+                    path_params={"accountId": account["id"]},
+                )
+                body = resp.body
+
+                def _get(obj, key, default=None):
+                    if obj is None:
+                        return default
+                    return obj.get(key, default) if hasattr(obj, "get") else getattr(obj, key, default)
+
+                # Primary: sum the cash field from USD balance entries (direct brokerage-reported cash)
+                balances = _get(body, "balances") or []
+                usd_cash_values = []
+                for b in balances:
+                    curr = _get(b, "currency")
+                    code = _get(curr, "code", "USD") or "USD"
+                    cash_val = _get(b, "cash")
+                    print(f"[buying-power] {result_key} balance: currency={code} cash={cash_val} buying_power={_get(b,'buying_power')}")
+                    if code == "USD" and cash_val is not None:
+                        usd_cash_values.append(float(cash_val))
+
+                if usd_cash_values:
+                    net_cash = sum(usd_cash_values)
+                    print(f"[buying-power] {result_key}: balance.cash={net_cash:.2f}")
+                    result[result_key] = round(result.get(result_key, 0.0) + net_cash, 2)
+                else:
+                    # Fallback: account total minus positions market value
+                    acct = _get(body, "account")
+                    acct_bal = _get(acct, "balance")
+                    acct_total_raw = _get(acct_bal, "total")
+                    acct_total = _get(acct_total_raw, "amount") if isinstance(acct_total_raw, dict) else acct_total_raw
+                    tv = _get(body, "total_value")
+                    tv_value = _get(tv, "value")
+                    total = acct_total if acct_total is not None else tv_value
+                    positions_value = sum(
+                        float(_get(pos, "units") or 0) * float(_get(pos, "price") or 0)
+                        for pos in (_get(body, "positions") or [])
                     )
-                    body = resp.body
-
-                    def _get(obj, key, default=None):
-                        if obj is None:
-                            return default
-                        return obj.get(key, default) if hasattr(obj, "get") else getattr(obj, key, default)
-
-                    # Primary: sum the cash field from USD balance entries (direct brokerage-reported cash)
-                    balances = _get(body, "balances") or []
-                    usd_cash_values = []
-                    for b in balances:
-                        curr = _get(b, "currency")
-                        code = _get(curr, "code", "USD") or "USD"
-                        cash_val = _get(b, "cash")
-                        print(f"[buying-power] {result_key} balance: currency={code} cash={cash_val} buying_power={_get(b,'buying_power')}")
-                        if code == "USD" and cash_val is not None:
-                            usd_cash_values.append(float(cash_val))
-
-                    if usd_cash_values:
-                        net_cash = sum(usd_cash_values)
-                        print(f"[buying-power] {result_key}: balance.cash={net_cash:.2f}")
+                    if total is not None:
+                        net_cash = float(total) - positions_value
+                        print(f"[buying-power] {result_key}: fallback total={float(total):.2f} - positions={positions_value:.2f} → net_cash={net_cash:.2f}")
                         result[result_key] = round(result.get(result_key, 0.0) + net_cash, 2)
                     else:
-                        # Fallback: account total minus positions market value
-                        acct = _get(body, "account")
-                        acct_bal = _get(acct, "balance")
-                        acct_total_raw = _get(acct_bal, "total")
-                        acct_total = _get(acct_total_raw, "amount") if isinstance(acct_total_raw, dict) else acct_total_raw
-                        tv = _get(body, "total_value")
-                        tv_value = _get(tv, "value")
-                        total = acct_total if acct_total is not None else tv_value
-                        positions_value = sum(
-                            float(_get(pos, "units") or 0) * float(_get(pos, "price") or 0)
-                            for pos in (_get(body, "positions") or [])
-                        )
-                        if total is not None:
-                            net_cash = float(total) - positions_value
-                            print(f"[buying-power] {result_key}: fallback total={float(total):.2f} - positions={positions_value:.2f} → net_cash={net_cash:.2f}")
-                            result[result_key] = round(result.get(result_key, 0.0) + net_cash, 2)
-                        else:
-                            print(f"[buying-power] {result_key}: no cash or total available, skipping")
-                except Exception as e:
-                    import traceback
-                    print(f"[buying-power] error for {result_key}: {e}")
-                    traceback.print_exc()
-        finally:
-            db.close()
+                        print(f"[buying-power] {result_key}: no cash or total available, skipping")
+            except Exception as e:
+                import traceback
+                print(f"[buying-power] error for {result_key}: {e}")
+                traceback.print_exc()
         print(f"[buying-power] result: {result}")
         # Cache result so /buying-power/cached can serve it instantly next time
-        _save_buying_power_cache(result)
+        _save_buying_power_cache(scope, result)
         return result
     except Exception as e:
         print(f"[buying-power] top-level error: {e}")
         return {}
 
 
-def _save_buying_power_cache(result: dict):
+def _save_buying_power_cache(scope: UserScope, result: dict):
+    """Cache this user's buying power. Takes the request scope rather than
+    opening its own session — a second session would write outside the user
+    filter and, being unscoped, could overwrite another user's cached row."""
     import json
     from backend.app.db.schema import PortfolioSummary
-    from backend.app.core.database import SessionLocal
-    _db = SessionLocal()
+    require_scope(scope)
     try:
-        summary = _db.query(PortfolioSummary).first()
+        summary = scope.query(PortfolioSummary).first()
         if summary:
             summary.buying_power_json = json.dumps(result)
         else:
-            summary = PortfolioSummary(id=1, cash_balance=0.0, buying_power_json=json.dumps(result))
-            _db.add(summary)
-        _db.commit()
+            scope.add(PortfolioSummary(cash_balance=0.0, buying_power_json=json.dumps(result)))
+        scope.db.commit()
     except Exception:
-        _db.rollback()
-    finally:
-        _db.close()
+        scope.db.rollback()
 
 
 @router.get("/buying-power/cached")
-def get_buying_power_cached(db: Session = Depends(get_db)):
+def get_buying_power_cached(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
     """Return last cached buying power from DB — instant, no SnapTrade call."""
     import json
     from backend.app.db.schema import PortfolioSummary
-    summary = db.query(PortfolioSummary).first()
+    summary = scope.query(PortfolioSummary).first()
     if summary and summary.buying_power_json:
         return json.loads(summary.buying_power_json)
     return {}
 
 
 @router.get("/holdings", response_model=List[Holding])
-def get_holdings(db: Session = Depends(get_db)):
-    return db.query(DBHolding).all()
+def get_holdings(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
+    return scope.query(DBHolding).all()
 
 
 @router.get("/realized-gains", response_model=List[RealizedGain])
-def get_realized_gains(db: Session = Depends(get_db)):
-    return db.query(DBRealizedGain).all()
+def get_realized_gains(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
+    return scope.query(DBRealizedGain).all()
 
 
 @router.get("/unrealized-gains", response_model=List[UnrealizedGain])
-def get_unrealized_gains(db: Session = Depends(get_db)):
-    return db.query(DBUnrealizedGain).all()
+def get_unrealized_gains(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
+    return scope.query(DBUnrealizedGain).all()
 
 
 @router.post("/realized-gains/process")
-def process_realized_gains_endpoint(db: Session = Depends(get_db)):
-    process.process_transactions(db)
+def process_realized_gains_endpoint(db: Session = Depends(get_db),
+    scope: UserScope = Depends(get_user_scope)):
+    process.process_transactions(db, scope.user_id)
     return {"message": "Realized gains processing initiated."}

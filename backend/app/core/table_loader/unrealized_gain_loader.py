@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 from backend.app.db.schema import UnrealizedGain
+from backend.app.core.scoping import UserScope
 from backend.app.core.stock_fetcher import get_stock_price, get_stock_quote, is_expired_option
 from backend.app.core.utils.ticker import underlying_ticker
 from backend.app.core.stock_split_utils import build_split_map
@@ -11,16 +12,14 @@ _OPTIONS_MULTIPLIER = 100  # 1 contract = 100 underlying shares
 def _multiplier(asset_type: str) -> int:
     return _OPTIONS_MULTIPLIER if (asset_type or "").lower() == "options" else 1
 
-def delete(db: Session, brokerage_name: str = None):
-    # Clear existing unrealized gains for the given brokerage, or all if none specified
-    if brokerage_name:
-        db.query(UnrealizedGain).filter(UnrealizedGain.brokerage == brokerage_name).delete()
-    else:
-        db.query(UnrealizedGain).delete()
-    db.commit()
+def delete(scope: UserScope, brokerage_name: str = None):
+    # Scoped delete — unscoped, this clears every user's open lots.
+    scope.delete_all(UnrealizedGain, brokerage=brokerage_name)
+    scope.db.commit()
 
-def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brokerage_name: str = None) -> Dict[str, float]:
-    print(f"[unrealized_gain_loader] Starting load for brokerage: {brokerage_name}")
+def load(scope: UserScope, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brokerage_name: str = None) -> Dict[str, float]:
+    print(f"[unrealized_gain_loader] Starting load for user {scope.user_id}, brokerage: {brokerage_name}")
+    db = scope.db
 
     # Capture the marks we already have before clearing the table. A price fetch
     # can fail for reasons that have nothing to do with the position — a rate
@@ -28,13 +27,13 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
     # destroy rows we cannot re-derive. A stale price is wrong by a day; a
     # missing lot is wrong by the whole position.
     last_known: Dict[str, tuple] = {}
-    for row in db.query(UnrealizedGain).all():
+    for row in scope.query(UnrealizedGain).all():
         key = row.option_symbol or row.ticker
         if key and row.currentPrice:
             last_known[key] = (row.currentPrice, row.prevClose)
 
     # First, delete existing unrealized gains
-    delete(db, brokerage_name)
+    delete(scope, brokerage_name)
 
     unrealized_gains_list = []
     today = datetime.now()
@@ -135,7 +134,7 @@ def load(db: Session, open_lots_by_ticker: Dict[str, List[Dict[str, Any]]], brok
 
     try:
         print(f"[unrealized_gain_loader] Adding {len(unrealized_gains_list)} unrealized gains to DB.")
-        db.add_all(unrealized_gains_list)
+        scope.add_all(unrealized_gains_list)  # stamps user_id
         db.commit()
         print(f"[unrealized_gain_loader] Successfully committed unrealized gains.")
     except Exception as e:

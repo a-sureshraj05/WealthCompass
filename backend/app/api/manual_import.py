@@ -1,17 +1,53 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from backend.app.api.auth import get_current_user
 from backend.app.core import process
 from backend.app.core.statement_parser import csv_data_parse
 from backend.app.core.database import get_db
+from backend.app.core.scoping import UserScope
 from backend.app.core.utils.asset_type import normalize as normalize_asset_type
 from backend.app.db.schema import \
     Transaction as DBTransaction, ManualRawTransaction as DBManualRawTransaction, \
-    SnaptradeTransaction as DBSnaptradeTransaction
+    SnaptradeTransaction as DBSnaptradeTransaction, User
 
 router = APIRouter()
+
+DEMO_MODE = os.getenv("WC_DEMO_MODE", "").lower() == "true"
+
+
+def require_import_access(user: User) -> None:
+    """Guard CSV upload on the public demo.
+
+    The demo publishes its passwords, so its accounts are shared by every
+    visitor at once. This endpoint *persists* what it parses — so without this
+    guard, one visitor uploading a real brokerage statement would have it
+    written to a shared account and shown to the next visitor who signed in.
+    The hourly reset bounds that window; it does not close it.
+
+    That is a hazard for visitors rather than for the instance owner, which is
+    exactly why it is easy to miss: nothing about the operator's own data is at
+    risk, so nothing complains.
+
+    Checked in the same order as brokerage.py's guard — the row-level flag
+    first, because it travels with the data and holds even if this database is
+    started without WC_DEMO_MODE set.
+    """
+    if getattr(user, "is_test_user", False):
+        raise HTTPException(
+            status_code=503,
+            detail="This is a shared demo account. Statement import is disabled "
+                   "for it — anything uploaded would be visible to other visitors.",
+        )
+    if DEMO_MODE:
+        raise HTTPException(
+            status_code=503,
+            detail="Statement import is disabled in demo mode.",
+        )
 
 
 class StatementRequest(BaseModel):
@@ -21,20 +57,25 @@ class StatementRequest(BaseModel):
 
 @router.post("/import/parse-statement")
 def parse_statement_import_endpoint(
-    request: StatementRequest, db: Session = Depends(get_db)
+    request: StatementRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    require_import_access(current_user)
+    # An upload belongs to whoever is logged in. Every row written below is
+    # stamped through the scope rather than by hand, so an added field or an
+    # extra insert cannot quietly land in another account.
+    scope = UserScope(db, current_user.id)
     try:
-        # Delete existing manual raw transactions for this brokerageName
-        db.query(DBManualRawTransaction).filter(
-            DBManualRawTransaction.brokerage == request.brokerageName
-        ).delete()
-        # Delete existing manual transactions — preserve is_backend_verified ones
+        # Delete this user's existing manual raw transactions for this brokerage
+        scope.delete_all(DBManualRawTransaction, brokerage=request.brokerageName)
+        # Delete their manual transactions — preserve is_backend_verified ones
         # (those are user-curated seed lots that must survive re-imports)
-        db.query(DBTransaction).filter(
+        scope.query(DBTransaction).filter(
             DBTransaction.brokerage == request.brokerageName,
             DBTransaction.source == "manual",
             DBTransaction.is_backend_verified == False,
-        ).delete()
+        ).delete(synchronize_session=False)
         db.commit()
 
         parsed_transactions_data = csv_data_parse(
@@ -46,7 +87,7 @@ def parse_statement_import_endpoint(
         # SnapTrade covers from its min date onwards, manual fills the history before it.
         snap_min_dates = {
             (brokerage, ticker): min_date
-            for brokerage, ticker, min_date in db.query(
+            for brokerage, ticker, min_date in scope.query(
                 DBSnaptradeTransaction.brokerage,
                 DBSnaptradeTransaction.ticker,
                 func.min(DBSnaptradeTransaction.date),
@@ -70,7 +111,7 @@ def parse_statement_import_endpoint(
                 totalCost=transaction_data["totalCost"],
                 assetType=asset_type,
             )
-            db.add(db_raw)
+            scope.add(db_raw)  # stamps user_id
             db.flush()
 
             # Only push to unified table if this row predates SnapTrade's coverage
@@ -95,19 +136,17 @@ def parse_statement_import_endpoint(
                 source="manual",
                 raw_id=db_raw.id,
             )
-            db.add(db_transaction)
+            scope.add(db_transaction)  # stamps user_id
             db.flush()
             new_transaction_ids.append(db_transaction.id)
         db.commit()
 
-        process.process_transactions(
-            db, request.brokerageName
-        )  # Call the new processing function with db session and brokerage name
+        process.process_transactions(db, current_user.id, request.brokerageName)
 
         # After commit, query for the newly added transactions to get their IDs and full data
         # Or, to simplify, fetch all transactions for the given brokerage after the update
         updated_transactions = (
-            db.query(DBTransaction)
+            scope.query(DBTransaction)
             .filter(DBTransaction.brokerage == request.brokerageName)
             .all()
         )

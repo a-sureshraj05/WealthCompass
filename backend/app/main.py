@@ -6,15 +6,62 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".gemini", ".env"))
 load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
 
-from fastapi import FastAPI, Depends
+from pathlib import Path
+
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.app.core.database import engine
 from backend.app.db.schema import Base
 
-from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, prices, preferences
+DEMO_MODE = os.getenv("WC_DEMO_MODE", "").lower() == "true"
+
+from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, prices, preferences, insights
 from .api.auth import get_current_user
 
 app = FastAPI()
+
+
+def _assert_schema_current():
+    """Refuse to serve a database whose tables predate this build.
+
+    `create_all()` only creates *missing tables* — it never adds a column to an
+    existing one. So a database written before a new column was introduced opens
+    without complaint and then fails on the first query that mentions it, which
+    surfaces as 500s behind a working login page rather than as a schema problem.
+
+    Checking up front turns that into one legible message. It is deliberately
+    generic: it compares every model column against the live table, so a column
+    added later is caught without anyone remembering to update this function.
+    """
+    from sqlalchemy import inspect
+
+    inspector = inspect(engine)
+    existing = set(inspector.get_table_names())
+
+    drift = []
+    for table_name, table in Base.metadata.tables.items():
+        if table_name not in existing:
+            continue  # create_all() just made it — nothing to compare against
+        actual = {col["name"] for col in inspector.get_columns(table_name)}
+        missing = [c.name for c in table.columns if c.name not in actual]
+        if missing:
+            drift.append((table_name, missing))
+
+    if not drift:
+        return
+
+    detail = "\n".join(f"    {t} is missing: {', '.join(cols)}" for t, cols in drift)
+    raise SystemExit(
+        "\nREFUSED TO START: this database predates the current schema.\n\n"
+        f"  database: {engine.url}\n{detail}\n\n"
+        "  Nothing was modified. Choose one:\n\n"
+        "    ./server.sh demo        run against db/demo.db instead\n"
+        "    git checkout main       run the build this database was written for\n\n"
+        "  To migrate this database, run the migration explicitly — it is never\n"
+        "  applied as a side effect of starting the server.\n"
+    )
 
 
 @app.on_event("startup")
@@ -169,19 +216,16 @@ def startup_event():
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN ui_prefs_json TEXT"))
                 conn.commit()
+        if "insights_json" not in ps_cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN insights_json TEXT"))
+                conn.commit()
 
-    # Bootstrap portfolio_summary if empty (first run after adding the table)
-    from backend.app.core.database import SessionLocal
-    from backend.app.db.schema import PortfolioSummary, Transaction as _DBTxn
-    _sum_db = SessionLocal()
-    try:
-        if not _sum_db.query(PortfolioSummary).first():
-            cash_txns = _sum_db.query(_DBTxn).filter(_DBTxn.assetType == "Cash", _DBTxn.is_deleted == False).all()
-            balance = sum(t.totalCost if t.action.upper() == "BUY" else -t.totalCost for t in cash_txns)
-            _sum_db.add(PortfolioSummary(id=1, cash_balance=round(balance, 2)))
-            _sum_db.commit()
-    finally:
-        _sum_db.close()
+    # portfolio_summary is no longer a singleton pinned at id=1 — it is one row
+    # per user, created by process_transactions() the first time that user's
+    # data is processed. Bootstrapping a row here would have to invent a
+    # user_id, and inventing one is exactly the fail-open write the NOT NULL
+    # constraint exists to prevent.
 
     # Seed stock_splits with well-known historical splits (safe to run every startup — skips duplicates)
     from backend.app.core.stock_split_seeds import SEED_SPLITS
@@ -197,6 +241,16 @@ def startup_event():
     finally:
         _seed_db.close()
 
+    # Last: the legacy ALTER blocks above are allowed to bring an older SQLite
+    # file up to date first, so this only fires on drift they do not cover.
+    _assert_schema_current()
+
+    # Demo instance only — both are no-ops unless WC_DEMO_MODE=true.
+    from backend.app.core.demo_reset import seed_if_empty, start_reset_loop
+
+    seed_if_empty()
+    start_reset_loop()
+
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(transactions.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
@@ -208,8 +262,49 @@ app.include_router(options.router, prefix="/api/v1", dependencies=[Depends(get_c
 app.include_router(splits.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(prices.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(preferences.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(insights.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
+@app.get("/healthz")
+def healthz():
+    """Liveness for the platform health check.
+
+    Deliberately touches the database. A health check that only proves the
+    process is accepting sockets reports green while every real request 500s on
+    a broken connection, which is the failure mode worth catching.
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database unreachable: {exc}")
+    return {"status": "ok", "demo": DEMO_MODE}
+
+
+# ── Static SPA ────────────────────────────────────────────────────────────
+# Registered LAST, after every router, because the catch-all below matches any
+# path — mounted earlier it would swallow /api/v1/*.
+#
+# Only wired up when a build exists. Locally there is no frontend/dist: Vite
+# serves the app on :5173 and proxies the API here, so the mount must not be a
+# hard requirement or `./server.sh start` would break.
+_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+if _DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=_DIST / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    def spa(full_path: str):
+        # The app has no client-side router, so every non-API path resolves to
+        # the same document. Real files under /assets are already handled above.
+        candidate = _DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_DIST / "index.html")
+
+else:
+    @app.get("/")
+    def read_root():
+        return {"Hello": "World", "spa": "not built — run `npm run build` in frontend/"}

@@ -1,0 +1,58 @@
+# Fly.io config for the WealthCompass PUBLIC DEMO instance.
+#
+# This deploys fabricated data only. There is no volume and no Postgres: the
+# database is SQLite on the machine's ephemeral filesystem, re-seeded at boot and
+# every 12 hours thereafter. Nothing here persists across a restart, which is the point.
+#
+# `app` must be globally unique across Fly. Change it if `fly launch` reports the
+# name is taken. Kept in step with render.yaml so the hostname does not change
+# if this ever becomes the live platform.
+app = "wealthcompass-demo"
+
+# Ashburn, Virginia. Change to the region nearest your audience — `fly platform
+# regions` lists them. Latency is the only thing this affects.
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Also set in the Dockerfile; repeated here so the deployed configuration is
+  # readable without opening the image. WC_DEMO_MODE is what closes registration
+  # (auth.py), blocks brokerage routes, disables the tickers.yml allowlist, and
+  # unlocks the seed script's guards.
+  WC_DEMO_MODE = "true"
+  WC_DEMO_RESET_MINUTES = "720"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+
+  # Always-on. A demo that cold-starts leaves a visitor looking at a spinner for
+  # the boot plus a ~6s re-seed, which is a poor first impression for the sake of
+  # a few dollars a month.
+  #
+  # To trade responsiveness for cost, set auto_stop_machines = "stop" and
+  # min_machines_running = 0. Correctness is unaffected either way: a cold start
+  # re-seeds from scratch, exactly as a scheduled reset would.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    # /healthz runs SELECT 1 against the database. A check that only proved the
+    # socket was open would report green while every real request 500s.
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    # Generous: the first boot seeds the database, which fetches live quotes for
+    # every demo position. Measured at ~6s locally; this leaves ample headroom on
+    # a slower machine without letting a genuinely dead app stay in rotation.
+    grace_period = "60s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  # 512MB is the usual default, but pandas and yfinance are both resident during
+  # a reseed and the OOM killer is not a subtle failure. 1GB is a few dollars for
+  # not having to debug that.
+  memory = "1gb"

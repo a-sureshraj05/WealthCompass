@@ -179,11 +179,73 @@ export const fetchUnrealizedGains = async (): Promise<UnrealizedLot[]> => {
   return data.map((item: any) => ({ ...item, id: String(item.id), gain: item.unrealizedGain }));
 };
 
-export const getPortfolioInsights = async (holdings: StockHolding[]): Promise<string> => {
-  if (holdings.length === 0) return "Add holdings to get AI insights.";
+export interface PortfolioInsights {
+  text: string | null;
+  generated_at: number | null;
+  available: boolean;
+  reason: string | null;
+  /** The portfolio changed since this text was written (or nothing is cached). */
+  stale: boolean;
+}
 
-  // This will be implemented in the backend in the next step.
-  return "Insights are not yet implemented in the new architecture.";
+/**
+ * Last generated insights. Free and instant — reads the cache, never calls the
+ * AI service. Safe to fire on every mount.
+ */
+export const fetchInsightsCached = async (): Promise<PortfolioInsights> => {
+  const response = await apiFetch("/api/v1/insights/cached");
+  if (!response.ok) throw new Error(`Failed to fetch insights: ${response.status}`);
+  return response.json();
+};
+
+/**
+ * Generate fresh insights. This is the call that costs money, so it must only
+ * ever run from an explicit user action — never from an effect on mount.
+ *
+ * The backend builds the digest from the database itself; nothing about the
+ * portfolio is sent from here.
+ */
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatReply {
+  reply: string | null;
+  available: boolean;
+  reason: string | null;
+  remaining: number | null;
+}
+
+/**
+ * Ask a question about the portfolio.
+ *
+ * The conversation lives in React state and is posted each time — deliberately
+ * not persisted anywhere. The backend rebuilds the portfolio digest itself and
+ * caps how much of this history it will actually send on.
+ */
+export const sendChatMessage = async (messages: ChatMessage[]): Promise<ChatReply> => {
+  const response = await apiFetch("/api/v1/insights/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+  });
+  if (response.status === 429 || response.status === 400) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Message could not be sent.");
+  }
+  if (!response.ok) throw new Error(`Chat failed: ${response.status}`);
+  return response.json();
+};
+
+export const generateInsights = async (): Promise<PortfolioInsights> => {
+  const response = await apiFetch("/api/v1/insights/generate", { method: "POST" });
+  if (response.status === 429) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Please wait before regenerating.");
+  }
+  if (!response.ok) throw new Error(`Failed to generate insights: ${response.status}`);
+  return response.json();
 };
 
 export const createPlaidLinkToken = async (): Promise<string> => {
