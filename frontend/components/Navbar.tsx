@@ -71,7 +71,7 @@ const Navbar: React.FC<Props> = ({ stats, onLogout, sidebarCollapsed, numbersVis
             title="Sign out"
             className="w-9 h-9 rounded-full bg-[#0F52BA] flex items-center justify-center text-white font-bold text-xs hover:bg-[#0A3E8F] transition-colors"
           >
-            SA
+            AH
           </button>
         </div>
       </div>
