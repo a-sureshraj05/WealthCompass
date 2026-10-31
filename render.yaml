@@ -33,10 +33,14 @@ services:
   # Serves BOTH the API and the built frontend from a single process
   # (main.py mounts frontend/dist as a SPA fallback whenever it exists in the
   # image, which it always does) — no separate frontend host needed. What
-  # makes this the real app rather than the demo is simply the environment
-  # it's given: no WC_DEMO_MODE (so there's no seed/reset loop and no
-  # baked-demo-data reset timer) and a DATABASE_URL pointed at Supabase
-  # instead of the throwaway SQLite baked into the image.
+  # makes this the real app rather than the demo is the environment it's
+  # given: WC_DEMO_MODE explicitly "false" (not just omitted — the
+  # Dockerfile bakes `ENV WC_DEMO_MODE=true` as the image's own default, so
+  # a service that merely doesn't mention this key inherits demo mode from
+  # the image, not "off"; confirmed the hard way via a live /healthz check
+  # returning demo:true on a service with no WC_DEMO_MODE key in its Render
+  # env at all) and a DATABASE_URL pointed at Supabase instead of the
+  # throwaway SQLite baked into the image.
   #
   # Registration is gated by invite codes (see
   # backend/scripts/create_invite_codes.py) regardless of WC_ALLOW_REGISTRATION,
@@ -54,6 +58,9 @@ services:
     healthCheckPath: /healthz
 
     envVars:
+      - key: WC_DEMO_MODE
+        value: "false"
+
       - key: JWT_SECRET
         generateValue: true
 
