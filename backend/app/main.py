@@ -11,6 +11,8 @@ from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from backend.app.core.database import engine
 from backend.app.db.schema import Base
@@ -18,9 +20,11 @@ from backend.app.db.schema import Base
 DEMO_MODE = os.getenv("WC_DEMO_MODE", "").lower() == "true"
 
 from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, prices, preferences, insights
-from .api.auth import get_current_user
+from .api.auth import get_current_user, limiter
 
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 def _assert_schema_current():
