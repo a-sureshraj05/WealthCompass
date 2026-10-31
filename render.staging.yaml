@@ -1,0 +1,63 @@
+# Render blueprint for WealthCompass STAGING — an isolated copy of the real
+# app used to test new code before it's promoted to production.
+#
+# This is a SEPARATE Blueprint from the production one (render.yaml, tracked
+# on design/cloud-launch for now, eventually main): this file lives on the
+# `staging` branch and is read by a Blueprint pointed specifically at that
+# branch + this filename (Render Blueprints can't span two branches from one
+# file — confirmed via Render's own docs — so staging and production each
+# need their own file + branch pairing, not a shared render.yaml).
+#
+# Workflow: ongoing work happens on `staging`. Once something is verified
+# here, it gets promoted by merging `staging` -> design/cloud-launch (and,
+# eventually, -> main), which is what actually ships it to production.
+#
+# wealthcompass-demo was previously a public, no-login, fabricated-data
+# showcase (WC_DEMO_MODE=true, auto-resets). It's been repurposed here as a
+# real staging environment instead — same real-app code path as production
+# (WC_DEMO_MODE=false), own Supabase database, own persistent data — so that
+# testing never touches production data, demo mode's auto-reset is gone, and
+# the data here actually sticks around between test sessions.
+
+services:
+  - type: web
+    name: wealthcompass-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+
+    envVars:
+      # Explicitly "false", not omitted — the Dockerfile bakes
+      # `ENV WC_DEMO_MODE=true` as the image's own default, so omitting this
+      # key here would silently put this service back into demo mode. See
+      # the matching note in render.yaml; this bit the real app once
+      # already, don't repeat it here.
+      - key: WC_DEMO_MODE
+        value: "false"
+
+      - key: JWT_SECRET
+        generateValue: true
+
+      # A SEPARATE Supabase project from production's — not just a separate
+      # database within the same project. Keeps staging genuinely isolated:
+      # a bad migration, a buggy test, or a deliberate destructive test can
+      # never reach real data. Supabase's free tier allows 2 active projects
+      # per organization, so this costs nothing extra.
+      #
+      # Same connection-string requirements as production: Supabase's
+      # SESSION POOLER string specifically (Supavisor, port 5432, host
+      # aws-0-<region>.pooler.supabase.com, username postgres.<project-ref>),
+      # NOT the "Direct connection" string (resolves IPv6-only; Render has no
+      # outbound IPv6 route) and NOT the Transaction pooler on 6543 (breaks
+      # the session-scoped pg_advisory_lock in prices.py). `sync: false`
+      # means the value is entered once in the dashboard and never committed
+      # here.
+      - key: DATABASE_URL
+        sync: false
+
+      # Same AI-insights key as production, reused rather than duplicated —
+      # linking the group costs nothing extra and lets staging exercise the
+      # AI features too. Absent it, those features just report unconfigured.
+      - fromGroup: WealthCompass
