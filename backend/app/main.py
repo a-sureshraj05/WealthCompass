@@ -67,177 +67,181 @@ def _assert_schema_current():
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
-    # Migration: add is_deleted column to transactions if it doesn't exist
-    from sqlalchemy import inspect, text
-    inspector = inspect(engine)
-    columns = [col["name"] for col in inspector.get_columns("transactions")]
-    if "is_deleted" not in columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE transactions ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0"))
-            conn.commit()
-    if "is_override" not in columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE transactions ADD COLUMN is_override BOOLEAN NOT NULL DEFAULT 0"))
-            conn.commit()
-    if "original_values" not in columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE transactions ADD COLUMN original_values TEXT"))
-            conn.commit()
-    if "raw_id" not in columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE transactions ADD COLUMN raw_id INTEGER"))
-            conn.commit()
-    if "option_symbol" not in columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE transactions ADD COLUMN option_symbol TEXT"))
-            conn.commit()
-
-    # Migration: create lot_assignments table if it doesn't exist
-    if "lot_assignments" not in inspector.get_table_names():
-        with engine.connect() as conn:
-            conn.execute(text(
-                "CREATE TABLE lot_assignments ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                "sell_transaction_id INTEGER NOT NULL, "
-                "buy_transaction_id INTEGER NOT NULL, "
-                "quantity REAL NOT NULL)"
-            ))
-            conn.commit()
-
-    # Migration: create options_retain table if it doesn't exist
-    if "options_retain" not in inspector.get_table_names():
-        with engine.connect() as conn:
-            conn.execute(text(
-                "CREATE TABLE options_retain ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                "brokerage TEXT NOT NULL, "
-                "ticker TEXT NOT NULL, "
-                "buy_date DATETIME NOT NULL, "
-                "retain_quantity REAL NOT NULL DEFAULT 0, "
-                "UNIQUE(brokerage, ticker, buy_date))"
-            ))
-            conn.commit()
-
-    # Migration: add previousClose to holdings if it doesn't exist
-    if "holdings" in inspector.get_table_names():
-        holding_columns = [col["name"] for col in inspector.get_columns("holdings")]
-        if "previousClose" not in holding_columns:
+    # Everything below is SQLite-only patchwork for files that predate the
+    # current schema. A Postgres database is always created up to date by
+    # Alembic (backend/migrations/), so this entire block is skipped there.
+    if engine.dialect.name == "sqlite":
+        # Migration: add is_deleted column to transactions if it doesn't exist
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        columns = [col["name"] for col in inspector.get_columns("transactions")]
+        if "is_deleted" not in columns:
             with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE holdings ADD COLUMN previousClose REAL DEFAULT 0.0"))
+                conn.execute(text("ALTER TABLE transactions ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0"))
+                conn.commit()
+        if "is_override" not in columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE transactions ADD COLUMN is_override BOOLEAN NOT NULL DEFAULT 0"))
+                conn.commit()
+        if "original_values" not in columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE transactions ADD COLUMN original_values TEXT"))
+                conn.commit()
+        if "raw_id" not in columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE transactions ADD COLUMN raw_id INTEGER"))
+                conn.commit()
+        if "option_symbol" not in columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE transactions ADD COLUMN option_symbol TEXT"))
                 conn.commit()
 
-    # Migration: add option_symbol to snaptrade_transactions if it doesn't exist
-    if "snaptrade_transactions" in inspector.get_table_names():
-        st_columns = [col["name"] for col in inspector.get_columns("snaptrade_transactions")]
-        if "option_symbol" not in st_columns:
+        # Migration: create lot_assignments table if it doesn't exist
+        if "lot_assignments" not in inspector.get_table_names():
             with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE snaptrade_transactions ADD COLUMN option_symbol TEXT"))
+                conn.execute(text(
+                    "CREATE TABLE lot_assignments ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "sell_transaction_id INTEGER NOT NULL, "
+                    "buy_transaction_id INTEGER NOT NULL, "
+                    "quantity REAL NOT NULL)"
+                ))
                 conn.commit()
 
-    # Migration: wash sale columns on realized_gains
-    if "realized_gains" in inspector.get_table_names():
-        rg_columns = [col["name"] for col in inspector.get_columns("realized_gains")]
-        if "is_wash_sale" not in rg_columns:
+        # Migration: create options_retain table if it doesn't exist
+        if "options_retain" not in inspector.get_table_names():
             with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE realized_gains ADD COLUMN is_wash_sale BOOLEAN NOT NULL DEFAULT 0"))
-                conn.commit()
-        if "wash_sale_disallowed_amount" not in rg_columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE realized_gains ADD COLUMN wash_sale_disallowed_amount REAL NOT NULL DEFAULT 0"))
-                conn.commit()
-
-    # Migration: wash sale columns on unrealized_gains
-    if "unrealized_gains" in inspector.get_table_names():
-        ug_columns = [col["name"] for col in inspector.get_columns("unrealized_gains")]
-        if "wash_sale_adjustment" not in ug_columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_adjustment REAL NOT NULL DEFAULT 0"))
-                conn.commit()
-        if "wash_sale_clear_date" not in ug_columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_clear_date DATE"))
-                conn.commit()
-        if "wash_sale_at_risk" not in ug_columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_at_risk BOOLEAN NOT NULL DEFAULT 0"))
-                conn.commit()
-        if "wash_sale_risk_trigger_date" not in ug_columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_risk_trigger_date DATE"))
+                conn.execute(text(
+                    "CREATE TABLE options_retain ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "brokerage TEXT NOT NULL, "
+                    "ticker TEXT NOT NULL, "
+                    "buy_date DATETIME NOT NULL, "
+                    "retain_quantity REAL NOT NULL DEFAULT 0, "
+                    "UNIQUE(brokerage, ticker, buy_date))"
+                ))
                 conn.commit()
 
-    # Migration: account_id column linking to brokerage_accounts reference table
-    if "account_id" not in columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE transactions ADD COLUMN account_id INTEGER"))
-            conn.commit()
-    if "holdings" in inspector.get_table_names():
-        holding_columns = [col["name"] for col in inspector.get_columns("holdings")]
-        if "account_id" not in holding_columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE holdings ADD COLUMN account_id INTEGER"))
-                conn.commit()
-    if "unrealized_gains" in inspector.get_table_names():
-        ug_columns = [col["name"] for col in inspector.get_columns("unrealized_gains")]
-        if "account_id" not in ug_columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN account_id INTEGER"))
-                conn.commit()
-    if "snaptrade_transactions" in inspector.get_table_names():
-        st_columns = [col["name"] for col in inspector.get_columns("snaptrade_transactions")]
-        if "account_id" not in st_columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE snaptrade_transactions ADD COLUMN account_id INTEGER"))
-                conn.commit()
-
-    if "unrealized_gains" in inspector.get_table_names():
-        ug_columns = [col["name"] for col in inspector.get_columns("unrealized_gains")]
-        if "option_symbol" not in ug_columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN option_symbol TEXT"))
-                conn.commit()
-        if "prevClose" not in ug_columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN prevClose REAL"))
-                conn.commit()
-
-    # Migration: buying_power_json and analyst_json columns on portfolio_summary
-    if "portfolio_summary" in inspector.get_table_names():
-        ps_cols = [col["name"] for col in inspector.get_columns("portfolio_summary")]
-        if "buying_power_json" not in ps_cols:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN buying_power_json TEXT"))
-                conn.commit()
-        if "analyst_json" not in ps_cols:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN analyst_json TEXT"))
-                conn.commit()
-        if "ui_prefs_json" not in ps_cols:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN ui_prefs_json TEXT"))
-                conn.commit()
-        if "insights_json" not in ps_cols:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN insights_json TEXT"))
-                conn.commit()
-
-    # Migration: encryption (T2) columns on users — all nullable. A row missing
-    # these is exactly how auth.login() recognises a pre-Phase-2 legacy account
-    # and runs the one-time re-encryption upgrade instead of a normal unwrap.
-    if "users" in inspector.get_table_names():
-        user_columns = [col["name"] for col in inspector.get_columns("users")]
-        for col_name, col_sql in (
-            ("dek_salt", "TEXT"),
-            ("wrapped_dek", "TEXT"),
-            ("kek_params_json", "TEXT"),
-            ("recovery_salt", "TEXT"),
-            ("recovery_wrapped_dek", "TEXT"),
-            ("recovery_key_confirmed_at", "DATETIME"),
-        ):
-            if col_name not in user_columns:
+        # Migration: add previousClose to holdings if it doesn't exist
+        if "holdings" in inspector.get_table_names():
+            holding_columns = [col["name"] for col in inspector.get_columns("holdings")]
+            if "previousClose" not in holding_columns:
                 with engine.connect() as conn:
-                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_sql}"))
+                    conn.execute(text("ALTER TABLE holdings ADD COLUMN previousClose REAL DEFAULT 0.0"))
                     conn.commit()
+
+        # Migration: add option_symbol to snaptrade_transactions if it doesn't exist
+        if "snaptrade_transactions" in inspector.get_table_names():
+            st_columns = [col["name"] for col in inspector.get_columns("snaptrade_transactions")]
+            if "option_symbol" not in st_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE snaptrade_transactions ADD COLUMN option_symbol TEXT"))
+                    conn.commit()
+
+        # Migration: wash sale columns on realized_gains
+        if "realized_gains" in inspector.get_table_names():
+            rg_columns = [col["name"] for col in inspector.get_columns("realized_gains")]
+            if "is_wash_sale" not in rg_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE realized_gains ADD COLUMN is_wash_sale BOOLEAN NOT NULL DEFAULT 0"))
+                    conn.commit()
+            if "wash_sale_disallowed_amount" not in rg_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE realized_gains ADD COLUMN wash_sale_disallowed_amount REAL NOT NULL DEFAULT 0"))
+                    conn.commit()
+
+        # Migration: wash sale columns on unrealized_gains
+        if "unrealized_gains" in inspector.get_table_names():
+            ug_columns = [col["name"] for col in inspector.get_columns("unrealized_gains")]
+            if "wash_sale_adjustment" not in ug_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_adjustment REAL NOT NULL DEFAULT 0"))
+                    conn.commit()
+            if "wash_sale_clear_date" not in ug_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_clear_date DATE"))
+                    conn.commit()
+            if "wash_sale_at_risk" not in ug_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_at_risk BOOLEAN NOT NULL DEFAULT 0"))
+                    conn.commit()
+            if "wash_sale_risk_trigger_date" not in ug_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN wash_sale_risk_trigger_date DATE"))
+                    conn.commit()
+
+        # Migration: account_id column linking to brokerage_accounts reference table
+        if "account_id" not in columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE transactions ADD COLUMN account_id INTEGER"))
+                conn.commit()
+        if "holdings" in inspector.get_table_names():
+            holding_columns = [col["name"] for col in inspector.get_columns("holdings")]
+            if "account_id" not in holding_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE holdings ADD COLUMN account_id INTEGER"))
+                    conn.commit()
+        if "unrealized_gains" in inspector.get_table_names():
+            ug_columns = [col["name"] for col in inspector.get_columns("unrealized_gains")]
+            if "account_id" not in ug_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN account_id INTEGER"))
+                    conn.commit()
+        if "snaptrade_transactions" in inspector.get_table_names():
+            st_columns = [col["name"] for col in inspector.get_columns("snaptrade_transactions")]
+            if "account_id" not in st_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE snaptrade_transactions ADD COLUMN account_id INTEGER"))
+                    conn.commit()
+
+        if "unrealized_gains" in inspector.get_table_names():
+            ug_columns = [col["name"] for col in inspector.get_columns("unrealized_gains")]
+            if "option_symbol" not in ug_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN option_symbol TEXT"))
+                    conn.commit()
+            if "prevClose" not in ug_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE unrealized_gains ADD COLUMN prevClose REAL"))
+                    conn.commit()
+
+        # Migration: buying_power_json and analyst_json columns on portfolio_summary
+        if "portfolio_summary" in inspector.get_table_names():
+            ps_cols = [col["name"] for col in inspector.get_columns("portfolio_summary")]
+            if "buying_power_json" not in ps_cols:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN buying_power_json TEXT"))
+                    conn.commit()
+            if "analyst_json" not in ps_cols:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN analyst_json TEXT"))
+                    conn.commit()
+            if "ui_prefs_json" not in ps_cols:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN ui_prefs_json TEXT"))
+                    conn.commit()
+            if "insights_json" not in ps_cols:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN insights_json TEXT"))
+                    conn.commit()
+
+        # Migration: encryption (T2) columns on users — all nullable. A row missing
+        # these is exactly how auth.login() recognises a pre-Phase-2 legacy account
+        # and runs the one-time re-encryption upgrade instead of a normal unwrap.
+        if "users" in inspector.get_table_names():
+            user_columns = [col["name"] for col in inspector.get_columns("users")]
+            for col_name, col_sql in (
+                ("dek_salt", "TEXT"),
+                ("wrapped_dek", "TEXT"),
+                ("kek_params_json", "TEXT"),
+                ("recovery_salt", "TEXT"),
+                ("recovery_wrapped_dek", "TEXT"),
+                ("recovery_key_confirmed_at", "DATETIME"),
+            ):
+                if col_name not in user_columns:
+                    with engine.connect() as conn:
+                        conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_sql}"))
+                        conn.commit()
 
     # portfolio_summary is no longer a singleton pinned at id=1 — it is one row
     # per user, created by process_transactions() the first time that user's

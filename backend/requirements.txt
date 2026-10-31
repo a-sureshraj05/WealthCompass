@@ -25,6 +25,8 @@ cryptography==43.0.3
 
 # ── Data / persistence ───────────────────────────────────────────────
 SQLAlchemy==2.0.46
+psycopg2-binary==2.9.12           # Postgres driver — binary wheel, no libpq-dev needed in the image
+alembic==1.16.5                   # schema migrations for the hosted Postgres datastore (Phase 3)
 python-dotenv==1.2.1
 PyYAML==6.0.3                     # config/tickers.yml loader (absent in the image; import still runs)
 pandas==2.3.3
