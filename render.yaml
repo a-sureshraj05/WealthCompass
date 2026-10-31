@@ -1,14 +1,20 @@
 # Render blueprint for the WealthCompass PUBLIC DEMO.
 #
-# Paid plan — see the `plan:` field below. Fabricated data only — see
-# docs/CLOUD_LAUNCH.md and the guards in .dockerignore, Dockerfile, and
-# backend/scripts/seed_demo.py.
+# Both services below are on the Free instance type as of 2026-10-31 — a
+# deliberate cost call while real usage is still low, not an oversight. Free
+# means each service sleeps after ~15 min idle and takes ~30-50s to wake on
+# the next request. Known, accepted consequence for wealthcompass-api
+# specifically (not just slower): its session design keeps each logged-in
+# user's decryption key in server-process memory only (see
+# backend/app/core/session_store.py); a Free-tier sleep terminates that
+# process, so anyone logged in when it sleeps is silently signed out, even
+# though their cookie is still technically valid. Revisit (`plan: starter`,
+# $7/mo each) once real traffic or that logout annoyance makes it worth it.
 #
 # This service is Blueprint-managed: Render reconciles the dashboard against
-# this file on every sync. Upgrading the plan ONLY in the dashboard gets
-# silently reverted back to whatever `plan:` says here on the next deploy —
-# that's what was happening before this field was set to a paid tier. Any
-# future plan change must be made here, not just in the UI.
+# this file on every sync. Changing the plan ONLY in the dashboard gets
+# silently reverted back to whatever `plan:` says here on the next deploy.
+# Any future plan change must be made here, not just in the UI.
 #
 # Nothing here locks the project to Render. The Dockerfile is the whole
 # deployment; moving to Koyeb, Cloud Run or Fly means writing that platform's
@@ -37,7 +43,7 @@ services:
   - type: web
     name: wealthcompass-app
     runtime: docker
-    plan: starter
+    plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .
 
@@ -49,12 +55,11 @@ services:
       - key: WC_DEMO_MODE
         value: "true"
 
-      # 720 minutes = 12 hours. On the free plan this rarely fired — the
-      # instance slept after ~15 min idle, and waking up (which restores the
-      # baked template) WAS the reset. On this paid plan the instance no longer
-      # sleeps, so it now stays up continuously and this timer is the only thing
-      # resetting the demo — plan to shorten it if 12 hours of accumulated
-      # visitor edits on a public demo becomes a problem.
+      # 720 minutes = 12 hours. On the free plan this rarely fires in practice —
+      # the instance sleeps after ~15 min idle, and waking up (which restores
+      # the baked template) IS the reset. Only matters if the service gets
+      # enough steady traffic to stay awake continuously for 12h+ straight,
+      # in which case this timer is the backstop.
       - key: WC_DEMO_RESET_MINUTES
         value: "720"
 
@@ -106,7 +111,7 @@ services:
   - type: web
     name: wealthcompass-api
     runtime: docker
-    plan: starter
+    plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /healthz
