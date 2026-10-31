@@ -23,6 +23,11 @@ bcrypt==5.0.0
 argon2-cffi==23.1.0
 cryptography==43.0.3
 
+# ── Rate limiting (backend/app/api/auth.py) ───────────────────────────
+# `limits` pulled in transitively — not pinned separately, same convention
+# as every other direct-only pin in this file.
+slowapi==0.1.10
+
 # ── Data / persistence ───────────────────────────────────────────────
 SQLAlchemy==2.0.46
 psycopg2-binary==2.9.12           # Postgres driver — binary wheel, no libpq-dev needed in the image

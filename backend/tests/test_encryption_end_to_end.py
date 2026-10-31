@@ -40,21 +40,21 @@ def _login_form(email, password):
 
 
 def test_register_and_login_roundtrip(db):
-    resp = auth.register(auth.RegisterRequest(email="alice@example.test", password="correct-horse"), db=db)
+    resp = auth.register(None, auth.RegisterRequest(email="alice@example.test", password="correct-horse"), db=db)
     assert resp["recovery_key"]  # issued exactly once, here
 
-    resp2 = auth.login(_login_form("alice@example.test", "correct-horse"), db=db)
+    resp2 = auth.login(None, _login_form("alice@example.test", "correct-horse"), db=db)
     assert "recovery_key" not in resp2 or resp2.get("recovery_key") is None
 
 
 def test_wrong_password_rejected(db):
-    auth.register(auth.RegisterRequest(email="bob@example.test", password="right-password"), db=db)
+    auth.register(None, auth.RegisterRequest(email="bob@example.test", password="right-password"), db=db)
     with pytest.raises(Exception):
-        auth.login(_login_form("bob@example.test", "wrong-password"), db=db)
+        auth.login(None, _login_form("bob@example.test", "wrong-password"), db=db)
 
 
 def test_sensitive_column_is_ciphertext_on_disk_not_plaintext(db):
-    resp = auth.register(auth.RegisterRequest(email="carol@example.test", password="pw12345"), db=db)
+    resp = auth.register(None, auth.RegisterRequest(email="carol@example.test", password="pw12345"), db=db)
     token = resp["access_token"]
 
     import jose.jwt as jwt_lib
@@ -107,7 +107,7 @@ def test_sensitive_column_is_ciphertext_on_disk_not_plaintext(db):
 
 
 def test_reading_encrypted_column_without_dek_fails_closed(db):
-    resp = auth.register(auth.RegisterRequest(email="dave@example.test", password="pw12345"), db=db)
+    resp = auth.register(None, auth.RegisterRequest(email="dave@example.test", password="pw12345"), db=db)
     token = resp["access_token"]
     import jose.jwt as jwt_lib
     from backend.app.core import session_store

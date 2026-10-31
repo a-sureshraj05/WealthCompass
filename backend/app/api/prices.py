@@ -13,10 +13,11 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_user_scope
-from backend.app.core.database import get_db
+from backend.app.core.database import engine, get_db
 from backend.app.core.scoping import UserScope
 from backend.app.core.stock_fetcher import get_stock_quote, is_expired_option
 from backend.app.core.table_loader import holding_loader
@@ -39,7 +40,10 @@ MAX_WORKERS = 8
 # Serialising the whole endpoint is the right trade here: a refresh is a
 # read-mostly rebuild that takes a couple of seconds, and two concurrent ones
 # would only fetch the same quotes twice. FastAPI runs sync endpoints in a
-# threadpool, so a module-level lock is sufficient.
+# threadpool, so a module-level lock is sufficient — on SQLite, i.e. local dev
+# only. It is per-process, not per-database, so it stops protecting anything
+# the moment this runs under more than one worker/replica, which is exactly
+# the Postgres-hosted case below. Frozen as the dev-only fallback, not grown.
 _refresh_lock = threading.Lock()
 
 
@@ -54,15 +58,41 @@ def refresh_prices(db: Session = Depends(get_db),
     scope: UserScope = Depends(get_user_scope)):
     """Re-quote every open lot and rebuild holdings from the new prices.
 
-    Serialised on _refresh_lock — see the comment there; concurrent runs
-    duplicate every holding.
+    Serialised per-user; see _refresh_lock's comment for the race this
+    guards against (duplicated holdings from two concurrent refreshes).
 
     Wash-sale fields are intentionally left alone: `wash_sale_at_risk` depends on
     `wash_sale_recent_buy_date`, which is not persisted on the row, so it cannot
     be re-derived here. Those are recomputed on the next full reprocess.
     """
-    with _refresh_lock:
-        return _refresh_prices_locked(scope)
+    if engine.dialect.name == "sqlite":
+        with _refresh_lock:
+            return _refresh_prices_locked(scope)
+
+    # Postgres: a session-level advisory lock, keyed by user_id (already an
+    # int — no hashing needed), held on a DEDICATED connection across the
+    # whole critical section. Deliberately NOT pg_advisory_xact_lock:
+    # _refresh_prices_locked commits three times internally (once below,
+    # twice inside holding_loader's delete-then-insert), so a transaction-
+    # scoped lock would release at the FIRST of those commits — before the
+    # actual race window even begins. Must also not be scope.db's own
+    # connection: that one gets returned to the pool at each of those
+    # internal commits, which would release a session-level lock the same
+    # way. The explicit unlock in `finally` is mandatory, not best-effort —
+    # an unreleased session-level lock poisons whatever pooled connection it
+    # rode on until the pool recycles it; these locks only release on
+    # explicit unlock or socket close, never on a plain return-to-pool.
+    #
+    # Naturally per-user rather than global, unlike the SQLite fallback
+    # above — a real improvement, not just a port: unrelated users'
+    # refreshes no longer block each other, only a user's own overlapping
+    # calls (e.g. two open tabs) do.
+    with engine.connect() as lock_conn:
+        lock_conn.execute(text("SELECT pg_advisory_lock(:uid)"), {"uid": scope.user_id})
+        try:
+            return _refresh_prices_locked(scope)
+        finally:
+            lock_conn.execute(text("SELECT pg_advisory_unlock(:uid)"), {"uid": scope.user_id})
 
 
 def _refresh_prices_locked(scope: UserScope) -> PriceRefreshResult:

@@ -29,7 +29,7 @@ def db():
 
 
 def test_recovery_key_unwraps_same_dek_as_password(db):
-    resp = auth.register(auth.RegisterRequest(email="frank@example.test", password="correct-horse"), db=db)
+    resp = auth.register(None, auth.RegisterRequest(email="frank@example.test", password="correct-horse"), db=db)
     recovery_key = resp["recovery_key"]
     assert recovery_key
 
@@ -68,7 +68,7 @@ def test_recovery_key_unwraps_same_dek_as_password(db):
 
 
 def test_wrong_recovery_key_does_not_unwrap(db):
-    resp = auth.register(auth.RegisterRequest(email="grace@example.test", password="pw"), db=db)
+    resp = auth.register(None, auth.RegisterRequest(email="grace@example.test", password="pw"), db=db)
     user = db.query(User).filter_by(email="grace@example.test").first()
 
     wrong_recovery_key = crypto.generate_recovery_key()

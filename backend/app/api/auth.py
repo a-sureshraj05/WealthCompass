@@ -5,10 +5,13 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
+from limits import parse
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from backend.app.core import crypto, session_store
@@ -28,6 +31,34 @@ _demo = os.getenv("WC_DEMO_MODE", "").lower() == "true"
 ALLOW_REGISTRATION = (not _demo) and os.getenv("WC_ALLOW_REGISTRATION", "true").lower() == "true"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+# --- Rate limiting ----------------------------------------------------------
+# In-memory, single-process — same precedent/caveat as session_store.py: fine
+# today, needs shared storage (Redis) once this runs on more than one worker.
+#
+# get_remote_address reads request.client.host directly. There is no
+# ProxyHeadersMiddleware/X-Forwarded-For handling anywhere in this app yet, so
+# behind a future reverse proxy every request would appear to come from the
+# proxy's own IP, collapsing per-IP limiting to one global bucket. Fixing that
+# is a hosting-deploy-time concern for whenever a proxy actually exists, not a
+# code concern today.
+limiter = Limiter(key_func=get_remote_address)
+
+# Per-account limits, enforced separately from the per-IP ones below — a
+# slowapi key_func runs synchronously and can't parse a request body, so this
+# can't be a second @limiter.limit(key_func=...) decorator. Call
+# _enforce_account_limit() directly instead, after the email is already a
+# plain Python string.
+_ACCOUNT_LOGIN_LIMIT = parse("5/minute")
+_ACCOUNT_REGISTER_LIMIT = parse("5/minute")
+
+
+def _enforce_account_limit(scope: str, email: str, limit) -> None:
+    if not limiter.limiter.hit(limit, scope, email.strip().lower()):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many attempts for this account. Try again shortly.",
+        )
 
 
 class RegisterRequest(BaseModel):
@@ -134,24 +165,30 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 
 @router.post("/auth/register", response_model=TokenResponse)
-def register(request: RegisterRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def register(request: Request, body: RegisterRequest, db: Session = Depends(get_db)):
+    # Per-account limit first — cheap, and stops a single targeted account
+    # from being hammered even if the per-IP bucket (the decorator above)
+    # isn't exhausted yet (e.g. an attacker spread across many IPs).
+    _enforce_account_limit("register", body.email, _ACCOUNT_REGISTER_LIMIT)
+
     # The app is no longer single-user, so registration is gated by policy
     # rather than by "a user already exists". Default-closed on a hosted
     # instance: an open signup form on someone's portfolio tracker is an
     # invitation, so ALLOW_REGISTRATION must be set deliberately.
     if not ALLOW_REGISTRATION:
         raise HTTPException(status_code=403, detail="Registration is closed on this instance.")
-    if db.query(User).filter(User.email == request.email).first():
+    if db.query(User).filter(User.email == body.email).first():
         raise HTTPException(status_code=400, detail="An account with that email already exists.")
 
-    user = User(email=request.email, hashed_password=hash_password(request.password))
+    user = User(email=body.email, hashed_password=hash_password(body.password))
 
     # --- Encryption setup (T2) ------------------------------------------------
     dek = crypto.generate_dek()
     recovery_key = crypto.generate_recovery_key()
 
     dek_salt = crypto.generate_salt()
-    kek = crypto.derive_kek(request.password, dek_salt, crypto.DEFAULT_KEK_PARAMS)
+    kek = crypto.derive_kek(body.password, dek_salt, crypto.DEFAULT_KEK_PARAMS)
     user.dek_salt = dek_salt.hex()
     user.wrapped_dek = crypto.wrap(kek, dek)
     user.kek_params_json = json.dumps(crypto.DEFAULT_KEK_PARAMS)
@@ -169,7 +206,10 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/auth/login", response_model=TokenResponse)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    _enforce_account_limit("login", form_data.username, _ACCOUNT_LOGIN_LIMIT)
+
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")

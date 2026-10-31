@@ -74,6 +74,7 @@ def test_legacy_login_upgrades_and_reencrypts(db):
     assert raw_before.quantity == "10.0" or raw_before.quantity == 10.0
 
     resp = auth.login(
+        None,
         OAuth2PasswordRequestForm(username="ida@example.test", password="legacy-password", scope=""),
         db=db,
     )
