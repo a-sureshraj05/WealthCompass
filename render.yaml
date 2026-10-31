@@ -115,12 +115,28 @@ services:
       - key: JWT_SECRET
         generateValue: true
 
-      # Supabase direct-connection string (port 5432, not the 6543 pooler —
-      # this app's long-lived SQLAlchemy pool doesn't play well with
-      # PgBouncer transaction-pooling mode). `sync: false` means Render
-      # creates the key and leaves it blank for one-time manual entry in the
-      # dashboard; a Blueprint sync will not overwrite a value entered there,
-      # same guarantee already relied on for the demo's ANTHROPIC_API_KEY —
-      # the connection string itself never enters this repository.
+      # Supabase SESSION POOLER string (Supavisor, port 5432, host
+      # aws-0-<region>.pooler.supabase.com, username postgres.<project-ref>)
+      # — NOT Supabase's "Direct connection" string, and NOT the Transaction
+      # pooler on port 6543.
+      #
+      # Direct connection fails outright on Render: Supabase resolves that
+      # hostname to IPv6-only, and Render has no outbound IPv6 route —
+      # confirmed via a real failed deploy ("Network is unreachable",
+      # psycopg2.OperationalError). Supavisor's shared pooler is IPv4-only
+      # on every tier regardless of mode, which fixes that.
+      #
+      # Session mode specifically (not Transaction mode) because it preserves
+      # session-level Postgres state across statements — this app's
+      # prices.py holds a session-scoped pg_advisory_lock across a multi-
+      # commit critical section, which Transaction-mode pooling would break
+      # (the pooler can reassign the underlying connection between the lock
+      # and unlock calls, silently losing the lock's guarantee).
+      #
+      # `sync: false` means Render creates the key and leaves it blank for
+      # one-time manual entry in the dashboard; a Blueprint sync will not
+      # overwrite a value entered there, same guarantee already relied on
+      # for the demo's ANTHROPIC_API_KEY — the connection string itself
+      # never enters this repository.
       - key: DATABASE_URL
         sync: false
