@@ -24,7 +24,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.app.core import insights
+from backend.app.core import crypto, insights
 from backend.app.core.scoping import UserScope
 from backend.app.db.schema import (Base, Holding, RealizedGain, UnrealizedGain,
                                    User)
@@ -46,6 +46,7 @@ def scope():
     engine = create_engine(f"sqlite:///{path}", connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)
     session = sessionmaker(bind=engine)()
+    dek_token = crypto.CURRENT_DEK.set(crypto.generate_dek())
     session.add(User(id=1, email="a@example.com", hashed_password="x"))
     session.add_all([
         _holding(1, "AAPL", "Robinhood", 5000.0, 2500.0),
@@ -54,6 +55,7 @@ def scope():
     ])
     session.commit()
     yield UserScope(session, 1)
+    crypto.CURRENT_DEK.reset(dek_token)
     session.close()
     os.unlink(path)
 
@@ -377,10 +379,39 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/insights.db")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
+    # database.py reads DATABASE_URL at MODULE IMPORT time, not per-request —
+    # the env var above only takes effect if this is the module's first
+    # import of the whole test session. Other test modules (anything that
+    # imports backend.app.api.auth) import it first, so the env var alone is
+    # too late here. Patching the already-bound engine/SessionLocal directly
+    # works regardless of import order: main.py's own `from ... import
+    # engine` re-reads these attributes when IT is first imported, which
+    # happens below.
+    import backend.app.core.database as database_module
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    test_engine = create_engine(
+        f"sqlite:///{tmp_path}/insights.db", connect_args={"check_same_thread": False}
+    )
+    monkeypatch.setattr(database_module, "engine", test_engine)
+    monkeypatch.setattr(database_module, "SessionLocal", sessionmaker(bind=test_engine))
+
     from fastapi.testclient import TestClient
 
     from backend.app.api import insights as insights_api
+    from backend.app import main as main_module
     from backend.app.main import app
+
+    # backend.app.main is cached in sys.modules after the FIRST test that
+    # uses this fixture — its own `from ...database import engine` (a
+    # separate name binding in main's namespace) does not re-run on later
+    # tests' imports, so it would otherwise keep pointing at the first
+    # test's long-gone tmp_path engine. main.py's functions look this name
+    # up dynamically at call time, so patching it here (not just on the
+    # database module above) makes every test — not only the first — use
+    # its own engine for /healthz, startup_event, and the schema guard.
+    monkeypatch.setattr(main_module, "engine", test_engine)
 
     calls = {"n": 0}
 
