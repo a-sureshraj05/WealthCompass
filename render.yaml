@@ -1,9 +1,10 @@
-# Render blueprint for the WealthCompass PUBLIC DEMO.
+# Render blueprint for WealthCompass: the real multi-tenant app plus a
+# public fabricated-data demo.
 #
 # Both services below are on the Free instance type as of 2026-10-31 — a
 # deliberate cost call while real usage is still low, not an oversight. Free
 # means each service sleeps after ~15 min idle and takes ~30-50s to wake on
-# the next request. Known, accepted consequence for wealthcompass-api
+# the next request. Known, accepted consequence for wealthcompass-app
 # specifically (not just slower): its session design keeps each logged-in
 # user's decryption key in server-process memory only (see
 # backend/app/core/session_store.py); a Free-tier sleep terminates that
@@ -18,30 +19,80 @@
 #
 # Nothing here locks the project to Render. The Dockerfile is the whole
 # deployment; moving to Koyeb, Cloud Run or Fly means writing that platform's
-# config file and pointing it at the same image. There is no database to
-# migrate, because there is no persistent database.
+# config file and pointing it at the same image.
 
 services:
-  # Becomes the public hostname: https://wealthcompass-app.onrender.com
+  # The REAL multi-user app. Becomes https://wealthcompass-app.onrender.com.
   #
-  # Named "wealthcompass-app", not "wealthcompass-demo" or plain "wealthcompass":
-  # plain "wealthcompass" is already claimed by another Render customer (confirmed
-  # when the original demo was first deployed — it silently became
-  # wealthcompass-iy9v.onrender.com, which is what Render does on a collision
-  # rather than failing), and "wealthcompass-demo" is occupied by an orphaned,
-  # still-running service pointed at the wrong (stale, archived) source repo that
-  # this fresh Blueprint deliberately avoids colliding with rather than fighting
-  # over the name.
+  # Named "wealthcompass-app", not plain "wealthcompass": that bare name is
+  # already claimed by another Render customer (confirmed early on — a
+  # collision silently becomes wealthcompass-iy9v.onrender.com rather than
+  # failing). Subdomains are globally unique across all Render customers and
+  # can't be checked from outside beforehand, so this name could collide too.
   #
-  # Subdomains are globally unique across all customers and cannot be checked
-  # from outside: onrender.com answers every unclaimed name with the same 404 as
-  # a claimed one. So this name may collide too and pick up its own suffix.
+  # Serves BOTH the API and the built frontend from a single process
+  # (main.py mounts frontend/dist as a SPA fallback whenever it exists in the
+  # image, which it always does) — no separate frontend host needed. What
+  # makes this the real app rather than the demo is simply the environment
+  # it's given: no WC_DEMO_MODE (so there's no seed/reset loop and no
+  # baked-demo-data reset timer) and a DATABASE_URL pointed at Supabase
+  # instead of the throwaway SQLite baked into the image.
   #
-  # Changing this renames the service in the Blueprint; the URL follows the name,
-  # and the previous URL stops resolving. Nothing else in the deployment depends
-  # on it.
+  # Registration is gated by invite codes (see
+  # backend/scripts/create_invite_codes.py) regardless of WC_ALLOW_REGISTRATION,
+  # so this is safe to leave open.
+  #
+  # Changing `name:` renames the service in the Blueprint; the URL follows
+  # the name, and the previous URL stops resolving. Nothing else in the
+  # deployment depends on it.
   - type: web
     name: wealthcompass-app
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+
+      # Supabase SESSION POOLER string (Supavisor, port 5432, host
+      # aws-0-<region>.pooler.supabase.com, username postgres.<project-ref>)
+      # — NOT Supabase's "Direct connection" string, and NOT the Transaction
+      # pooler on port 6543.
+      #
+      # Direct connection fails outright on Render: Supabase resolves that
+      # hostname to IPv6-only, and Render has no outbound IPv6 route —
+      # confirmed via a real failed deploy ("Network is unreachable",
+      # psycopg2.OperationalError). Supavisor's shared pooler is IPv4-only
+      # on every tier regardless of mode, which fixes that.
+      #
+      # Session mode specifically (not Transaction mode) because it preserves
+      # session-level Postgres state across statements — this app's
+      # prices.py holds a session-scoped pg_advisory_lock across a multi-
+      # commit critical section, which Transaction-mode pooling would break
+      # (the pooler can reassign the underlying connection between the lock
+      # and unlock calls, silently losing the lock's guarantee).
+      #
+      # `sync: false` means Render creates the key and leaves it blank for
+      # one-time manual entry in the dashboard; a Blueprint sync will not
+      # overwrite a value entered there, same guarantee already relied on
+      # for the demo's ANTHROPIC_API_KEY below — the connection string
+      # itself never enters this repository.
+      - key: DATABASE_URL
+        sync: false
+
+  # The PUBLIC DEMO — fabricated data only, resets every 12h (or on every
+  # sleep/wake while on the Free plan). Becomes
+  # https://wealthcompass-demo.onrender.com.
+  #
+  # Named "wealthcompass-demo": this name was previously held by an orphaned
+  # service pointed at a stale, disconnected repo (a-sureshraj05/WealthCompass-dev-archive,
+  # last pushed 2026-09-09) — that service has since been deleted, freeing
+  # this name up for the correctly-connected replacement below.
+  - type: web
+    name: wealthcompass-demo
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
@@ -93,55 +144,3 @@ services:
       # Absent the group the app is unaffected: both AI features report
       # themselves unconfigured and every other route works normally.
       - fromGroup: WealthCompass
-
-  # The REAL multi-user app — separate service from the demo above, same
-  # image, same Dockerfile, no code differences. This one serves BOTH the
-  # API and the built frontend from a single process (main.py mounts
-  # frontend/dist as a SPA fallback whenever it exists in the image, which
-  # it always does) — no separate frontend host needed. What makes this one
-  # "real" is simply the environment it's given: no WC_DEMO_MODE (so there's
-  # no seed/reset loop and no baked-demo-data reset timer) and a DATABASE_URL
-  # pointed at Supabase instead of the throwaway SQLite baked into the image.
-  #
-  # Registration is gated by invite codes (see backend/scripts/create_invite_codes.py)
-  # regardless of WC_ALLOW_REGISTRATION, so this is safe to leave open.
-  #
-  # Becomes https://wealthcompass-api.onrender.com, subject to the same
-  # collision/suffix caveat as wealthcompass-demo above.
-  - type: web
-    name: wealthcompass-api
-    runtime: docker
-    plan: free
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    healthCheckPath: /healthz
-
-    envVars:
-      - key: JWT_SECRET
-        generateValue: true
-
-      # Supabase SESSION POOLER string (Supavisor, port 5432, host
-      # aws-0-<region>.pooler.supabase.com, username postgres.<project-ref>)
-      # — NOT Supabase's "Direct connection" string, and NOT the Transaction
-      # pooler on port 6543.
-      #
-      # Direct connection fails outright on Render: Supabase resolves that
-      # hostname to IPv6-only, and Render has no outbound IPv6 route —
-      # confirmed via a real failed deploy ("Network is unreachable",
-      # psycopg2.OperationalError). Supavisor's shared pooler is IPv4-only
-      # on every tier regardless of mode, which fixes that.
-      #
-      # Session mode specifically (not Transaction mode) because it preserves
-      # session-level Postgres state across statements — this app's
-      # prices.py holds a session-scoped pg_advisory_lock across a multi-
-      # commit critical section, which Transaction-mode pooling would break
-      # (the pooler can reassign the underlying connection between the lock
-      # and unlock calls, silently losing the lock's guarantee).
-      #
-      # `sync: false` means Render creates the key and leaves it blank for
-      # one-time manual entry in the dashboard; a Blueprint sync will not
-      # overwrite a value entered there, same guarantee already relied on
-      # for the demo's ANTHROPIC_API_KEY — the connection string itself
-      # never enters this repository.
-      - key: DATABASE_URL
-        sync: false
