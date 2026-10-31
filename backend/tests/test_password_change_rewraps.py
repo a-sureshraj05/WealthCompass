@@ -35,7 +35,7 @@ def _dek_from_token(token):
 
 
 def test_password_change_rewraps_same_dek_and_preserves_data(db):
-    resp = auth.register(auth.RegisterRequest(email="erin@example.test", password="old-password"), db=db)
+    resp = auth.register(None, auth.RegisterRequest(email="erin@example.test", password="old-password"), db=db)
     dek_before = _dek_from_token(resp["access_token"])
     user = db.query(User).filter_by(email="erin@example.test").first()
 
@@ -59,10 +59,10 @@ def test_password_change_rewraps_same_dek_and_preserves_data(db):
 
     # Old password no longer works.
     with pytest.raises(Exception):
-        auth.login(OAuth2PasswordRequestForm(username="erin@example.test", password="old-password", scope=""), db=db)
+        auth.login(None, OAuth2PasswordRequestForm(username="erin@example.test", password="old-password", scope=""), db=db)
 
     # New password works and unwraps to the IDENTICAL dek bytes.
-    resp2 = auth.login(OAuth2PasswordRequestForm(username="erin@example.test", password="new-password", scope=""), db=db)
+    resp2 = auth.login(None, OAuth2PasswordRequestForm(username="erin@example.test", password="new-password", scope=""), db=db)
     dek_after = _dek_from_token(resp2["access_token"])
     assert dek_after == dek_before
 
