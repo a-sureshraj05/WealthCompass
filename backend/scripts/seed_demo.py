@@ -170,8 +170,10 @@ def seed(assume_yes: bool = False) -> None:
     The guards in `_guard` run identically on both paths — the in-process caller
     gets no exemption from them, which is the whole point of them being here.
     """
+    import json
+
     from backend.app.api.auth import hash_password
-    from backend.app.core import process
+    from backend.app.core import crypto, process
     from backend.app.core.database import SessionLocal, engine
     from backend.app.core.scoping import UserScope
     from backend.app.db.schema import (Base, BrokerageAccount, Holding,
@@ -182,6 +184,24 @@ def seed(assume_yes: bool = False) -> None:
                                        StockSplit, TickerReference, Transaction,
                                        TransactionSplitConfig, UnrealizedGain, User)
     from backend.app.core.stock_split_seeds import SEED_SPLITS
+
+    def _issue_dek(user, password: str) -> bytes:
+        """Set up encryption for a seeded user exactly as auth.register()
+        would for a real signup — demo users are real encrypted accounts
+        with a known password, not a special case. Returns the DEK so the
+        caller can bind it (crypto.CURRENT_DEK) for the rows written below."""
+        dek = crypto.generate_dek()
+        dek_salt = crypto.generate_salt()
+        kek = crypto.derive_kek(password, dek_salt, crypto.DEFAULT_KEK_PARAMS)
+        user.dek_salt = dek_salt.hex()
+        user.wrapped_dek = crypto.wrap(kek, dek)
+        user.kek_params_json = json.dumps(crypto.DEFAULT_KEK_PARAMS)
+
+        recovery_salt = crypto.generate_salt()
+        recovery_kek = crypto.derive_recovery_kek(crypto.generate_recovery_key(), recovery_salt)
+        user.recovery_salt = recovery_salt.hex()
+        user.recovery_wrapped_dek = crypto.wrap(recovery_kek, dek)
+        return dek
 
     _guard(engine, assume_yes)
     Base.metadata.create_all(bind=engine)
@@ -203,6 +223,8 @@ def seed(assume_yes: bool = False) -> None:
                     is_test_user=True)
         test = User(email=TEST_EMAIL, hashed_password=hash_password(DEMO_PASSWORD),
                     is_test_user=True)
+        demo_dek = _issue_dek(demo, DEMO_PASSWORD)
+        test_dek = _issue_dek(test, DEMO_PASSWORD)
         db.add_all([demo, test])
         db.flush()
 
@@ -261,42 +283,65 @@ def seed(assume_yes: bool = False) -> None:
 
             db.commit()
 
-        seed_user(demo,
-                  [("Robinhood", "Individual"), ("Schwab", "Brokerage")],
-                  DEMO_CASH, DEMO_EQUITY, DEMO_OPTIONS)
-        seed_user(test, [("Fidelity", "Roth IRA")], TEST_CASH, TEST_EQUITY)
+        # Every row written below is encrypted (schema.py's EncryptedFloat/
+        # EncryptedString columns), so each user's block runs with THEIR dek
+        # bound — never both at once, and never left bound after the block,
+        # same discipline a real multi-user request flow enforces.
+        users_and_deks = ((demo, demo_dek), (test, test_dek))
+
+        bound = crypto.CURRENT_DEK.set(demo_dek)
+        try:
+            seed_user(demo,
+                      [("Robinhood", "Individual"), ("Schwab", "Brokerage")],
+                      DEMO_CASH, DEMO_EQUITY, DEMO_OPTIONS)
+        finally:
+            crypto.CURRENT_DEK.reset(bound)
+
+        bound = crypto.CURRENT_DEK.set(test_dek)
+        try:
+            seed_user(test, [("Fidelity", "Roth IRA")], TEST_CASH, TEST_EQUITY)
+        finally:
+            crypto.CURRENT_DEK.reset(bound)
 
         # config/tickers.yml is a local allowlist that would filter the demo set.
         # Neutralised for this process only, rather than editing the file.
         process._load_tracked_tickers = lambda: None
-        for user in (demo, test):
-            process.process_transactions(db, user.id)
+        for user, dek in users_and_deks:
+            bound = crypto.CURRENT_DEK.set(dek)
+            try:
+                process.process_transactions(db, user.id)
+            finally:
+                crypto.CURRENT_DEK.reset(bound)
 
         # --- report ---------------------------------------------------------
         print()
-        for user in (demo, test):
-            scope = UserScope(db, user.id)
-            holdings = scope.query(Holding).all()
-            mv = sum(h.marketValue or 0 for h in holdings)
-            summary = scope.query(PortfolioSummary).first()
-            cash = summary.cash_balance if summary else 0.0
+        for user, dek in users_and_deks:
+            bound = crypto.CURRENT_DEK.set(dek)
+            try:
+                scope = UserScope(db, user.id)
+                holdings = scope.query(Holding).all()
+                mv = sum(h.marketValue or 0 for h in holdings)
+                summary = scope.query(PortfolioSummary).first()
+                cash = summary.cash_balance if summary else 0.0
 
-            print("=" * 70)
-            print(f"{user.email}  (user_id={user.id})   password: {DEMO_PASSWORD}")
-            print("-" * 70)
-            print(f"{'POSITION':<24}{'BROKER':<13}{'QTY':>10}{'VALUE':>15}")
-            for h in sorted(holdings, key=lambda x: -(x.marketValue or 0)):
-                print(f"{h.ticker:<24}{h.brokerage:<13}{h.quantity:>10.4f}{h.marketValue or 0:>15,.2f}")
-            print("-" * 70)
-            print(f"{'Market value':<47}{mv:>23,.2f}")
-            print(f"{'Cash':<47}{cash:>23,.2f}")
-            print(f"{'TOTAL':<47}{mv + cash:>23,.2f}")
-            print(f"realized gains: {scope.query(RealizedGain).count()}   "
-                  f"open lots: {scope.query(UnrealizedGain).count()}   "
-                  f"ledger rows: {scope.query(Transaction).count()}")
-            if mv + cash > 25000:
-                print("!! over $25,000 — trim quantities in DEMO_EQUITY")
-            print()
+                print("=" * 70)
+                print(f"{user.email}  (user_id={user.id})   password: {DEMO_PASSWORD}")
+                print("-" * 70)
+                print(f"{'POSITION':<24}{'BROKER':<13}{'QTY':>10}{'VALUE':>15}")
+                for h in sorted(holdings, key=lambda x: -(x.marketValue or 0)):
+                    print(f"{h.ticker:<24}{h.brokerage:<13}{h.quantity:>10.4f}{h.marketValue or 0:>15,.2f}")
+                print("-" * 70)
+                print(f"{'Market value':<47}{mv:>23,.2f}")
+                print(f"{'Cash':<47}{cash:>23,.2f}")
+                print(f"{'TOTAL':<47}{mv + cash:>23,.2f}")
+                print(f"realized gains: {scope.query(RealizedGain).count()}   "
+                      f"open lots: {scope.query(UnrealizedGain).count()}   "
+                      f"ledger rows: {scope.query(Transaction).count()}")
+                if mv + cash > 25000:
+                    print("!! over $25,000 — trim quantities in DEMO_EQUITY")
+                print()
+            finally:
+                crypto.CURRENT_DEK.reset(bound)
     finally:
         db.close()
 
