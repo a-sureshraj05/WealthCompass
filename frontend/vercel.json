@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://wealthcompass-api.onrender.com/api/v1/:path*"
+    },
+    {
+      "source": "/healthz",
+      "destination": "https://wealthcompass-api.onrender.com/healthz"
+    }
+  ]
+}
