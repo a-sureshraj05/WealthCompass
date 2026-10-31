@@ -16,6 +16,13 @@ python-multipart==0.0.20          # CSV upload endpoints parse multipart form da
 python-jose[cryptography]==3.5.0
 bcrypt==5.0.0
 
+# ── Encryption (per-user DEK/KEK, see backend/app/core/crypto.py) ─────
+# Pinned explicitly rather than relying on python-jose's transitive pull of
+# `cryptography` — that pull is an implementation detail of jose's backend,
+# not a guarantee this app can build encryption on top of.
+argon2-cffi==23.1.0
+cryptography==43.0.3
+
 # ── Data / persistence ───────────────────────────────────────────────
 SQLAlchemy==2.0.46
 python-dotenv==1.2.1

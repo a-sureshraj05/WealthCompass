@@ -12,12 +12,13 @@ So the load-bearing assertion here is not "B cannot see A's rows". It is
 
 import os
 import tempfile
+from datetime import datetime
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.app.core import process
+from backend.app.core import crypto, process
 from backend.app.core.scoping import UserScope
 from backend.app.db.schema import (Base, Holding, RealizedGain, Transaction,
                                    UnrealizedGain, User)
@@ -28,7 +29,14 @@ USER_B = 2
 
 @pytest.fixture()
 def db(monkeypatch):
-    """A throwaway database with two users, prices stubbed, allowlist off."""
+    """A throwaway database with two users, prices stubbed, allowlist off.
+
+    Binds one ambient DEK for the fixture's lifetime so every existing test
+    below — none of which is about encryption — keeps working unchanged now
+    that Transaction/Holding/etc. columns are encrypted. Tests that care
+    about per-user DEKs (test_cross_tenant_reads_fail_under_the_wrong_dek)
+    override this binding explicitly.
+    """
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     engine = create_engine(f"sqlite:///{path}", connect_args={"check_same_thread": False})
@@ -48,7 +56,10 @@ def db(monkeypatch):
         User(id=USER_B, email="b@example.test", hashed_password="x"),
     ])
     session.commit()
+
+    dek_token = crypto.CURRENT_DEK.set(crypto.generate_dek())
     yield session
+    crypto.CURRENT_DEK.reset(dek_token)
     session.close()
     os.unlink(path)
 
@@ -163,3 +174,45 @@ def test_test_users_cannot_reach_the_brokerage_api(db, monkeypatch):
     # ...and a real account in the same environment is allowed through.
     real = User(id=USER_A, email="real@example.test", hashed_password="x", is_test_user=False)
     brokerage.require_provider_access(real)
+
+
+def test_cross_tenant_reads_fail_under_the_wrong_dek(db):
+    """Encryption as a SECOND line of defense behind UserScope, not merely
+    redundant with it: give A and B genuinely different DEKs (as real
+    accounts would have), and show that even bypassing UserScope's user_id
+    filter entirely, A's row cannot be decrypted under B's key."""
+    dek_a, dek_b = crypto.generate_dek(), crypto.generate_dek()
+
+    token = crypto.CURRENT_DEK.set(dek_a)
+    UserScope(db, USER_A).add(Transaction(
+        brokerage="Robinhood", date=datetime(2024, 1, 15),
+        ticker="AAA", name="AAA", action="BUY", quantity=10.0, price=100.0,
+        costPerShare=100.0, totalCost=1000.0, assetType="Equity", source="manual",
+    ))
+    db.commit()
+    # Fetched while dek_a is still bound — reading A's own row must happen
+    # under A's key, same as resetting below returns to the fixture's
+    # ambient key, which is neither A's nor B's.
+    a_txn_id = db.query(Transaction).filter_by(user_id=USER_A).first().id
+    crypto.CURRENT_DEK.reset(token)
+
+    # Deliberately unscoped read (no UserScope filter) of A's row, but under
+    # B's key — simulating "what if the user_id filter were missing, and
+    # this were a different user's session". Must fail to decrypt rather
+    # than return a plausible wrong value.
+    token = crypto.CURRENT_DEK.set(dek_b)
+    try:
+        db.expire_all()
+        with pytest.raises(Exception):
+            db.query(Transaction).filter_by(id=a_txn_id).first().quantity
+    finally:
+        crypto.CURRENT_DEK.reset(token)
+
+    # ...but it reads correctly under its own key.
+    token = crypto.CURRENT_DEK.set(dek_a)
+    try:
+        db.expire_all()
+        row = db.query(Transaction).filter_by(id=a_txn_id).first()
+        assert row.quantity == 10.0
+    finally:
+        crypto.CURRENT_DEK.reset(token)

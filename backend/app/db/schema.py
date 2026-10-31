@@ -2,6 +2,8 @@ from sqlalchemy import (Boolean, Column, Date, DateTime, Float, Integer,
                         String, UniqueConstraint)
 from sqlalchemy.ext.declarative import declarative_base
 
+from backend.app.core.crypto import EncryptedFloat, EncryptedJSON, EncryptedString
+
 Base = declarative_base()
 
 # --- Multi-tenancy -----------------------------------------------------------
@@ -43,6 +45,21 @@ class User(Base):
     # Defaults to False so a real account is never mistaken for a fixture.
     is_test_user = Column(Boolean, default=False, nullable=False, server_default="0")
 
+    # --- Encryption (T2) ------------------------------------------------------
+    # All nullable: a user row created before this phase shipped has none of
+    # these set, which is exactly how auth.login() detects a legacy account
+    # and runs the one-time upgrade (crypto_migrate.enable_encryption_for_user)
+    # instead of a normal unwrap. See backend/app/core/crypto.py.
+    dek_salt = Column(String, nullable=True)
+    wrapped_dek = Column(String, nullable=True)
+    kek_params_json = Column(String, nullable=True)
+    recovery_salt = Column(String, nullable=True)
+    recovery_wrapped_dek = Column(String, nullable=True)
+    # Set by POST /auth/confirm-recovery-key once the frontend confirms the
+    # user has saved their one-time recovery key. Informational only today —
+    # nothing gates on it yet.
+    recovery_key_confirmed_at = Column(DateTime, nullable=True)
+
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -55,10 +72,10 @@ class Transaction(Base):
     ticker = Column(String)
     name = Column(String)
     action = Column(String)
-    quantity = Column(Float)
-    price = Column(Float)
-    costPerShare = Column(Float)
-    totalCost = Column(Float)
+    quantity = Column(EncryptedFloat)
+    price = Column(EncryptedFloat)
+    costPerShare = Column(EncryptedFloat)
+    totalCost = Column(EncryptedFloat)
     assetType = Column(String)
     source = Column(String)
     raw_id = Column(Integer, nullable=True)
@@ -83,10 +100,10 @@ class ManualRawTransaction(Base):
     ticker = Column(String)
     name = Column(String)
     action = Column(String)
-    quantity = Column(Float)
-    price = Column(Float)
-    costPerShare = Column(Float)
-    totalCost = Column(Float)
+    quantity = Column(EncryptedFloat)
+    price = Column(EncryptedFloat)
+    costPerShare = Column(EncryptedFloat)
+    totalCost = Column(EncryptedFloat)
     assetType = Column(String)
 
 
@@ -98,12 +115,15 @@ class Holding(Base):
     brokerage = Column(String, index=True)
     account_id = Column(Integer, nullable=True)
     ticker = Column(String, index=True)
-    quantity = Column(Float)
-    averageCostPerShare = Column(Float)
-    totalCost = Column(Float)
+    quantity = Column(EncryptedFloat)
+    averageCostPerShare = Column(EncryptedFloat)
+    totalCost = Column(EncryptedFloat)
+    # Live market data, not cost basis — stays plaintext (see crypto.py docstring
+    # and docs/ARCHITECTURE.md §11.3). Encrypting a public quote buys nothing
+    # and would block background price refresh, which has no DEK to work with.
     currentPrice = Column(Float)
     previousClose = Column(Float, default=0.0)
-    marketValue = Column(Float)
+    marketValue = Column(EncryptedFloat)
     assetType = Column(String)
 
 
@@ -116,14 +136,19 @@ class RealizedGain(Base):
     ticker = Column(String)
     buyDate = Column(DateTime)
     sellDate = Column(DateTime)
-    quantity = Column(Float)
-    buyPrice = Column(Float)
-    sellPrice = Column(Float)
-    gain = Column(Float)
+    quantity = Column(EncryptedFloat)
+    buyPrice = Column(EncryptedFloat)
+    sellPrice = Column(EncryptedFloat)
+    gain = Column(EncryptedFloat)
     isLongTerm = Column(Boolean)
     assetType = Column(String)
     is_wash_sale = Column(Boolean, default=False, nullable=False, server_default="0")
-    wash_sale_disallowed_amount = Column(Float, default=0.0, nullable=False, server_default="0")
+    # No server_default here deliberately: a DB-level default bypasses the
+    # ORM's TypeDecorator and would insert the literal text "0" rather than
+    # ciphertext, which would then fail to decrypt. The Python-side `default`
+    # below goes through encryption correctly; that is the only default path
+    # an encrypted column can safely have.
+    wash_sale_disallowed_amount = Column(EncryptedFloat, default=0.0, nullable=False)
 
 
 class UnrealizedGain(Base):
@@ -135,11 +160,13 @@ class UnrealizedGain(Base):
     account_id = Column(Integer, nullable=True)
     ticker = Column(String)
     buyDate = Column(DateTime)
-    quantity = Column(Float)
-    buyPrice = Column(Float)
+    quantity = Column(EncryptedFloat)
+    buyPrice = Column(EncryptedFloat)
+    # Live quotes — public market data, not cost basis. Stay plaintext; see
+    # the Holding.currentPrice comment above for why.
     currentPrice = Column(Float)
     prevClose = Column(Float, nullable=True)
-    unrealizedGain = Column(Float)
+    unrealizedGain = Column(EncryptedFloat)
     isLongTerm = Column(Boolean)
     assetType = Column(String)
     # Type 1: this lot absorbed a disallowed wash sale loss
@@ -175,8 +202,8 @@ class PortfolioSummary(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, index=True, unique=True, nullable=False)
-    cash_balance = Column(Float, default=0.0)
-    buying_power_json = Column(String, nullable=True)  # JSON: {brokerage: amount}
+    cash_balance = Column(EncryptedFloat, default=0.0)
+    buying_power_json = Column(EncryptedJSON, nullable=True)  # {brokerage: amount}
     analyst_json = Column(String, nullable=True)       # JSON: [AnalystData, ...]
     # JSON: {key: value} — UI preferences that should follow the user between
     # devices rather than living in one browser's localStorage.
@@ -206,7 +233,9 @@ class BrokerageAccount(Base):
     user_id = Column(Integer, index=True, nullable=False)
     snaptrade_account_id = Column(String, nullable=False)
     brokerage = Column(String, nullable=False)
-    name = Column(String, nullable=False)
+    # Account nicknames are identifying in a way "Robinhood" as a brokerage
+    # name is not — encrypted; see docs/ARCHITECTURE.md §11.3.
+    name = Column(EncryptedString, nullable=False)
 
     # Unique per user rather than globally — the account id is only meaningful
     # within the connection that produced it.
@@ -295,9 +324,9 @@ class SnaptradeTransaction(Base):
     ticker = Column(String)
     name = Column(String)
     action = Column(String)
-    quantity = Column(Float)
-    price = Column(Float)
-    amount = Column(Float)
+    quantity = Column(EncryptedFloat)
+    price = Column(EncryptedFloat)
+    amount = Column(EncryptedFloat)
     currency = Column(String)
     assetType = Column(String)
     option_symbol = Column(String, nullable=True)  # OCC option symbol e.g. MSFT250117C00400000

@@ -221,6 +221,24 @@ def startup_event():
                 conn.execute(text("ALTER TABLE portfolio_summary ADD COLUMN insights_json TEXT"))
                 conn.commit()
 
+    # Migration: encryption (T2) columns on users — all nullable. A row missing
+    # these is exactly how auth.login() recognises a pre-Phase-2 legacy account
+    # and runs the one-time re-encryption upgrade instead of a normal unwrap.
+    if "users" in inspector.get_table_names():
+        user_columns = [col["name"] for col in inspector.get_columns("users")]
+        for col_name, col_sql in (
+            ("dek_salt", "TEXT"),
+            ("wrapped_dek", "TEXT"),
+            ("kek_params_json", "TEXT"),
+            ("recovery_salt", "TEXT"),
+            ("recovery_wrapped_dek", "TEXT"),
+            ("recovery_key_confirmed_at", "DATETIME"),
+        ):
+            if col_name not in user_columns:
+                with engine.connect() as conn:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_sql}"))
+                    conn.commit()
+
     # portfolio_summary is no longer a singleton pinned at id=1 — it is one row
     # per user, created by process_transactions() the first time that user's
     # data is processed. Bootstrapping a row here would have to invent a
