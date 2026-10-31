@@ -84,19 +84,20 @@ services:
       # themselves unconfigured and every other route works normally.
       - fromGroup: WealthCompass
 
-  # The REAL multi-user app's backend — separate from the demo above. Same
-  # image, same Dockerfile, no code differences; what makes this one "real"
-  # is simply the environment it's given: no WC_DEMO_MODE (so there's no
-  # seed/reset loop and no baked-demo-data reset timer) and a DATABASE_URL
+  # The REAL multi-user app — separate service from the demo above, same
+  # image, same Dockerfile, no code differences. This one serves BOTH the
+  # API and the built frontend from a single process (main.py mounts
+  # frontend/dist as a SPA fallback whenever it exists in the image, which
+  # it always does) — no separate frontend host needed. What makes this one
+  # "real" is simply the environment it's given: no WC_DEMO_MODE (so there's
+  # no seed/reset loop and no baked-demo-data reset timer) and a DATABASE_URL
   # pointed at Supabase instead of the throwaway SQLite baked into the image.
   #
   # Registration is gated by invite codes (see backend/scripts/create_invite_codes.py)
   # regardless of WC_ALLOW_REGISTRATION, so this is safe to leave open.
   #
   # Becomes https://wealthcompass-api.onrender.com, subject to the same
-  # collision/suffix caveat as wealthcompass-demo above — note the actual
-  # hostname Render assigns and update frontend/vercel.json's `destination`
-  # to match before the Vercel deploy can work end-to-end.
+  # collision/suffix caveat as wealthcompass-demo above.
   - type: web
     name: wealthcompass-api
     runtime: docker
