@@ -13,7 +13,8 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.api import auth
 from backend.app.core import crypto, session_store
 from backend.app.core.scoping import UserScope
-from backend.app.db.schema import Base, Transaction, User
+from backend.app.db.schema import Base, InviteCode, Transaction, User
+from datetime import datetime
 
 
 @pytest.fixture()
@@ -34,8 +35,15 @@ def _dek_from_token(token):
     return session_store.get_dek(payload["sid"])
 
 
+def _register(db, email, password):
+    code = f"invite-{email}"
+    db.add(InviteCode(code=code, created_at=datetime.utcnow()))
+    db.commit()
+    return auth.register(None, auth.RegisterRequest(email=email, password=password, invite_code=code), db=db)
+
+
 def test_password_change_rewraps_same_dek_and_preserves_data(db):
-    resp = auth.register(None, auth.RegisterRequest(email="erin@example.test", password="old-password"), db=db)
+    resp = _register(db, "erin@example.test", "old-password")
     dek_before = _dek_from_token(resp["access_token"])
     user = db.query(User).filter_by(email="erin@example.test").first()
 
