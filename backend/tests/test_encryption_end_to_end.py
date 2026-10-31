@@ -20,7 +20,8 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.api import auth
 from backend.app.core import crypto
 from backend.app.core.scoping import UserScope
-from backend.app.db.schema import Base, Transaction
+from backend.app.db.schema import Base, InviteCode, Transaction
+from datetime import datetime
 
 
 @pytest.fixture()
@@ -39,8 +40,18 @@ def _login_form(email, password):
     return OAuth2PasswordRequestForm(username=email, password=password, scope="")
 
 
+def _register(db, email, password):
+    """Seed a fresh, unique invite code and register through the real
+    endpoint — every call needs its own code, since each can only be used
+    once."""
+    code = f"invite-{email}"
+    db.add(InviteCode(code=code, created_at=datetime.utcnow()))
+    db.commit()
+    return auth.register(None, auth.RegisterRequest(email=email, password=password, invite_code=code), db=db)
+
+
 def test_register_and_login_roundtrip(db):
-    resp = auth.register(None, auth.RegisterRequest(email="alice@example.test", password="correct-horse"), db=db)
+    resp = _register(db, "alice@example.test", "correct-horse")
     assert resp["recovery_key"]  # issued exactly once, here
 
     resp2 = auth.login(None, _login_form("alice@example.test", "correct-horse"), db=db)
@@ -48,13 +59,13 @@ def test_register_and_login_roundtrip(db):
 
 
 def test_wrong_password_rejected(db):
-    auth.register(None, auth.RegisterRequest(email="bob@example.test", password="right-password"), db=db)
+    _register(db, "bob@example.test", "right-password")
     with pytest.raises(Exception):
         auth.login(None, _login_form("bob@example.test", "wrong-password"), db=db)
 
 
 def test_sensitive_column_is_ciphertext_on_disk_not_plaintext(db):
-    resp = auth.register(None, auth.RegisterRequest(email="carol@example.test", password="pw12345"), db=db)
+    resp = _register(db, "carol@example.test", "pw12345")
     token = resp["access_token"]
 
     import jose.jwt as jwt_lib
@@ -107,7 +118,7 @@ def test_sensitive_column_is_ciphertext_on_disk_not_plaintext(db):
 
 
 def test_reading_encrypted_column_without_dek_fails_closed(db):
-    resp = auth.register(None, auth.RegisterRequest(email="dave@example.test", password="pw12345"), db=db)
+    resp = _register(db, "dave@example.test", "pw12345")
     token = resp["access_token"]
     import jose.jwt as jwt_lib
     from backend.app.core import session_store

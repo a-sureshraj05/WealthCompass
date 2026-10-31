@@ -12,12 +12,13 @@ from limits import parse
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from backend.app.core import crypto, session_store
 from backend.app.core.crypto_migrate import enable_encryption_for_user
 from backend.app.core.database import get_db
-from backend.app.db.schema import User
+from backend.app.db.schema import InviteCode, User
 
 router = APIRouter()
 
@@ -64,6 +65,32 @@ def _enforce_account_limit(scope: str, email: str, limit) -> None:
 class RegisterRequest(BaseModel):
     email: str
     password: str
+    # Required, no separate feature flag gating whether this check runs —
+    # an empty invite_codes table already blocks all registration regardless,
+    # and a second boolean is one more thing to misconfigure later (operator
+    # reopens WC_ALLOW_REGISTRATION, forgets this exists, ships an
+    # accidentally-open instance). Mint codes via
+    # backend/scripts/create_invite_codes.py.
+    invite_code: str
+
+
+def _claim_invite_code(db: Session, code: str, user_id: int) -> bool:
+    """Atomically claim an invite code for `user_id`.
+
+    A plain SELECT then conditional UPDATE has a TOCTOU gap two concurrent
+    registrations could both slip through. This single UPDATE with the
+    unclaimed check in its own WHERE closes it: under MVCC, the first
+    concurrent call takes a row lock; the second blocks until the first
+    commits, re-evaluates its WHERE against the now-committed row, sees
+    used_by_user_id is no longer NULL, and affects 0 rows. No
+    SELECT ... FOR UPDATE needed.
+    """
+    stmt = (
+        update(InviteCode)
+        .where(InviteCode.code == code, InviteCode.used_by_user_id.is_(None))
+        .values(used_by_user_id=user_id, used_at=datetime.utcnow())
+    )
+    return db.execute(stmt).rowcount == 1
 
 
 class TokenResponse(BaseModel):
@@ -182,6 +209,12 @@ def register(request: Request, body: RegisterRequest, db: Session = Depends(get_
         raise HTTPException(status_code=400, detail="An account with that email already exists.")
 
     user = User(email=body.email, hashed_password=hash_password(body.password))
+    db.add(user)
+    db.flush()  # assigns user.id without committing — _claim_invite_code needs it
+
+    if not _claim_invite_code(db, body.invite_code, user.id):
+        db.rollback()
+        raise HTTPException(status_code=403, detail="Invalid or already-used invite code.")
 
     # --- Encryption setup (T2) ------------------------------------------------
     dek = crypto.generate_dek()
@@ -198,7 +231,9 @@ def register(request: Request, body: RegisterRequest, db: Session = Depends(get_
     user.recovery_salt = recovery_salt.hex()
     user.recovery_wrapped_dek = crypto.wrap(recovery_kek, dek)
 
-    db.add(user)
+    # user was already added+flushed above (before the invite-code claim,
+    # which needs user.id) — this commit covers both it and the claim in one
+    # transaction, so a failure anywhere in between rolls back together.
     db.commit()
 
     token = _issue_session(user, dek)

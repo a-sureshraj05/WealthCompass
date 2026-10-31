@@ -13,7 +13,8 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.api import auth
 from backend.app.core import crypto, session_store
 from backend.app.core.scoping import UserScope
-from backend.app.db.schema import Base, Transaction, User
+from backend.app.db.schema import Base, InviteCode, Transaction, User
+from datetime import datetime
 
 
 @pytest.fixture()
@@ -28,8 +29,15 @@ def db():
     os.unlink(path)
 
 
+def _register(db, email, password):
+    code = f"invite-{email}"
+    db.add(InviteCode(code=code, created_at=datetime.utcnow()))
+    db.commit()
+    return auth.register(None, auth.RegisterRequest(email=email, password=password, invite_code=code), db=db)
+
+
 def test_recovery_key_unwraps_same_dek_as_password(db):
-    resp = auth.register(None, auth.RegisterRequest(email="frank@example.test", password="correct-horse"), db=db)
+    resp = _register(db, "frank@example.test", "correct-horse")
     recovery_key = resp["recovery_key"]
     assert recovery_key
 
@@ -68,7 +76,7 @@ def test_recovery_key_unwraps_same_dek_as_password(db):
 
 
 def test_wrong_recovery_key_does_not_unwrap(db):
-    resp = auth.register(None, auth.RegisterRequest(email="grace@example.test", password="pw"), db=db)
+    resp = _register(db, "grace@example.test", "pw")
     user = db.query(User).filter_by(email="grace@example.test").first()
 
     wrong_recovery_key = crypto.generate_recovery_key()

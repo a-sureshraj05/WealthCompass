@@ -285,6 +285,25 @@ class StockSplit(Base):
     __table_args__ = (UniqueConstraint("ticker", "split_date", name="uq_stock_split"),)
 
 
+class InviteCode(Base):
+    """Admin-minted registration gate — not portfolio data, so deliberately
+    not user-scoped (same rationale as `users`/`stock_splits`: see module
+    docstring). Minted via backend/scripts/create_invite_codes.py, claimed
+    atomically at registration via the UPDATE in auth._claim_invite_code
+    (a SELECT-then-UPDATE here would have a TOCTOU gap two concurrent
+    registrations could both slip through).
+    """
+    __tablename__ = "invite_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    used_by_user_id = Column(Integer, nullable=True)
+    used_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (UniqueConstraint("code", name="uq_invite_code"),)
+
+
 class TransactionSplitConfig(Base):
     """Persists user-defined splits on a raw transaction so they survive resets."""
     __tablename__ = "transaction_split_configs"
