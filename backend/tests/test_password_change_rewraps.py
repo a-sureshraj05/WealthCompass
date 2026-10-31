@@ -6,6 +6,7 @@ import os
 import tempfile
 
 import pytest
+from fastapi import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -35,11 +36,31 @@ def _dek_from_token(token):
     return session_store.get_dek(payload["sid"])
 
 
+def _extract_session_token(response) -> str:
+    """register()/login() are cookie-only now — nothing in their JSON body
+    carries the token, so pull it out of the throwaway Response instead."""
+    raw = response.headers.get("set-cookie", "")
+    prefix = f"{auth.COOKIE_NAME}="
+    assert raw.startswith(prefix), f"expected a {auth.COOKIE_NAME} cookie, got: {raw!r}"
+    return raw[len(prefix):].split(";", 1)[0]
+
+
 def _register(db, email, password):
     code = f"invite-{email}"
     db.add(InviteCode(code=code, created_at=datetime.utcnow()))
     db.commit()
-    return auth.register(None, auth.RegisterRequest(email=email, password=password, invite_code=code), db=db)
+    response = Response()
+    resp = auth.register(None, response, auth.RegisterRequest(email=email, password=password, invite_code=code), db=db)
+    resp["access_token"] = _extract_session_token(response)
+    return resp
+
+
+def _login(db, email, password):
+    response = Response()
+    form = OAuth2PasswordRequestForm(username=email, password=password, scope="")
+    resp = auth.login(None, response, form, db=db)
+    resp["access_token"] = _extract_session_token(response)
+    return resp
 
 
 def test_password_change_rewraps_same_dek_and_preserves_data(db):
@@ -67,10 +88,10 @@ def test_password_change_rewraps_same_dek_and_preserves_data(db):
 
     # Old password no longer works.
     with pytest.raises(Exception):
-        auth.login(None, OAuth2PasswordRequestForm(username="erin@example.test", password="old-password", scope=""), db=db)
+        _login(db, "erin@example.test", "old-password")
 
     # New password works and unwraps to the IDENTICAL dek bytes.
-    resp2 = auth.login(None, OAuth2PasswordRequestForm(username="erin@example.test", password="new-password", scope=""), db=db)
+    resp2 = _login(db, "erin@example.test", "new-password")
     dek_after = _dek_from_token(resp2["access_token"])
     assert dek_after == dek_before
 

@@ -11,6 +11,7 @@ import tempfile
 import threading
 
 import pytest
+from fastapi import Response
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -66,12 +67,15 @@ def test_claim_rejects_an_unknown_code(db):
 
 def test_register_end_to_end_with_invite_code(db):
     code = _seed_code(db, "END-TO-END-1")
+    response = Response()
     resp = auth.register(
         None,
+        response,
         auth.RegisterRequest(email="newuser@example.test", password="pw123456", invite_code=code),
         db=db,
     )
-    assert resp["access_token"]
+    assert response.headers.get("set-cookie", "").startswith(f"{auth.COOKIE_NAME}=")
+    assert "recovery_key" in resp
 
     row = db.query(InviteCode).filter_by(code=code).first()
     user = db.query(User).filter_by(email="newuser@example.test").first()
@@ -82,12 +86,14 @@ def test_register_rejects_reused_code(db):
     code = _seed_code(db, "ONLY-ONCE")
     auth.register(
         None,
+        Response(),
         auth.RegisterRequest(email="first@example.test", password="pw123456", invite_code=code),
         db=db,
     )
     with pytest.raises(Exception) as exc_info:
         auth.register(
             None,
+            Response(),
             auth.RegisterRequest(email="second@example.test", password="pw123456", invite_code=code),
             db=db,
         )
@@ -101,6 +107,7 @@ def test_register_rejects_bogus_code(db):
     with pytest.raises(Exception) as exc_info:
         auth.register(
             None,
+            Response(),
             auth.RegisterRequest(email="x@example.test", password="pw123456", invite_code="BOGUS"),
             db=db,
         )
@@ -120,15 +127,21 @@ def test_claim_is_atomic_under_concurrent_attempts():
     SessionLocal = sessionmaker(bind=engine)
 
     setup_db = SessionLocal()
-    code = f"RACE-{datetime.utcnow().timestamp()}"
+    # Suffixed with a timestamp, not just the invite code — this test runs
+    # against a real, persistent Postgres instance (no throwaway tmp file
+    # like the SQLite tests get), so a hardcoded email collides with
+    # leftover rows the very next time this test runs against the same DB.
+    unique = datetime.utcnow().timestamp()
+    code = f"RACE-{unique}"
+    email_a, email_b = f"racer-a-{unique}@example.test", f"racer-b-{unique}@example.test"
     setup_db.add(InviteCode(code=code, created_at=datetime.utcnow()))
     setup_db.add_all([
-        User(email="racer-a@example.test", hashed_password="x"),
-        User(email="racer-b@example.test", hashed_password="x"),
+        User(email=email_a, hashed_password="x"),
+        User(email=email_b, hashed_password="x"),
     ])
     setup_db.commit()
-    user_a = setup_db.query(User).filter_by(email="racer-a@example.test").first()
-    user_b = setup_db.query(User).filter_by(email="racer-b@example.test").first()
+    user_a = setup_db.query(User).filter_by(email=email_a).first()
+    user_b = setup_db.query(User).filter_by(email=email_b).first()
     user_a_id, user_b_id = user_a.id, user_b.id
     setup_db.close()
 

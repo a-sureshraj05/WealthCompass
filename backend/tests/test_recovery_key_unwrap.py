@@ -7,6 +7,7 @@ import os
 import tempfile
 
 import pytest
+from fastapi import Response
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -29,11 +30,21 @@ def db():
     os.unlink(path)
 
 
+def _extract_session_token(response) -> str:
+    raw = response.headers.get("set-cookie", "")
+    prefix = f"{auth.COOKIE_NAME}="
+    assert raw.startswith(prefix), f"expected a {auth.COOKIE_NAME} cookie, got: {raw!r}"
+    return raw[len(prefix):].split(";", 1)[0]
+
+
 def _register(db, email, password):
     code = f"invite-{email}"
     db.add(InviteCode(code=code, created_at=datetime.utcnow()))
     db.commit()
-    return auth.register(None, auth.RegisterRequest(email=email, password=password, invite_code=code), db=db)
+    response = Response()
+    resp = auth.register(None, response, auth.RegisterRequest(email=email, password=password, invite_code=code), db=db)
+    resp["access_token"] = _extract_session_token(response)
+    return resp
 
 
 def test_recovery_key_unwraps_same_dek_as_password(db):

@@ -13,6 +13,7 @@ import os
 import tempfile
 
 import pytest
+from fastapi import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -22,6 +23,16 @@ from backend.app.core import crypto
 from backend.app.core.scoping import UserScope
 from backend.app.db.schema import Base, InviteCode, Transaction
 from datetime import datetime
+
+
+def _extract_session_token(response) -> str:
+    """Pull the session JWT out of a throwaway Response's Set-Cookie header —
+    register()/login() are cookie-only now, nothing in their JSON body
+    carries the token anymore."""
+    raw = response.headers.get("set-cookie", "")
+    prefix = f"{auth.COOKIE_NAME}="
+    assert raw.startswith(prefix), f"expected a {auth.COOKIE_NAME} cookie, got: {raw!r}"
+    return raw[len(prefix):].split(";", 1)[0]
 
 
 @pytest.fixture()
@@ -47,21 +58,24 @@ def _register(db, email, password):
     code = f"invite-{email}"
     db.add(InviteCode(code=code, created_at=datetime.utcnow()))
     db.commit()
-    return auth.register(None, auth.RegisterRequest(email=email, password=password, invite_code=code), db=db)
+    response = Response()
+    resp = auth.register(None, response, auth.RegisterRequest(email=email, password=password, invite_code=code), db=db)
+    resp["access_token"] = _extract_session_token(response)
+    return resp
 
 
 def test_register_and_login_roundtrip(db):
     resp = _register(db, "alice@example.test", "correct-horse")
     assert resp["recovery_key"]  # issued exactly once, here
 
-    resp2 = auth.login(None, _login_form("alice@example.test", "correct-horse"), db=db)
+    resp2 = auth.login(None, Response(), _login_form("alice@example.test", "correct-horse"), db=db)
     assert "recovery_key" not in resp2 or resp2.get("recovery_key") is None
 
 
 def test_wrong_password_rejected(db):
     _register(db, "bob@example.test", "right-password")
     with pytest.raises(Exception):
-        auth.login(None, _login_form("bob@example.test", "wrong-password"), db=db)
+        auth.login(None, Response(), _login_form("bob@example.test", "wrong-password"), db=db)
 
 
 def test_sensitive_column_is_ciphertext_on_disk_not_plaintext(db):
