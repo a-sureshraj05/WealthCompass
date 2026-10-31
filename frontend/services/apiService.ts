@@ -1,19 +1,12 @@
 import { BrokerageAccount, StockHolding, Transaction, RealizedGain, UnrealizedLot } from "../types";
 
-const getToken = () => localStorage.getItem("wc_token");
-
-const authHeaders = (extra: Record<string, string> = {}): Record<string, string> => {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}`, ...extra } : extra;
-};
-
+// The session lives in an HttpOnly cookie now, not localStorage — the browser
+// attaches it automatically on every same-origin request, so there's no
+// header to build here. (fetch()'s default credentials mode is
+// "same-origin", and every request this app makes is same-origin.)
 const apiFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
-  const res = await fetch(url, {
-    ...options,
-    headers: { ...authHeaders(), ...(options.headers as Record<string, string> || {}) },
-  });
+  const res = await fetch(url, options);
   if (res.status === 401) {
-    localStorage.removeItem("wc_token");
     window.location.reload();
   }
   return res;
