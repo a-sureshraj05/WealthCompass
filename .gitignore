@@ -29,6 +29,12 @@ node_modules/
 # Claude Code
 .claude/
 
+# Agent skills (fetched via `npx skills add ...`) — regenerable from
+# skills-lock.json, which IS committed. The fetched content itself is
+# generic upstream documentation, not project-specific, so it doesn't need
+# to live in version control.
+.agents/
+
 # Misc
 backend/tests/sample/
 last_commit_hash.txt
