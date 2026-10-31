@@ -1,8 +1,14 @@
 # Render blueprint for the WealthCompass PUBLIC DEMO.
 #
-# Free plan, no payment details required. Fabricated data only — see
+# Paid plan — see the `plan:` field below. Fabricated data only — see
 # docs/CLOUD_LAUNCH.md and the guards in .dockerignore, Dockerfile, and
 # backend/scripts/seed_demo.py.
+#
+# This service is Blueprint-managed: Render reconciles the dashboard against
+# this file on every sync. Upgrading the plan ONLY in the dashboard gets
+# silently reverted back to whatever `plan:` says here on the next deploy —
+# that's what was happening before this field was set to a paid tier. Any
+# future plan change must be made here, not just in the UI.
 #
 # Nothing here locks the project to Render. The Dockerfile is the whole
 # deployment; moving to Koyeb, Cloud Run or Fly means writing that platform's
@@ -26,7 +32,7 @@ services:
   - type: web
     name: wealthcompass-demo
     runtime: docker
-    plan: free
+    plan: starter
     dockerfilePath: ./Dockerfile
     dockerContext: .
 
@@ -38,12 +44,12 @@ services:
       - key: WC_DEMO_MODE
         value: "true"
 
-      # 720 minutes = 12 hours. The free plan sleeps after ~15 minutes of
-      # inactivity, so this wall-clock timer almost never fires — the process is
-      # usually not running to fire it. That is fine: a cold start restores the
-      # baked template, so waking up IS the reset, and in practice the demo
-      # resets far more often than every 12 hours. The timer only matters when
-      # traffic keeps the instance alive continuously.
+      # 720 minutes = 12 hours. On the free plan this rarely fired — the
+      # instance slept after ~15 min idle, and waking up (which restores the
+      # baked template) WAS the reset. On this paid plan the instance no longer
+      # sleeps, so it now stays up continuously and this timer is the only thing
+      # resetting the demo — plan to shorten it if 12 hours of accumulated
+      # visitor edits on a public demo becomes a problem.
       - key: WC_DEMO_RESET_MINUTES
         value: "720"
 
