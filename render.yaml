@@ -16,11 +16,16 @@
 # migrate, because there is no persistent database.
 
 services:
-  # Becomes the public hostname: https://wealthcompass-demo.onrender.com
+  # Becomes the public hostname: https://wealthcompass-app.onrender.com
   #
-  # Plain "wealthcompass" was already claimed by another Render customer — the
-  # first deploy silently became wealthcompass-iy9v.onrender.com, which is what
-  # Render does on a collision rather than failing.
+  # Named "wealthcompass-app", not "wealthcompass-demo" or plain "wealthcompass":
+  # plain "wealthcompass" is already claimed by another Render customer (confirmed
+  # when the original demo was first deployed — it silently became
+  # wealthcompass-iy9v.onrender.com, which is what Render does on a collision
+  # rather than failing), and "wealthcompass-demo" is occupied by an orphaned,
+  # still-running service pointed at the wrong (stale, archived) source repo that
+  # this fresh Blueprint deliberately avoids colliding with rather than fighting
+  # over the name.
   #
   # Subdomains are globally unique across all customers and cannot be checked
   # from outside: onrender.com answers every unclaimed name with the same 404 as
@@ -30,7 +35,7 @@ services:
   # and the previous URL stops resolving. Nothing else in the deployment depends
   # on it.
   - type: web
-    name: wealthcompass-demo
+    name: wealthcompass-app
     runtime: docker
     plan: starter
     dockerfilePath: ./Dockerfile
