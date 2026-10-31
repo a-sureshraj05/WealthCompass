@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from limits import parse
 from pydantic import BaseModel
@@ -31,7 +31,36 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24
 _demo = os.getenv("WC_DEMO_MODE", "").lower() == "true"
 ALLOW_REGISTRATION = (not _demo) and os.getenv("WC_ALLOW_REGISTRATION", "true").lower() == "true"
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+# --- Session cookie ----------------------------------------------------------
+# HttpOnly: client-side JS can never read this value, even via an XSS bug —
+# that's the whole point of moving off a JWT the frontend used to read out of
+# localStorage. The browser attaches it automatically; nothing in the frontend
+# needs a credentials:'include' fetch option, since every request this app
+# ever makes is same-origin (no CORSMiddleware anywhere in main.py, and the
+# Vite dev proxy makes it look that way locally too).
+COOKIE_NAME = "wc_session"
+# Defaults true, same pattern as WC_ALLOW_REGISTRATION. Chrome/Firefox treat
+# http://localhost as trustworthy and store/send Secure cookies there despite
+# no TLS, so this doesn't break local dev. It WOULD break reaching the dev
+# server over plain HTTP via its Tailscale hostname (vite.config.ts's
+# allowedHosts: ['.ts.net', ...] is a real access pattern here) — that's what
+# this escape hatch is for.
+COOKIE_SECURE = os.getenv("WC_COOKIE_SECURE", "true").lower() != "false"
+
+
+def _get_token_from_cookie(request: Request) -> str:
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return token
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        COOKIE_NAME, token,
+        httponly=True, secure=COOKIE_SECURE, samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60, path="/",
+    )
 
 # --- Rate limiting ----------------------------------------------------------
 # In-memory, single-process — same precedent/caveat as session_store.py: fine
@@ -94,8 +123,10 @@ def _claim_invite_code(db: Session, code: str, user_id: int) -> bool:
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str
+    # The session token itself lives only in the HttpOnly cookie now — never
+    # in a JSON body a script could read. This model exists purely to carry
+    # the recovery key.
+    #
     # Present ONLY in the register() response, and only once ever — this is
     # the user's one chance to save it. Never stored in plaintext, never
     # logged, never returned again by any other endpoint.
@@ -130,7 +161,7 @@ def _issue_session(user: User, dek: bytes) -> str:
     return create_access_token({"sub": user.email, "sid": sid})
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+async def get_current_user(token: str = Depends(_get_token_from_cookie), db: Session = Depends(get_db)) -> User:
     """Resolve the caller, and bind their DEK to this request.
 
     A `yield`-based dependency (like get_db) so the DEK binding is guaranteed
@@ -156,7 +187,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired token",
-        headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -181,7 +211,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session expired, please log in again",
-            headers={"WWW-Authenticate": "Bearer"},
         )
 
     token_var = crypto.CURRENT_DEK.set(dek)
@@ -193,7 +222,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 @router.post("/auth/register", response_model=TokenResponse)
 @limiter.limit("10/minute")
-def register(request: Request, body: RegisterRequest, db: Session = Depends(get_db)):
+def register(request: Request, response: Response, body: RegisterRequest, db: Session = Depends(get_db)):
     # Per-account limit first — cheap, and stops a single targeted account
     # from being hammered even if the per-IP bucket (the decorator above)
     # isn't exhausted yet (e.g. an attacker spread across many IPs).
@@ -237,12 +266,13 @@ def register(request: Request, body: RegisterRequest, db: Session = Depends(get_
     db.commit()
 
     token = _issue_session(user, dek)
-    return {"access_token": token, "token_type": "bearer", "recovery_key": recovery_key}
+    _set_session_cookie(response, token)
+    return {"recovery_key": recovery_key}
 
 
 @router.post("/auth/login", response_model=TokenResponse)
 @limiter.limit("10/minute")
-def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(request: Request, response: Response, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     _enforce_account_limit("login", form_data.username, _ACCOUNT_LOGIN_LIMIT)
 
     user = db.query(User).filter(User.email == form_data.username).first()
@@ -272,7 +302,8 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
         enable_encryption_for_user(db, user, dek)
 
         token = _issue_session(user, dek)
-        return {"access_token": token, "token_type": "bearer", "recovery_key": recovery_key}
+        _set_session_cookie(response, token)
+        return {"recovery_key": recovery_key}
 
     params = json.loads(user.kek_params_json) if user.kek_params_json else crypto.DEFAULT_KEK_PARAMS
     kek = crypto.derive_kek(form_data.password, bytes.fromhex(user.dek_salt), params)
@@ -285,23 +316,27 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     token = _issue_session(user, dek)
-    return {"access_token": token, "token_type": "bearer"}
+    _set_session_cookie(response, token)
+    return {}
 
 
 @router.post("/auth/logout")
-def logout(token: str = Depends(oauth2_scheme)):
+def logout(request: Request, response: Response):
     """Explicitly end a session, dropping its DEK before the JWT's natural
     expiry. The token itself is not revoked (that needs a server-side
     blocklist, which is Phase 3 — see docs/ARCHITECTURE.md §11.5) but without
     a live session its `sid` resolves to nothing, so get_current_user treats
     it as expired regardless of the JWT's own exp claim."""
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
-        return {"ok": True}
-    sid = payload.get("sid")
-    if sid:
-        session_store.drop_session(sid)
+    token = request.cookies.get(COOKIE_NAME)
+    if token:
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            sid = payload.get("sid")
+            if sid:
+                session_store.drop_session(sid)
+        except JWTError:
+            pass
+    response.delete_cookie(COOKIE_NAME, path="/")
     return {"ok": True}
 
 

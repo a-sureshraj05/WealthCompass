@@ -11,30 +11,35 @@ import { BrokerageAccount } from './types';
 import TickerTypeContext from './contexts/TickerTypeContext';
 
 const App: React.FC = () => {
-  const [token, setToken] = useState<string | null>(null);
+  // The session lives in an HttpOnly cookie — nothing for this component to
+  // read or store itself, just whether the server currently recognizes it.
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [validating, setValidating] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('wc_token');
-    if (!stored) { setValidating(false); return; }
-    fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${stored}` } })
-      .then(res => { if (res.ok) setToken(stored); else localStorage.removeItem('wc_token'); })
-      .catch(() => { localStorage.removeItem('wc_token'); })
+    fetch('/api/v1/auth/me')
+      .then(res => setIsAuthenticated(res.ok))
+      .catch(() => setIsAuthenticated(false))
       .finally(() => setValidating(false));
   }, []);
 
-  const handleLogin = (newToken: string) => {
-    localStorage.setItem('wc_token', newToken);
-    setToken(newToken);
+  const handleLogin = () => {
+    setIsAuthenticated(true);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('wc_token');
-    setToken(null);
+  const handleLogout = async () => {
+    // Previously this only cleared client state and never told the server —
+    // the DEK session stayed alive server-side for its full 24h TTL
+    // regardless of "logging out". This is the actual fix.
+    try {
+      await fetch('/api/v1/auth/logout', { method: 'POST' });
+    } finally {
+      setIsAuthenticated(false);
+    }
   };
 
   if (validating) return null;
-  if (!token) return <LoginPage onLogin={handleLogin} />;
+  if (!isAuthenticated) return <LoginPage onLogin={handleLogin} />;
   return <AuthenticatedApp onLogout={handleLogout} />;
 };
 

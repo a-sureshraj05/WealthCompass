@@ -10,6 +10,7 @@ import tempfile
 from datetime import datetime
 
 import pytest
+from fastapi import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -73,12 +74,17 @@ def test_legacy_login_upgrades_and_reencrypts(db):
     ).fetchone()
     assert raw_before.quantity == "10.0" or raw_before.quantity == 10.0
 
+    response = Response()
     resp = auth.login(
         None,
+        response,
         OAuth2PasswordRequestForm(username="ida@example.test", password="legacy-password", scope=""),
         db=db,
     )
     assert resp["recovery_key"]  # upgrade path issues one, same as register()
+    raw_cookie = response.headers.get("set-cookie", "")
+    assert raw_cookie.startswith(f"{auth.COOKIE_NAME}=")
+    resp["access_token"] = raw_cookie[len(f"{auth.COOKIE_NAME}="):].split(";", 1)[0]
 
     db.refresh(user)
     assert user.wrapped_dek is not None
