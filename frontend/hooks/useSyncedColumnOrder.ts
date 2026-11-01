@@ -16,6 +16,7 @@ export function useSyncedColumnOrder<T extends string>(
   prefKey: string,
   defaults: readonly T[],
 ) {
+  const cacheKey = import.meta.env.DEV && typeof window !== 'undefined' && window.location.pathname === '/design-preview' ? `design-preview:${prefKey}` : prefKey;
   const isValid = useCallback(
     (value: unknown): value is T[] =>
       Array.isArray(value) &&
@@ -26,7 +27,7 @@ export function useSyncedColumnOrder<T extends string>(
 
   const [order, setOrder] = useState<T[]>(() => {
     try {
-      const cached = localStorage.getItem(prefKey);
+      const cached = localStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (isValid(parsed)) return parsed;
@@ -50,7 +51,7 @@ export function useSyncedColumnOrder<T extends string>(
         const remote = prefs[prefKey];
         if (isValid(remote)) {
           setOrder(remote);
-          try { localStorage.setItem(prefKey, JSON.stringify(remote)); } catch { /* cache only */ }
+          try { localStorage.setItem(cacheKey, JSON.stringify(remote)); } catch { /* cache only */ }
           return;
         }
         // Server has no order for this view yet. Seed it from whatever this
@@ -64,7 +65,7 @@ export function useSyncedColumnOrder<T extends string>(
       })
       .catch(() => { /* offline or logged out — the cached order still works */ });
     return () => { cancelled = true; };
-  }, [prefKey, isValid]);
+  }, [prefKey, cacheKey, isValid]);
 
   const reorder = useCallback((from: T, to: T) => {
     if (from === to) return;
@@ -76,7 +77,7 @@ export function useSyncedColumnOrder<T extends string>(
       next.splice(fi, 1);
       next.splice(ti, 0, from);
 
-      try { localStorage.setItem(prefKey, JSON.stringify(next)); } catch { /* cache only */ }
+      try { localStorage.setItem(cacheKey, JSON.stringify(next)); } catch { /* cache only */ }
       pendingWrite.current = true;
       savePreferences({ [prefKey]: next })
         .catch(() => { /* order still applies locally; retried on next change */ })
@@ -84,7 +85,7 @@ export function useSyncedColumnOrder<T extends string>(
 
       return next;
     });
-  }, [prefKey]);
+  }, [prefKey, cacheKey]);
 
   /** Move a column one slot in either direction — the touch-friendly path. */
   const move = useCallback((col: T, direction: -1 | 1) => {

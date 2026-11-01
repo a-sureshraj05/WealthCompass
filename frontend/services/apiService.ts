@@ -5,11 +5,22 @@ import { BrokerageAccount, StockHolding, Transaction, RealizedGain, UnrealizedLo
 // header to build here. (fetch()'s default credentials mode is
 // "same-origin", and every request this app makes is same-origin.)
 const apiFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  // Only this explicit dev route gets in-memory data. Unknown requests fail
+  // closed in the adapter; none fall through to the real brokerage backend.
+  if (import.meta.env.DEV && window.location.pathname === '/design-preview') {
+    const { previewApiFetch } = await import('../preview/api');
+    return previewApiFetch(url, options);
+  }
   const res = await fetch(url, options);
   if (res.status === 401) {
     window.location.reload();
   }
   return res;
+};
+
+const responseError = async (response: Response, fallback: string): Promise<Error> => {
+  const body = await response.json().catch(() => null);
+  return new Error(typeof body?.detail === 'string' ? body.detail : fallback);
 };
 
 export const parseStatement = async (text: string, brokerageName: string): Promise<Transaction[]> => {
@@ -22,7 +33,7 @@ export const parseStatement = async (text: string, brokerageName: string): Promi
   });
 
   if (!response.ok) {
-    throw new Error("Failed to parse statement");
+    throw await responseError(response, "Failed to import statement");
   }
 
   const parsedData = await response.json();
@@ -271,31 +282,34 @@ export const fetchConnectedBrokerages = async (): Promise<{ id: number; brokerag
 
 export const getBrokerageConnectUrl = async (brokerage: string): Promise<string> => {
   const response = await apiFetch(`/api/v1/brokerage/connect-url?brokerage=${encodeURIComponent(brokerage)}`);
-  if (!response.ok) throw new Error("Failed to get connect URL");
+  if (!response.ok) throw await responseError(response, "Failed to get connect URL");
   const data = await response.json();
   return data.url;
 };
 
-export const fetchBrokerageConnections = async (): Promise<{ id: number; brokerage: string; authorization_id: string }[]> => {
+export interface BrokerageConnection { id: number; brokerage: string; authorization_id: string }
+export interface ProviderAccount { id: string; name: string; brokerage: string; authorization_id: string }
+
+export const fetchBrokerageConnections = async (): Promise<BrokerageConnection[]> => {
   const response = await apiFetch("/api/v1/brokerage/connections");
-  if (!response.ok) throw new Error("Failed to fetch connections");
+  if (!response.ok) throw await responseError(response, "Failed to fetch connections");
   return response.json();
 };
 
-export const fetchBrokerageAccounts = async (): Promise<{ id: string; name: string; brokerage: string; authorization_id: string }[]> => {
-  const response = await apiFetch("/api/v1/brokerage/accounts");
-  if (!response.ok) throw new Error("Failed to fetch accounts");
+export const fetchBrokerageAccounts = async (): Promise<ProviderAccount[]> => {
+  const response = await apiFetch("/api/v1/brokerage/provider-accounts");
+  if (!response.ok) throw await responseError(response, "Failed to fetch provider accounts");
   return response.json();
 };
 
 export const ignoreBrokerageAccount = async (accountId: string): Promise<void> => {
-  const response = await apiFetch(`/api/v1/brokerage/accounts/${encodeURIComponent(accountId)}`, { method: "DELETE" });
-  if (!response.ok) throw new Error("Failed to hide account");
+  const response = await apiFetch(`/api/v1/brokerage/accounts/${encodeURIComponent(accountId)}/ignore`, { method: "DELETE" });
+  if (!response.ok) throw await responseError(response, "Failed to hide account");
 };
 
 export const deleteBrokerageConnection = async (authorizationId: string): Promise<void> => {
-  const response = await apiFetch(`/api/v1/brokerage/connections/${authorizationId}`, { method: "DELETE" });
-  if (!response.ok) throw new Error("Failed to delete connection");
+  const response = await apiFetch(`/api/v1/brokerage/connections/${encodeURIComponent(authorizationId)}`, { method: "DELETE" });
+  if (!response.ok) throw await responseError(response, "Failed to delete connection");
 };
 
 export const syncBrokerageTransactions = async (startDate?: string, endDate?: string, accountIds?: string[], tickers?: string[]): Promise<{ message: string }> => {
@@ -306,14 +320,14 @@ export const syncBrokerageTransactions = async (startDate?: string, endDate?: st
   if (tickers && tickers.length > 0) tickers.forEach(t => params.append("tickers", t));
   const query = params.toString() ? `?${params.toString()}` : "";
   const response = await apiFetch(`/api/v1/brokerage/sync${query}`, { method: "POST" });
-  if (!response.ok) throw new Error("Failed to sync transactions");
+  if (!response.ok) throw await responseError(response, "Failed to sync transactions");
   return response.json();
 };
 
 export const deleteRawData = async (source?: 'manual' | 'snaptrade'): Promise<{ message: string }> => {
   const params = source ? `?source=${source}` : "";
   const response = await apiFetch(`/api/v1/transactions/raw${params}`, { method: "DELETE" });
-  if (!response.ok) throw new Error("Failed to delete raw data");
+  if (!response.ok) throw await responseError(response, "Failed to delete raw data");
   return response.json();
 };
 

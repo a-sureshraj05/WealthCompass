@@ -1,0 +1,40 @@
+.portfolio-sidebar { width: 244px; display: flex; flex-direction: column; flex-shrink: 0; min-height: 0; background: var(--wc-sidebar, #f3f6fb); border-right: 1px solid var(--wc-border, #d9e3ef); color: #526782; transition: width .2s ease; }
+.portfolio-sidebar.is-collapsed { width: 76px; }
+.portfolio-sidebar button { font: inherit; cursor: pointer; }
+.portfolio-sidebar button:focus-visible { outline: 3px solid #7096ed; outline-offset: 3px; }
+.sidebar-home { display: flex; align-items: center; min-height: 64px; flex-shrink: 0; width: 100%; padding: 0 19px; background: transparent; border: 0; border-bottom: 1px solid #e1e8f2; text-align: left; }
+.sidebar-home:hover { background: #eaf0f9; }
+.sidebar-body { flex: 1; min-height: 0; overflow-y: auto; padding: 32px 14px 20px; }
+.sidebar-section-label { color: #7184a0; font-size: 10px; font-weight: 600; letter-spacing: .14em; padding: 0 14px; margin: 0 0 14px; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 6px; }
+.sidebar-nav-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 11px 14px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #60738f; text-align: left; transition: background .15s, color .15s; position: relative; }
+.sidebar-nav-item > svg { flex-shrink: 0; opacity: .85; }
+.sidebar-nav-item > span { font-size: 12px; font-weight: 500; white-space: nowrap; }
+.sidebar-nav-item:hover { background: #e7eef9; color: #244a85; }
+.sidebar-nav-item.is-active { background: #e0e9fa; border-color: #d4e0f5; color: #2b57a1; box-shadow: 0 2px 4px #172d5003; }
+.sidebar-nav-item.is-active > span { font-weight: 600; }
+.sidebar-nav-item.is-active > svg { opacity: 1; }
+.sidebar-active-dot { margin-left: auto; width: 5px; height: 5px; border-radius: 50%; background: #4e79c8; flex-shrink: 0; }
+.sidebar-section-divider { height: 1px; background: #dfe7f2; margin: 24px 14px; }
+.sidebar-connect-card { padding: 17px 15px 15px; background: #e8eff9; border: 1px solid #dce5f3; border-radius: 11px; }
+.sidebar-connect-icon { display: flex; align-items: center; justify-content: center; height: 29px; width: 29px; border: 1px solid #d5e1f4; background: #f3f7fd; border-radius: 8px; color: #6284ba; margin-bottom: 11px; }
+.sidebar-connect-card h2 { font-size: 12px; font-weight: 600; color: #3c5476; margin: 0 0 6px; }
+.sidebar-connect-card p { color: #6e83a1; font-size: 11px; line-height: 1.75; margin: 0 0 15px; }
+.sidebar-connect-button { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 38px; border: 1px solid #172d50; border-radius: 7px; background: #172d50; color: #e8f0ff; font-size: 11px !important; font-weight: 500 !important; transition: background .15s; }
+.sidebar-connect-button:hover { background: #24436d; }
+.sidebar-footer { padding: 16px 20px 13px; border-top: 1px solid #e1e8f2; flex-shrink: 0; }
+.sidebar-security { display: flex; align-items: flex-start; gap: 9px; padding: 0 3px 16px; color: #7487a2; }
+.sidebar-security > svg { flex-shrink: 0; margin-top: 1px; }
+.sidebar-security strong { display: block; font-size: 10px; font-weight: 500; color: #5d7392; margin: 0 0 4px; }
+.sidebar-security p { font-size: 10px; line-height: 1.7; color: #6e819d; margin: 0; }
+.sidebar-collapse { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 37px; padding: 8px 5px; border: 0; border-top: 1px solid #e0e7f2; background: transparent; color: #6c809e; }
+.sidebar-collapse > span { font-size: 11px; }
+.sidebar-collapse:hover { color: #2b57a1; }
+.portfolio-sidebar.is-collapsed .sidebar-home { justify-content: center; padding: 0; }
+.portfolio-sidebar.is-collapsed .sidebar-body { padding: 28px 12px; }
+.portfolio-sidebar.is-collapsed .sidebar-nav-item { justify-content: center; padding: 11px 0; }
+.portfolio-sidebar.is-collapsed .sidebar-nav-item::after { display: none; }
+.portfolio-sidebar.is-collapsed .sidebar-footer { padding: 12px; }
+.portfolio-sidebar.is-collapsed .sidebar-collapse { justify-content: center; border-top: 0; }
+@media (max-width: 1023px) { .portfolio-sidebar { display: none; } }
+@media (prefers-reduced-motion: reduce) { .portfolio-sidebar, .sidebar-nav-item, .sidebar-connect-button { transition: none; } }

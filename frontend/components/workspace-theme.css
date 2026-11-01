@@ -1,0 +1,26 @@
+/* Shared surfaces keep the navy portfolio summary as the visual anchor. */
+:root {
+  --wc-canvas: #edf2f8;
+  --wc-surface: #ffffff;
+  --wc-surface-soft: #f7f9fd;
+  --wc-surface-blue: #f0f5fc;
+  --wc-sidebar: #f3f6fb;
+  --wc-border: #d9e3ef;
+  --wc-border-strong: #cbd9e9;
+  --wc-ink: #192b46;
+  --wc-muted: #65758d;
+  --wc-navy: #172d50;
+  --wc-card-radius: 14px;
+  --wc-card-shadow: 0 1px 2px #1b355808, 0 8px 24px #1b355806;
+  --wc-hero-shadow: 0 2px 4px #172d5008, 0 12px 32px #172d500b;
+}
+
+.wealth-workspace { background: var(--wc-canvas); }
+.workspace-canvas {
+  background-color: var(--wc-canvas);
+  background-image: radial-gradient(ellipse 100% 380px at 15% 0, #e4edf9 0, transparent 100%);
+}
+
+@media (prefers-contrast: more) {
+  :root { --wc-border: #aabbd0; --wc-border-strong: #8ca1bd; --wc-card-shadow: none; }
+}
