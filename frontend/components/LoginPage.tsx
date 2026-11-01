@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import BrandLogo from './BrandLogo';
 
 interface Props {
   onLogin: () => void;
@@ -102,13 +103,8 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
       <div className="w-full max-w-md">
         {/* Logo / App name */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-[#0F52BA] rounded mb-4 shadow-lg shadow-[#0F52BA]/20">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-          </div>
-          <h1 className="font-display text-2xl font-bold text-[#1D1D1F]">WealthCompass</h1>
-          <p className="text-sm text-slate-500 mt-1">Your personal portfolio tracker</p>
+          <h1><BrandLogo size={48} className="login-brand" /></h1>
+          <p className="text-sm text-slate-500 mt-4">Your personal portfolio tracker</p>
         </div>
 
         {/* Card */}

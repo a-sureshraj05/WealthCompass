@@ -1,6 +1,7 @@
-
 import React from 'react';
 import { PortfolioStats } from '../types';
+import BrandLogo from './BrandLogo';
+import { NAV_ITEMS } from './navItems';
 
 interface Props {
   stats: PortfolioStats;
@@ -8,75 +9,21 @@ interface Props {
   sidebarCollapsed: boolean;
   numbersVisible?: boolean;
   onToggleNumbers?: () => void;
+  activeTab?: string;
 }
 
-const Navbar: React.FC<Props> = ({ stats, onLogout, sidebarCollapsed, numbersVisible = true, onToggleNumbers }) => {
-  return (
-    <nav className="h-16 border-b border-[#D2D2D7] bg-white flex items-center justify-between px-8 shrink-0">
-      <div className="flex items-center">
-        {sidebarCollapsed && (
-          <span className="font-display text-lg font-bold text-[#0F52BA]">WealthCompass</span>
-        )}
-      </div>
-
-      <div className="flex items-center gap-6">
-        <span className="text-sm font-semibold text-[#1D1D1F]">
-          Portfolio:{' '}
-          <span className="text-[#0F52BA]">
-            {numbersVisible
-              ? `$${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              : '••••••'}
-          </span>
-        </span>
-
-        {/* Eye toggle */}
-        {onToggleNumbers && (
-          <button onClick={onToggleNumbers} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-[#1D1D1F] transition-colors" title={numbersVisible ? 'Hide numbers' : 'Show numbers'}>
-            {numbersVisible ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-              </svg>
-            )}
-          </button>
-        )}
-
-        {/* Bell */}
-        <button className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-[#1D1D1F] transition-colors">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
-        </button>
-
-        {/* Settings */}
-        <button className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-[#1D1D1F] transition-colors">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
-
-        {/* User + Avatar */}
-        <div className="flex items-center gap-3 border-l border-[#D2D2D7] pl-6">
-          <div className="text-right hidden lg:block">
-            <span className="block text-xs font-bold text-[#1D1D1F]">Account Holder</span>
-            <span className="block text-[10px] text-slate-400 uppercase tracking-widest">Premium Member</span>
-          </div>
-          <button
-            onClick={onLogout}
-            title="Sign out"
-            className="w-9 h-9 rounded-full bg-[#0F52BA] flex items-center justify-center text-white font-bold text-xs hover:bg-[#0A3E8F] transition-colors"
-          >
-            AH
-          </button>
-        </div>
-      </div>
-    </nav>
-  );
-};
+const Navbar: React.FC<Props> = ({ stats, onLogout, sidebarCollapsed, numbersVisible = true, onToggleNumbers, activeTab = 'dashboardView' }) => (
+  <nav className="h-16 border-b border-[#e7ecf3] bg-white flex items-center justify-between gap-3 px-4 md:px-8 shrink-0" aria-label="Account controls">
+    <div className="text-xs text-slate-400 min-w-0">
+      <span className="lg:hidden"><BrandLogo size={28} className="brand-mobile" /></span>
+      <span className="hidden lg:inline">{sidebarCollapsed ? 'WealthCompass' : 'Workspace'} <span className="mx-2 text-slate-300">/</span> <span className="text-slate-600">{NAV_ITEMS.find(item => item.id === activeTab)?.label || 'Your portfolio'}</span></span>
+    </div>
+    <div className="flex items-center gap-3 md:gap-5 shrink-0">
+      <span className="hidden sm:block text-xs text-slate-500">Portfolio <span className="ml-1 font-semibold text-[#354762] tabular-nums">{numbersVisible ? `$${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '••••••'}</span></span>
+      {onToggleNumbers && <button onClick={onToggleNumbers} aria-pressed={!numbersVisible} className="px-3 py-2 rounded-lg border border-[#e7ecf3] text-xs text-slate-500 hover:bg-slate-50" title={numbersVisible ? 'Hide financial figures' : 'Show financial figures'}>{numbersVisible ? 'Hide figures' : 'Show figures'}</button>}
+      <button onClick={onLogout} className="text-xs font-medium text-slate-500 hover:text-[#2458d3] py-2">Sign out</button>
+    </div>
+  </nav>
+);
 
 export default Navbar;

@@ -1,0 +1,53 @@
+.portfolio-insights { border: 1px solid var(--wc-border, #d9e3ef); border-top: 3px solid #314d77; border-radius: var(--wc-card-radius, 14px); background: var(--wc-surface, #fff); box-shadow: var(--wc-card-shadow, 0 4px 16px #1b355808); color: #263c5b; margin-bottom: 24px; min-width: 0; }
+.insights-header { display: flex; align-items: center; gap: 12px; padding: 22px 24px 0; }
+.insights-mark { display: grid; place-items: center; height: 40px; width: 40px; flex-shrink: 0; color: #50739f; background: #edf3fb; border: 1px solid #dce6f4; border-radius: 11px; }
+.insights-eyebrow { font-size: 8px; letter-spacing: .13em; font-weight: 600; color: #60718a; margin: 0 0 6px; }
+.insights-header h2 { font-family: 'Hanken Grotesk', sans-serif; color: #253c5d; font-size: 22px; font-weight: 600; letter-spacing: -.5px; line-height: 1.1; margin: 0; }
+.insights-meta { margin-left: auto; display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+.insights-badge { font-size: 10px; background: #f1f5fb; border: 1px solid #e0e8f3; color: #5c7597; padding: 5px 9px; border-radius: 6px; }
+.insights-badge.is-sample { background: #edf4fc; color: #4d6f9c; border-color: #d8e5f6; }
+.insights-stale { font-size: 10px; color: #8a6e44; }
+.insights-context { display: flex; align-items: start; flex-wrap: wrap; gap: 8px 24px; padding: 12px 24px 20px; }
+.insights-context p { flex: 1 1 300px; font-size: 11px; color: #65758d; line-height: 1.8; margin: 0; }
+.insights-context time { font-size: 10px; color: #60718a; line-height: 1.8; }
+.insights-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; padding: 0 24px 23px; }
+.insights-observation { min-width: 0; padding: 0 22px; display: flex; flex-direction: column; align-items: start; }
+.insights-observation:first-child { padding-left: 0; }
+.insights-observation:last-child { padding-right: 0; }
+.insights-observation + .insights-observation { border-left: 1px solid #e3eaf4; }
+.insights-observation-label { display: flex; align-items: center; gap: 9px; }
+.insights-observation-label > span { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 6px; background: #f1f5fb; color: #7188a8; font-size: 9px; }
+.insights-observation-label h3 { color: #425c80; font-size: 12px; font-weight: 600; letter-spacing: -.1px; margin: 0; }
+.insights-observation p { font-size: 12px; color: #66768e; line-height: 1.85; margin: 12px 0 14px; overflow-wrap: anywhere; }
+.insights-observation p strong { font-weight: 600; color: #486180; }
+.insights-observation > button { display: flex; align-items: center; gap: 7px; border: 0; padding: 0; color: #3f69a2; background: none; cursor: pointer; font-size: 11px; margin-top: auto; }
+.insights-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 15px 24px; background: #f8fafd; border-top: 1px solid #e6edf6; border-radius: 0 0 13px 13px; }
+.insights-explore, .insights-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; }
+.insights-explore > button { font-size: 10px; color: #5d789f; cursor: pointer; border: 0; background: none; padding: 0; }
+.insights-actions { gap: 8px; }
+.insights-button { font-size: 11px; color: #526e94; background: white; border: 1px solid #dce5f1; border-radius: 7px; padding: 8px 12px; min-height: 35px; cursor: pointer; }
+.insights-button.is-primary { color: #f0f5ff; background: #25446e; border-color: #25446e; }
+.insights-button.is-primary:hover:not(:disabled) { background: #172d50; }
+.portfolio-insights button:disabled { opacity: .45; cursor: not-allowed; }
+.portfolio-insights :is(button, summary):focus-visible { outline: 2px solid #7096c8; outline-offset: 4px; }
+.insights-empty { margin: 0 24px 22px; border: 1px dashed #dce5f1; border-radius: 9px; background: #fbfcfe; padding: 21px; }
+.insights-empty strong { font-size: 12px; font-weight: 500; color: #526c91; }
+.insights-empty p { font-size: 11px; color: #6e7e96; line-height: 1.8; margin: 6px 0 0; }
+.insights-error { margin: 0 24px 20px; border: 1px solid #eadfcd; border-radius: 8px; background: #fbf8f0; color: #826b44; padding: 12px 14px; font-size: 11px; line-height: 1.8; }
+.insights-more { padding: 0 24px 20px; color: #607b9f; font-size: 11px; }
+.insights-more summary { cursor: pointer; }
+.insights-more p { margin: 12px 0 0; line-height: 1.8; color: #66768e; }
+.insights-skeleton { padding: 12px 18px; }
+.insights-skeleton i { display: block; height: 8px; border-radius: 4px; margin-bottom: 13px; background: #edf2f8; }
+.insights-skeleton i:first-child { width: 45%; height: 11px; }
+.insights-skeleton i:last-child { width: 80%; }
+.insight-chat-sample { padding: 9px 18px; border-bottom: 1px solid #dce6f3; color: #55769e; background: #eef4fc; font-size: 11px; line-height: 1.7; }
+.insight-chat-suggestions { display: grid; gap: 8px; margin-top: 14px; }
+.insight-chat-suggestions button { text-align: left; border: 1px solid #e0e8f3; background: white; border-radius: 7px; padding: 10px; font-size: 11px; color: #4a6d9e; cursor: pointer; }
+@media (max-width: 1000px) { .insights-grid { grid-template-columns: 1fr; gap: 18px; }.insights-observation { padding: 0; }.insights-observation + .insights-observation { border-left: 0; border-top: 1px solid #e7edf6; padding-top: 17px; }.insights-observation p { margin: 9px 0 10px; }.insights-footer { align-items: start; }.insights-actions { margin-left: auto; } }
+@media (max-width: 600px) { .insights-header { padding: 19px 18px 0; flex-wrap: wrap; }.insights-header h2 { font-size: 20px; }.insights-meta { margin-left: 52px; }.insights-context { padding: 13px 18px 18px; }.insights-grid { padding: 0 18px 20px; }.insights-footer { padding: 15px 18px; }.insights-explore { width: 100%; }.insights-actions { width: 100%; }.insights-actions > button { flex: 1; }.insights-empty, .insights-error { margin-inline: 18px; } }
+
+.portfolio-insights .insights-button { font: 500 11px 'Inter', sans-serif; }
+.portfolio-insights .insights-explore > button { font-size: 10px; }
+.portfolio-insights .insights-observation > button { font-size: 11px; }
+.portfolio-insights [role="dialog"] button { font-size: 12px; }

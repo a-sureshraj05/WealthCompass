@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { BrokerageAccount, StockHolding, UnrealizedLot, RealizedGain } from '../types';
 import { fetchAnalystData } from '../services/apiService';
 import TickerLogo from './TickerLogo';
 import SortIndicator from './SortIndicator';
-import { useClickOutside } from '../hooks/useClickOutside';
-import { useSyncedColumnOrder } from '../hooks/useSyncedColumnOrder';
+import { useTableColumns } from '../hooks/useTableColumns';
 import ColumnOrderSheet from './ColumnOrderSheet';
+import { FilterToolbar, MultiSelectFilter, GroupByControl, ColumnsButton, selectionChips, TAX_TERM_OPTIONS } from './TableFilters';
 import { optionsMultiplier } from '../utils/finance';
 import { SignedValue, trendColor } from './TrendIndicator';
 
@@ -14,13 +14,17 @@ type SortDirection = 'asc' | 'desc' | null;
 
 type ColKey = 'ticker' | 'washSale' | 'termType' | 'quantity' | 'avgCost' | 'totalCost' | 'currentPrice' | 'marketValue' | 'dailyGain' | 'dailyPct' | 'unrealizedGain' | 'unrealizedPct' | 'realized' | 'totalGain' | 'analystPrice' | 'analystPct';
 const COL_LABELS: Record<ColKey, string> = {
-  ticker: 'Ticker', washSale: 'Wash Sale', termType: 'Term Type', quantity: 'Quantity',
-  avgCost: 'Avg Cost', totalCost: 'Total Cost', currentPrice: 'Current Price',
-  marketValue: 'Market Value', dailyGain: 'Daily Gain', dailyPct: 'Daily %',
-  unrealizedGain: 'Unrealized Gain', unrealizedPct: 'Unrealized %', realized: 'Realized',
-  totalGain: 'Total Gain', analystPrice: 'Analyst Price', analystPct: 'Analyst %',
+  ticker: 'Ticker', washSale: 'Wash Sale', termType: 'Tax term', quantity: 'Quantity',
+  avgCost: 'Avg. cost', totalCost: 'Cost basis', currentPrice: 'Price',
+  marketValue: 'Market Value', dailyGain: 'Day P&L', dailyPct: 'Day %',
+  unrealizedGain: 'Unrealized P&L', unrealizedPct: 'Unrealized %', realized: 'Realized',
+  totalGain: 'Total Gain', analystPrice: 'Analyst target', analystPct: 'Target upside %',
 };
-const DEFAULT_COLS: ColKey[] = ['ticker','washSale','termType','quantity','avgCost','totalCost','currentPrice','marketValue','dailyGain','dailyPct','unrealizedGain','unrealizedPct','realized','totalGain','analystPrice','analystPct'];
+const DEFAULT_COLS: ColKey[] = ['ticker','quantity','avgCost','currentPrice','marketValue','dailyGain','dailyPct','unrealizedGain','unrealizedPct','totalCost','termType','washSale','realized','totalGain','analystPrice','analystPct'];
+
+const RECOMMENDED_COLS: readonly ColKey[] = ['ticker','quantity','avgCost','currentPrice','marketValue','dailyGain','unrealizedGain','unrealizedPct'];
+const REQUIRED_COLS: readonly ColKey[] = ['ticker'];
+const COLUMN_PRESETS: Record<string, readonly ColKey[]> = { Overview: RECOMMENDED_COLS, Performance: ['ticker','marketValue','dailyGain','dailyPct','unrealizedGain','unrealizedPct','realized','totalGain'], 'Cost & tax': ['ticker','quantity','avgCost','totalCost','currentPrice','marketValue','termType','washSale','unrealizedGain'] };
 
 type TermType = 'Long' | 'Short' | 'Mixed' | null;
 // Term type for a set of lots — Long if held > 1 year, Short if held ≤ 1 year
@@ -94,16 +98,8 @@ const HoldingsView: React.FC<Props> = ({
   );
   const [lotSortKey, setLotSortKey] = useState<'buyDate' | 'quantity' | 'buyPrice' | 'totalCost' | 'currentPrice' | 'marketValue' | 'gain'>('buyDate');
   const [lotSortDir, setLotSortDir] = useState<'asc' | 'desc'>('asc');
-  const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
-  const [isTickerMenuOpen, setIsTickerMenuOpen] = useState(false);
-  const brokerageMenuRef = useRef<HTMLDivElement>(null);
-  const tickerMenuRef = useRef<HTMLDivElement>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
-  const [isTermMenuOpen, setIsTermMenuOpen] = useState(false);
-  const termMenuRef = useRef<HTMLDivElement>(null);
-  const toggleTerm = (t: 'long' | 'short') =>
-    setSelectedTerms(selectedTerms.includes(t) ? selectedTerms.filter(x => x !== t) : [...selectedTerms, t]);
   const lotMatchesTerm = (l: UnrealizedLot) =>
     selectedTerms.length === 0 || selectedTerms.includes(l.isLongTerm ? 'long' : 'short');
   const [analystMedian, setAnalystMedian] = useState<Record<string, number>>({});
@@ -113,8 +109,12 @@ const HoldingsView: React.FC<Props> = ({
 
   // Column drag-and-drop state
   // Server-backed so the order matches on the Mac and the phone.
-  const { order: columnOrder, reorder: reorderCol, move: moveCol } =
-    useSyncedColumnOrder<ColKey>('holdings-col-order', DEFAULT_COLS);
+  const { order: allColumns, visible: visibleColumns, columns: columnOrder, reorder: reorderCol, move: moveCol, toggle: toggleColumn, reset: resetColumns, preset: applyColumnPreset } =
+    useTableColumns<ColKey>('holdings-col-order', DEFAULT_COLS, RECOMMENDED_COLS, REQUIRED_COLS);
+  useEffect(() => {
+    const column = sortKey === 'gain' ? 'unrealizedGain' : sortKey === 'gainPct' ? 'unrealizedPct' : sortKey;
+    if (column && !visibleColumns.includes(column as ColKey)) { setSortKey(null); setSortDirection(null); }
+  }, [visibleColumns, sortKey]);
   const [showColSheet, setShowColSheet] = useState(false);
   const [dragCol, setDragCol] = useState<ColKey | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ColKey | null>(null);
@@ -140,10 +140,6 @@ const HoldingsView: React.FC<Props> = ({
       .catch(console.error);
   }, [holdings]);
 
-  useClickOutside(
-    [brokerageMenuRef, tickerMenuRef, termMenuRef],
-    [setIsBrokerageMenuOpen, setIsTickerMenuOpen, setIsTermMenuOpen],
-  );
 
   const washSaleByTicker = useMemo(() => {
     const today = new Date();
@@ -214,8 +210,6 @@ const HoldingsView: React.FC<Props> = ({
   const allBrokerages = useMemo(() => Array.from(new Set(holdings.map(h => h.brokerage))).sort(), [holdings]);
   const allTickers = useMemo(() => Array.from(new Set(holdings.map(h => h.ticker))).sort(), [holdings]);
 
-  const toggleBrokerage = (b: string) => setSelectedBrokerages(selectedBrokerages.includes(b) ? selectedBrokerages.filter(x => x !== b) : [...selectedBrokerages, b]);
-  const toggleTickerFilter = (t: string) => setSelectedTickers(selectedTickers.includes(t) ? selectedTickers.filter(x => x !== t) : [...selectedTickers, t]);
 
   const resetFilters = () => {
     setSelectedBrokerages([]);
@@ -243,7 +237,7 @@ const HoldingsView: React.FC<Props> = ({
   };
 
   const LotSortIndicator = ({ col }: { col: typeof lotSortKey }) => (
-    <svg className={`w-2.5 h-2.5 ml-0.5 ${lotSortKey === col ? 'text-[#0F52BA]' : 'opacity-20'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className={`w-2.5 h-2.5 ml-0.5 ${lotSortKey === col ? 'text-[#2458d3]' : 'opacity-20'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       {lotSortKey !== col || lotSortDir === 'asc'
         ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
         : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
@@ -257,8 +251,8 @@ const HoldingsView: React.FC<Props> = ({
 
   const termBadge = (t: TermType) => {
     if (!t) return <span className="text-slate-300 text-xs">—</span>;
-    const cls = t === 'Long' ? 'bg-[#E6EEFB] text-[#0A3E8F]'
-      : t === 'Short' ? 'bg-[#E5E5EA] text-[#6E6E73]'
+    const cls = t === 'Long' ? 'bg-[#edf3fc] text-[#24436d]'
+      : t === 'Short' ? 'bg-[#E5E5EA] text-[#71829b]'
       : 'bg-amber-50 text-amber-700';
     return <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${cls}`}>{t}</span>;
   };
@@ -495,29 +489,29 @@ const HoldingsView: React.FC<Props> = ({
 
   const thCls = (col: ColKey, extra = '') =>
     `px-4 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap select-none cursor-grab active:cursor-grabbing transition-colors
-     ${dragOverCol === col ? 'border-l-2 border-[#0F52BA] bg-[#E6EEFB]/40' : ''}
+     ${dragOverCol === col ? 'border-l-2 border-[#2458d3] bg-[#edf3fc]/40' : ''}
      ${dragCol === col ? 'opacity-40' : ''}
      ${extra}`.replace(/\s+/g, ' ').trim();
 
   const renderTh = (col: ColKey) => {
     const dp = dragProps(col);
     switch (col) {
-      case 'ticker':        return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA]')} onClick={() => handleSort('ticker')}><div className="flex items-center gap-0.5">Ticker <SI column="ticker" /></div></th>;
-      case 'washSale':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA]')} onClick={() => handleSort('washSale')}><div className="flex items-center gap-0.5">Wash Sale <SI column="washSale" /></div></th>;
-      case 'termType':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA]')} onClick={() => handleSort('termType')}><div className="flex items-center gap-0.5">Term Type <SI column="termType" /></div></th>;
-      case 'quantity':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('quantity')}><div className="flex items-center justify-end gap-0.5">Quantity <SI column="quantity" /></div></th>;
-      case 'avgCost':       return <th key={col} {...dp} className={thCls(col, 'text-slate-400 text-right')}>Avg Price</th>;
-      case 'totalCost':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('totalCost')}><div className="flex items-center justify-end gap-0.5">Total Value <SI column="totalCost" /></div></th>;
-      case 'currentPrice':  return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('currentPrice')}><div className="flex items-center justify-end gap-0.5">Current Price <SI column="currentPrice" /></div></th>;
-      case 'marketValue':   return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('marketValue')}><div className="flex items-center justify-end gap-0.5">Market Value <SI column="marketValue" /></div></th>;
-      case 'dailyGain':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('dailyGain')}><div className="flex items-center justify-end gap-0.5">Daily $ <SI column="dailyGain" /></div></th>;
-      case 'dailyPct':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('dailyPct')}><div className="flex items-center justify-end gap-0.5">Daily % <SI column="dailyPct" /></div></th>;
-      case 'unrealizedGain':return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('gain')}><div className="flex items-center justify-end gap-0.5">Overall $ <SI column="gain" /></div></th>;
-      case 'unrealizedPct': return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('gainPct')}><div className="flex items-center justify-end gap-0.5">Overall % <SI column="gainPct" /></div></th>;
-      case 'realized':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('realized')}><div className="flex items-center justify-end gap-0.5">Realized <SI column="realized" /></div></th>;
-      case 'totalGain':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('totalGain')}><div className="flex items-center justify-end gap-0.5">Total Gain <SI column="totalGain" /></div></th>;
-      case 'analystPrice':  return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('analystPrice')}><div className="flex items-center justify-end gap-0.5">Analyst $ <SI column="analystPrice" /></div></th>;
-      case 'analystPct':    return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#0F52BA] text-right')} onClick={() => handleSort('analystPct')}><div className="flex items-center justify-end gap-0.5">Analyst % <SI column="analystPct" /></div></th>;
+      case 'ticker':        return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3]')} onClick={() => handleSort('ticker')}><div className="flex items-center gap-0.5">Ticker <SI column="ticker" /></div></th>;
+      case 'washSale':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3]')} onClick={() => handleSort('washSale')}><div className="flex items-center gap-0.5">Wash Sale <SI column="washSale" /></div></th>;
+      case 'termType':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3]')} onClick={() => handleSort('termType')}><div className="flex items-center gap-0.5">Tax term <SI column="termType" /></div></th>;
+      case 'quantity':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('quantity')}><div className="flex items-center justify-end gap-0.5">Quantity <SI column="quantity" /></div></th>;
+      case 'avgCost':       return <th key={col} {...dp} className={thCls(col, 'text-slate-400 text-right')}>Avg. cost</th>;
+      case 'totalCost':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('totalCost')}><div className="flex items-center justify-end gap-0.5">Cost basis <SI column="totalCost" /></div></th>;
+      case 'currentPrice':  return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('currentPrice')}><div className="flex items-center justify-end gap-0.5">Price <SI column="currentPrice" /></div></th>;
+      case 'marketValue':   return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('marketValue')}><div className="flex items-center justify-end gap-0.5">Market Value <SI column="marketValue" /></div></th>;
+      case 'dailyGain':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('dailyGain')}><div className="flex items-center justify-end gap-0.5">Day P&L <SI column="dailyGain" /></div></th>;
+      case 'dailyPct':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('dailyPct')}><div className="flex items-center justify-end gap-0.5">Day % <SI column="dailyPct" /></div></th>;
+      case 'unrealizedGain':return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('gain')}><div className="flex items-center justify-end gap-0.5">Unrealized P&L <SI column="gain" /></div></th>;
+      case 'unrealizedPct': return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('gainPct')}><div className="flex items-center justify-end gap-0.5">Unrealized % <SI column="gainPct" /></div></th>;
+      case 'realized':      return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('realized')}><div className="flex items-center justify-end gap-0.5">Realized <SI column="realized" /></div></th>;
+      case 'totalGain':     return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('totalGain')}><div className="flex items-center justify-end gap-0.5">Total Gain <SI column="totalGain" /></div></th>;
+      case 'analystPrice':  return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('analystPrice')}><div className="flex items-center justify-end gap-0.5">Analyst target <SI column="analystPrice" /></div></th>;
+      case 'analystPct':    return <th key={col} {...dp} className={thCls(col, 'text-slate-400 hover:text-[#2458d3] text-right')} onClick={() => handleSort('analystPct')}><div className="flex items-center justify-end gap-0.5">Target upside % <SI column="analystPct" /></div></th>;
       default: return <th key={col} />;
     }
   };
@@ -531,7 +525,7 @@ const HoldingsView: React.FC<Props> = ({
           <div className="flex items-center gap-2">
             <TickerLogo ticker={row.ticker} size={compact ? 24 : 32} assetType={row.assetType} />
             <div>
-              <span className={`${compact ? 'text-[11px]' : 'text-xs'} font-bold text-[#1D1D1F] uppercase tracking-tight`}>{row.ticker}</span>
+              <span className={`${compact ? 'text-[11px]' : 'text-xs'} font-bold text-[#192b46] uppercase tracking-tight`}>{row.ticker}</span>
               {row.assetType?.toLowerCase() === 'options' && <span className="ml-1.5 px-1 py-0.5 rounded bg-violet-100 text-[9px] font-black text-violet-600 uppercase">OPT</span>}
             </div>
           </div>
@@ -571,7 +565,7 @@ const HoldingsView: React.FC<Props> = ({
       case 'unrealizedPct': return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold`}>{row.avgCost > 0 ? <SignedValue value={row.unrealizedGain} format={() => `${Math.abs((row.currentPrice - row.avgCost) / row.avgCost * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
       case 'realized':      return <td key={col} className="px-4 py-2 text-right">{row.realized !== 0 ? <div className={`${sz} font-black`}><SignedValue value={row.realized} format={m => `$${n2(m)}`} arrowClass="w-2.5 h-2.5" /></div> : <div className="text-xs text-slate-300">—</div>}</td>;
       case 'totalGain':     return <td key={col} className="px-4 py-2 text-right"><div className={`${sz} font-black`}><SignedValue value={row.totalGain} format={m => `$${n2(m)}`} arrowClass="w-2.5 h-2.5" /></div></td>;
-      case 'analystPrice':  return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold text-[#0F52BA]`}>{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-xs text-slate-300">—</span>}</td>;
+      case 'analystPrice':  return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold text-[#2458d3]`}>{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-xs text-slate-300">—</span>}</td>;
       case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && row.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - row.currentPrice) / row.currentPrice) * 100; return <span className={`${sz} font-bold`}><SignedValue value={pct} format={() => `${Math.abs(pct).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /></span>; })() : <span className="text-xs text-slate-300">—</span>}</td>;
       default: return <td key={col} />;
     }
@@ -581,7 +575,7 @@ const HoldingsView: React.FC<Props> = ({
     switch (col) {
       case 'ticker': return (
         <td key={col} className="px-4 py-2">
-          <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white' : bg.brokerage.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white' : 'bg-[#E5E5EA] text-[#6E6E73]'}`}>{bg.brokerage}</span>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#2458d3] text-white' : bg.brokerage.toLowerCase().includes('schwab') ? 'bg-[#71829b] text-white' : 'bg-[#E5E5EA] text-[#71829b]'}`}>{bg.brokerage}</span>
         </td>
       );
       case 'washSale':      return <td key={col} />;
@@ -604,7 +598,7 @@ const HoldingsView: React.FC<Props> = ({
       case 'unrealizedPct': return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold">{bg.totalCost > 0 ? <SignedValue value={bg.unrealizedGain} format={() => `${Math.abs(bg.unrealizedGain / bg.totalCost * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
       case 'realized':      return <td key={col} />;
       case 'totalGain':     return <td key={col} />;
-      case 'analystPrice':  return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold text-[#0F52BA]">{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-[10px] text-slate-300">—</span>}</td>;
+      case 'analystPrice':  return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold text-[#2458d3]">{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-[10px] text-slate-300">—</span>}</td>;
       case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && bg.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - bg.currentPrice) / bg.currentPrice) * 100; return <span className="text-[11px] font-bold"><SignedValue value={pct} format={() => `${Math.abs(pct).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /></span>; })() : <span className="text-[10px] text-slate-300">—</span>}</td>;
       default: return <td key={col} />;
     }
@@ -612,7 +606,7 @@ const HoldingsView: React.FC<Props> = ({
 
   const renderL3Header = (col: ColKey) => {
     const lotTh = (lotCol: typeof lotSortKey, label: string) => (
-      <td key={col} className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap text-right cursor-pointer select-none hover:text-[#0F52BA] transition-colors" style={{ color: lotSortKey === lotCol ? '#0F52BA' : undefined }} onClick={() => handleLotSort(lotCol)}>
+      <td key={col} className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap text-right cursor-pointer select-none hover:text-[#2458d3] transition-colors" style={{ color: lotSortKey === lotCol ? '#2458d3' : undefined }} onClick={() => handleLotSort(lotCol)}>
         <div className="flex items-center justify-end gap-0.5">{label}<LotSortIndicator col={lotCol} /></div>
       </td>
     );
@@ -620,22 +614,22 @@ const HoldingsView: React.FC<Props> = ({
       <td key={col} className={`px-4 py-1.5 text-[9px] font-black text-[#AEAEB2] uppercase tracking-widest whitespace-nowrap text-${align}`}>{label}</td>
     );
     switch (col) {
-      case 'ticker':        return <td key={col} className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap cursor-pointer select-none hover:text-[#0F52BA] transition-colors" style={{ color: lotSortKey === 'buyDate' ? '#0F52BA' : undefined }} onClick={() => handleLotSort('buyDate')}><div className="flex items-center gap-0.5">Buy Date<LotSortIndicator col="buyDate" /></div></td>;
+      case 'ticker':        return <td key={col} className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap cursor-pointer select-none hover:text-[#2458d3] transition-colors" style={{ color: lotSortKey === 'buyDate' ? '#2458d3' : undefined }} onClick={() => handleLotSort('buyDate')}><div className="flex items-center gap-0.5">Buy Date<LotSortIndicator col="buyDate" /></div></td>;
       case 'washSale':      return staticTd('Wash Sale', 'left');
-      case 'termType':      return staticTd('Term Type', 'left');
+      case 'termType':      return staticTd('Tax term', 'left');
       case 'quantity':      return lotTh('quantity', 'Qty');
       case 'avgCost':       return lotTh('buyPrice', 'Buy Price');
-      case 'totalCost':     return lotTh('totalCost', 'Total Value');
-      case 'currentPrice':  return lotTh('currentPrice', 'Current Price');
+      case 'totalCost':     return lotTh('totalCost', 'Cost basis');
+      case 'currentPrice':  return lotTh('currentPrice', 'Price');
       case 'marketValue':   return lotTh('marketValue', 'Market Value');
-      case 'dailyGain':     return staticTd('Daily $');
-      case 'dailyPct':      return staticTd('Daily %');
-      case 'unrealizedGain':return lotTh('gain', 'Overall $');
-      case 'unrealizedPct': return staticTd('Overall %');
+      case 'dailyGain':     return staticTd('Day P&L');
+      case 'dailyPct':      return staticTd('Day %');
+      case 'unrealizedGain':return lotTh('gain', 'Unrealized P&L');
+      case 'unrealizedPct': return staticTd('Unrealized %');
       case 'realized':      return <td key={col} />;
       case 'totalGain':     return <td key={col} />;
-      case 'analystPrice':  return staticTd('Analyst $');
-      case 'analystPct':    return staticTd('Analyst %');
+      case 'analystPrice':  return staticTd('Analyst target');
+      case 'analystPct':    return staticTd('Target upside %');
       default: return <td key={col} />;
     }
   };
@@ -648,7 +642,7 @@ const HoldingsView: React.FC<Props> = ({
         <td key={col} className="px-4 py-2 text-[11px] text-slate-500 font-bold whitespace-nowrap">
           <div className="flex items-center gap-1.5">
             {new Date(lot.buyDate).toLocaleDateString('en-CA')}
-            {onNavigateToTransactions && <svg className="w-3 h-3 text-[#0F52BA] opacity-0 group-hover/lot:opacity-100 transition-opacity shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>}
+            {onNavigateToTransactions && <svg className="w-3 h-3 text-[#2458d3] opacity-0 group-hover/lot:opacity-100 transition-opacity shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>}
           </div>
         </td>
       );
@@ -688,16 +682,16 @@ const HoldingsView: React.FC<Props> = ({
       case 'unrealizedPct': return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold">{lot.buyPrice > 0 ? <SignedValue value={lot.gain} format={() => `${Math.abs((lot.currentPrice - lot.buyPrice) / lot.buyPrice * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
       case 'realized':      return <td key={col} />;
       case 'totalGain':     return <td key={col} />;
-      case 'analystPrice':  return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold text-[#0F52BA]">{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-[10px] text-slate-300">—</span>}</td>;
+      case 'analystPrice':  return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold text-[#2458d3]">{analystMedian[row.ticker] ? `$${analystMedian[row.ticker].toFixed(2)}` : <span className="text-[10px] text-slate-300">—</span>}</td>;
       case 'analystPct':    return <td key={col} className="px-4 py-2 text-right">{analystMedian[row.ticker] && lot.currentPrice > 0 ? (() => { const pct = ((analystMedian[row.ticker] - lot.currentPrice) / lot.currentPrice) * 100; return <span className="text-[11px] font-bold"><SignedValue value={pct} format={() => `${Math.abs(pct).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /></span>; })() : <span className="text-[10px] text-slate-300">—</span>}</td>;
       default: return <td key={col} />;
     }
   };
 
   const brokerageBadgeCls = (b: string) =>
-    b.toLowerCase().includes('robinhood') ? 'bg-[#0F52BA] text-white'
-    : b.toLowerCase().includes('schwab') ? 'bg-[#6E6E73] text-white'
-    : 'bg-[#E5E5EA] text-[#6E6E73]';
+    b.toLowerCase().includes('robinhood') ? 'bg-[#2458d3] text-white'
+    : b.toLowerCase().includes('schwab') ? 'bg-[#71829b] text-white'
+    : 'bg-[#E5E5EA] text-[#71829b]';
 
   const renderBVL1 = (col: ColKey, row: BVBrokerageRow) => {
     const g = row.unrealizedGain;
@@ -734,7 +728,7 @@ const HoldingsView: React.FC<Props> = ({
 
   if (holdings.length === 0) {
     return (
-      <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
+      <div className="py-20 text-center bg-white border border-[#e7ecf3] rounded">
         <div className="max-w-xs mx-auto space-y-4">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -751,143 +745,41 @@ const HoldingsView: React.FC<Props> = ({
   return (
     <div className="space-y-4">
 
-      {/* Filter Bar */}
-      <div className="bg-white p-4 rounded border border-[#D2D2D7] relative z-30">
-        <div className="flex flex-wrap items-center gap-6">
-          <div className="flex items-center space-x-2">
-            <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-            <span className="text-sm font-bold text-slate-700">Filter</span>
-          </div>
+      <FilterToolbar resultLabel={`${tickerRows.length} ${tickerRows.length === 1 ? 'position' : 'positions'}`} onClear={resetFilters}
+        chips={[
+          ...selectionChips('Brokerage', selectedBrokerages, setSelectedBrokerages),
+          ...selectionChips('Ticker', selectedTickers, setSelectedTickers),
+          ...selectionChips('Tax term', selectedTerms, values => setSelectedTerms(values as ('long' | 'short')[]), value => value === 'long' ? 'Long term' : 'Short term'),
+        ]}
+        actions={<>{onViewModeChange && <GroupByControl value={viewMode} onChange={onViewModeChange} />}<ColumnsButton count={columnOrder.length} total={allColumns.length} onClick={() => setShowColSheet(true)} /></>}
+      >
+        <MultiSelectFilter label="Brokerage" values={selectedBrokerages} options={allBrokerages} onChange={setSelectedBrokerages} emptyLabel="All brokerages" />
+        <MultiSelectFilter label="Ticker" values={selectedTickers} options={allTickers} onChange={setSelectedTickers} emptyLabel="All tickers" />
+        <MultiSelectFilter label="Tax term" values={selectedTerms} options={TAX_TERM_OPTIONS} onChange={values => setSelectedTerms(values as ('long' | 'short')[])} emptyLabel="All terms" searchable={false} />
+      </FilterToolbar>
 
-          <div className="flex flex-wrap items-center gap-4 flex-1">
-            {/* Brokerage Filter */}
-            <div className="relative" ref={brokerageMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Brokerage</label>
-              <button onClick={() => setIsBrokerageMenuOpen(!isBrokerageMenuOpen)} className="flex items-center justify-between pl-3 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left">
-                <span className="truncate max-w-[100px]">{selectedBrokerages.length === 0 ? 'All Brokers' : selectedBrokerages.length === 1 ? selectedBrokerages[0] : `${selectedBrokerages.length} Brokers`}</span>
-                <svg className={`w-4 h-4 text-slate-400 transition-transform ${isBrokerageMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              {isBrokerageMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50">
-                  <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Brokerages</span>
-                    {selectedBrokerages.length > 0 && <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
-                  </div>
-                  <div className="max-h-60 overflow-y-auto p-2 space-y-1">
-                    {allBrokerages.map(b => (
-                      <label key={b} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
-                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedBrokerages.includes(b)} onChange={() => toggleBrokerage(b)} />
-                        <span className="ml-3 text-sm font-bold text-slate-700">{b}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Ticker Filter */}
-            <div className="relative" ref={tickerMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Ticker</label>
-              <button onClick={() => setIsTickerMenuOpen(!isTickerMenuOpen)} className="flex items-center justify-between pl-3 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left">
-                <span className="truncate max-w-[100px]">{selectedTickers.length === 0 ? 'All Tickers' : selectedTickers.length === 1 ? selectedTickers[0] : `${selectedTickers.length} Tickers`}</span>
-                <svg className={`w-4 h-4 text-slate-400 transition-transform ${isTickerMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              {isTickerMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50">
-                  <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Tickers</span>
-                    {selectedTickers.length > 0 && <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
-                  </div>
-                  <div className="max-h-60 overflow-y-auto p-2 space-y-1">
-                    {allTickers.map(t => (
-                      <label key={t} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
-                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedTickers.includes(t)} onChange={() => toggleTickerFilter(t)} />
-                        <span className="ml-3 text-sm font-bold text-slate-700">{t}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Term Type Filter — lot-level; row totals reflect only matching lots */}
-            <div className="relative" ref={termMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Term Type</label>
-              <button onClick={() => setIsTermMenuOpen(!isTermMenuOpen)} className="flex items-center justify-between pl-3 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left">
-                <span className="truncate max-w-[100px] capitalize">{selectedTerms.length === 0 ? 'All Terms' : selectedTerms.length === 1 ? selectedTerms[0] : 'Long & Short'}</span>
-                <svg className={`w-4 h-4 text-slate-400 transition-transform ${isTermMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              {isTermMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden z-50">
-                  <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Term Type</span>
-                    {selectedTerms.length > 0 && <button onClick={() => setSelectedTerms([])} className="text-[10px] font-bold text-[#0F52BA] px-2">Clear</button>}
-                  </div>
-                  <div className="max-h-60 overflow-y-auto p-2 space-y-1">
-                    {(['long', 'short'] as const).map(t => (
-                      <label key={t} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
-                        <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]" checked={selectedTerms.includes(t)} onChange={() => toggleTerm(t)} />
-                        <span className="ml-3 text-sm font-bold text-slate-700 capitalize">{t}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="w-px h-8 bg-slate-200 shrink-0" />
-
-          <button onClick={resetFilters} className="text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 shrink-0">
-            Reset
-          </button>
-
-          {/* Header drag-and-drop never fires from touch — this is the only
-              way to reorder columns on a phone. */}
-          <button onClick={() => setShowColSheet(true)} title="Reorder columns"
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 py-2 min-h-[44px] shrink-0">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            Columns
-          </button>
-
-          {onViewModeChange && (
-            <>
-              <div className="w-px h-8 bg-slate-200 shrink-0" />
-              <div className="flex items-center rounded overflow-hidden border border-slate-200 shrink-0">
-                <button onClick={() => onViewModeChange('ticker')} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors ${viewMode === 'ticker' ? 'bg-[#0F52BA] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>By Ticker</button>
-                <button onClick={() => onViewModeChange('brokerage')} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-l border-slate-200 transition-colors ${viewMode === 'brokerage' ? 'bg-[#0F52BA] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>By Brokerage</button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {title && <h3 className="font-display text-2xl font-bold text-[#1D1D1F]">{title}</h3>}
+      {title && <h3 className="font-display text-2xl font-bold text-[#192b46]">{title}</h3>}
 
       {/* Table */}
       <div className={!numbersVisible ? 'blur-sm select-none pointer-events-none' : ''}>
       {viewMode === 'ticker' && (tickerRows.length === 0 ? (
-        <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
+        <div className="py-20 text-center bg-white border border-[#e7ecf3] rounded">
           <div className="max-w-xs mx-auto space-y-4">
             <h4 className="text-slate-900 font-bold">No results found</h4>
             <p className="text-sm text-slate-400">No holdings match these criteria.</p>
-            <button onClick={resetFilters} className="text-[#0F52BA] text-sm font-bold hover:underline">Clear all filters</button>
+            <button onClick={resetFilters} className="text-[#2458d3] text-sm font-bold hover:underline">Clear all filters</button>
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white overflow-hidden">
+        <div className="overflow-x-auto rounded border border-[#e7ecf3] bg-white overflow-hidden">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
+              <tr className="bg-[#f6f8fc] border-b border-[#e7ecf3]">
                 {/* Fixed expand column */}
                 <th className="px-4 py-2 w-8">
                   <button
                     onClick={() => { if (expandedTickers.size > 0) { setExpandedTickers(new Set()); setExpandedBrokerages(new Set()); } else setExpandedTickers(new Set(tickerRows.map(r => r.rowKey))); }}
-                    className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
+                    className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#2458d3] hover:bg-[#f6f8fc] transition-all"
                     title={expandedTickers.size > 0 ? 'Collapse all' : 'Expand all'}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -907,10 +799,10 @@ const HoldingsView: React.FC<Props> = ({
                   <React.Fragment key={row.rowKey}>
 
                     {/* Level 1 — Ticker */}
-                    <tr className={`hover:bg-[#F5F5F7] transition-colors group border-t border-[#D2D2D7] ${isExpanded ? 'bg-slate-50/70' : ''}`}>
+                    <tr className={`hover:bg-[#f6f8fc] transition-colors group border-t border-[#e7ecf3] ${isExpanded ? 'bg-slate-50/70' : ''}`}>
                       <td className="px-4 py-2">
                         {row.brokerageGroups.length > 0 && (
-                          <button onClick={() => toggleTicker(row.rowKey)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all">
+                          <button onClick={() => toggleTicker(row.rowKey)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#2458d3] hover:bg-[#f6f8fc] transition-all">
                             <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                             </svg>
@@ -927,9 +819,9 @@ const HoldingsView: React.FC<Props> = ({
                       return (
                         <React.Fragment key={brokerageKey}>
 
-                          <tr className={`border-t border-[#D2D2D7] ${isBrokerageExpanded ? 'bg-[#0F52BA]/5' : 'bg-[#F5F5F7]'} hover:bg-[#0F52BA]/5 transition-colors`}>
+                          <tr className={`border-t border-[#e7ecf3] ${isBrokerageExpanded ? 'bg-[#2458d3]/5' : 'bg-[#f6f8fc]'} hover:bg-[#2458d3]/5 transition-colors`}>
                             <td className="pl-8 pr-4 py-2">
-                              <button onClick={() => toggleBrokerageRow(brokerageKey)} className="w-5 h-5 flex items-center justify-center rounded-md text-[#D2D2D7] hover:text-[#0F52BA] hover:bg-[#E6EEFB] transition-all">
+                              <button onClick={() => toggleBrokerageRow(brokerageKey)} className="w-5 h-5 flex items-center justify-center rounded-md text-[#e7ecf3] hover:text-[#2458d3] hover:bg-[#edf3fc] transition-all">
                                 <svg className={`w-3 h-3 transition-transform ${isBrokerageExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                                 </svg>
@@ -940,7 +832,7 @@ const HoldingsView: React.FC<Props> = ({
 
                           {/* Level 3 sub-header */}
                           {isBrokerageExpanded && (
-                            <tr className="bg-[#E6EEFB]/30 border-t border-[#D2D2D7]/60">
+                            <tr className="bg-[#edf3fc]/30 border-t border-[#e7ecf3]/60">
                               <td />
                               {columnOrder.map(renderL3Header)}
                             </tr>
@@ -950,12 +842,12 @@ const HoldingsView: React.FC<Props> = ({
                           {isBrokerageExpanded && bg.lots.map((lot: UnrealizedLot, idx: number) => (
                             <tr
                               key={`${brokerageKey}-lot-${idx}`}
-                              className={`bg-white border-t border-[#D2D2D7]/40 ${onNavigateToTransactions ? 'cursor-pointer hover:bg-[#E6EEFB]/40 group/lot' : ''}`}
+                              className={`bg-white border-t border-[#e7ecf3]/40 ${onNavigateToTransactions ? 'cursor-pointer hover:bg-[#edf3fc]/40 group/lot' : ''}`}
                               onClick={() => onNavigateToTransactions?.(row.ticker, bg.brokerage, lot.buyDate)}
                             >
                               <td className="px-4 py-2">
                                 <div className="flex justify-center pl-4">
-                                  <div className="w-px h-full min-h-[16px] bg-[#D2D2D7]" />
+                                  <div className="w-px h-full min-h-[16px] bg-[#e7ecf3]" />
                                 </div>
                               </td>
                               {columnOrder.map(col => renderL3(col, row, lot))}
@@ -976,22 +868,22 @@ const HoldingsView: React.FC<Props> = ({
 
       {/* Brokerage View */}
       {viewMode === 'brokerage' && (brokerageRows.length === 0 ? (
-        <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
+        <div className="py-20 text-center bg-white border border-[#e7ecf3] rounded">
           <div className="max-w-xs mx-auto space-y-4">
             <h4 className="text-slate-900 font-bold">No results found</h4>
             <p className="text-sm text-slate-400">No holdings match these criteria.</p>
-            <button onClick={resetFilters} className="text-[#0F52BA] text-sm font-bold hover:underline">Clear all filters</button>
+            <button onClick={resetFilters} className="text-[#2458d3] text-sm font-bold hover:underline">Clear all filters</button>
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded border border-[#D2D2D7] bg-white overflow-hidden">
+        <div className="overflow-x-auto rounded border border-[#e7ecf3] bg-white overflow-hidden">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
+              <tr className="bg-[#f6f8fc] border-b border-[#e7ecf3]">
                 <th className="px-4 py-2 w-8">
                   <button
                     onClick={() => { if (expandedBV_L1.size > 0) { setExpandedBV_L1(new Set()); setExpandedBV_L2(new Set()); setExpandedBV_L3(new Set()); } else setExpandedBV_L1(new Set(brokerageRows.map(r => r.brokerage))); }}
-                    className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all"
+                    className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#2458d3] hover:bg-[#f6f8fc] transition-all"
                     title={expandedBV_L1.size > 0 ? 'Collapse all' : 'Expand all'}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1011,9 +903,9 @@ const HoldingsView: React.FC<Props> = ({
                   <React.Fragment key={bvRow.brokerage}>
 
                     {/* L1 — Brokerage */}
-                    <tr className={`hover:bg-[#F5F5F7] transition-colors border-t border-[#D2D2D7] ${isL1 ? 'bg-slate-50/70' : ''}`}>
+                    <tr className={`hover:bg-[#f6f8fc] transition-colors border-t border-[#e7ecf3] ${isL1 ? 'bg-slate-50/70' : ''}`}>
                       <td className="px-4 py-2">
-                        <button onClick={() => toggleBV_L1(bvRow.brokerage)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all">
+                        <button onClick={() => toggleBV_L1(bvRow.brokerage)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#2458d3] hover:bg-[#f6f8fc] transition-all">
                           <svg className={`w-3.5 h-3.5 transition-transform ${isL1 ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                           </svg>
@@ -1033,10 +925,10 @@ const HoldingsView: React.FC<Props> = ({
                           const asTickerRow = { ...bvTicker, brokerageGroups: [], ids: [] } as unknown as TickerRow;
                           return (
                             <React.Fragment key={l3Key}>
-                              <tr className={`hover:bg-[#F5F5F7] transition-colors group border-t border-[#D2D2D7] bg-white ${isL3 ? 'bg-slate-50/70' : ''}`}>
+                              <tr className={`hover:bg-[#f6f8fc] transition-colors group border-t border-[#e7ecf3] bg-white ${isL3 ? 'bg-slate-50/70' : ''}`}>
                                 <td className={`${tickerIndent} pr-4 py-2`}>
                                   {bvTicker.lots.length > 0 && (
-                                    <button onClick={() => toggleBV_L3(l3Key)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#0F52BA] hover:bg-[#F5F5F7] transition-all">
+                                    <button onClick={() => toggleBV_L3(l3Key)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#2458d3] hover:bg-[#f6f8fc] transition-all">
                                       <svg className={`w-3.5 h-3.5 transition-transform ${isL3 ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                                       </svg>
@@ -1046,7 +938,7 @@ const HoldingsView: React.FC<Props> = ({
                                 {columnOrder.map(col => renderL1(col, asTickerRow, true))}
                               </tr>
                               {isL3 && (
-                                <tr className="bg-[#E6EEFB]/30 border-t border-[#D2D2D7]/60">
+                                <tr className="bg-[#edf3fc]/30 border-t border-[#e7ecf3]/60">
                                   <td />
                                   {columnOrder.map(renderL3Header)}
                                 </tr>
@@ -1054,12 +946,12 @@ const HoldingsView: React.FC<Props> = ({
                               {isL3 && bvTicker.lots.map((lot, idx) => (
                                 <tr
                                   key={`${l3Key}-lot-${idx}`}
-                                  className={`bg-white border-t border-[#D2D2D7]/40 ${onNavigateToTransactions ? 'cursor-pointer hover:bg-[#E6EEFB]/40 group/lot' : ''}`}
+                                  className={`bg-white border-t border-[#e7ecf3]/40 ${onNavigateToTransactions ? 'cursor-pointer hover:bg-[#edf3fc]/40 group/lot' : ''}`}
                                   onClick={() => onNavigateToTransactions?.(bvTicker.ticker, bvRow.brokerage, lot.buyDate)}
                                 >
                                   <td className={`${lotIndent} py-2`}>
                                     <div className="flex justify-center pl-4">
-                                      <div className="w-px h-full min-h-[16px] bg-[#D2D2D7]" />
+                                      <div className="w-px h-full min-h-[16px] bg-[#e7ecf3]" />
                                     </div>
                                   </td>
                                   {columnOrder.map(col => renderL3(col, asTickerRow, lot))}
@@ -1078,9 +970,9 @@ const HoldingsView: React.FC<Props> = ({
                         const isL2 = expandedBV_L2.has(l2Key);
                         return (
                           <React.Fragment key={l2Key}>
-                            <tr className={`border-t border-[#D2D2D7] ${isL2 ? 'bg-[#0F52BA]/5' : 'bg-[#F5F5F7]'} hover:bg-[#0F52BA]/5 transition-colors`}>
+                            <tr className={`border-t border-[#e7ecf3] ${isL2 ? 'bg-[#2458d3]/5' : 'bg-[#f6f8fc]'} hover:bg-[#2458d3]/5 transition-colors`}>
                               <td className="pl-8 pr-4 py-2">
-                                <button onClick={() => toggleBV_L2(l2Key)} className="w-5 h-5 flex items-center justify-center rounded-md text-[#D2D2D7] hover:text-[#0F52BA] hover:bg-[#E6EEFB] transition-all">
+                                <button onClick={() => toggleBV_L2(l2Key)} className="w-5 h-5 flex items-center justify-center rounded-md text-[#e7ecf3] hover:text-[#2458d3] hover:bg-[#edf3fc] transition-all">
                                   <svg className={`w-3 h-3 transition-transform ${isL2 ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                                   </svg>
@@ -1106,7 +998,13 @@ const HoldingsView: React.FC<Props> = ({
       <ColumnOrderSheet
         open={showColSheet}
         onClose={() => setShowColSheet(false)}
-        order={columnOrder}
+        order={allColumns}
+        visible={visibleColumns}
+        required={REQUIRED_COLS}
+        onToggle={toggleColumn}
+        onReset={resetColumns}
+        presets={COLUMN_PRESETS}
+        onPreset={applyColumnPreset}
         labels={COL_LABELS}
         onMove={moveCol}
       />

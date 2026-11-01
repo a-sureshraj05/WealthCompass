@@ -1,0 +1,9 @@
+.wealthcompass-brand { display: inline-flex; align-items: center; gap: 10px; vertical-align: middle; text-align: left; white-space: nowrap; }
+.wealthcompass-mark { display: block; flex-shrink: 0; }
+.wealthcompass-brand-copy { display: flex; flex-direction: column; gap: 5px; }
+.wealthcompass-wordmark { font-family: 'Hanken Grotesk', sans-serif; font-size: 17px; font-weight: 700; letter-spacing: -.65px; line-height: 1; color: #192b46; }
+.wealthcompass-wordmark > span { color: #436db9; }
+.wealthcompass-tagline { color: #7184a0; font-size: 8px; font-weight: 500; line-height: 1; letter-spacing: .11em; }
+.login-brand .wealthcompass-wordmark { font-size: 27px; letter-spacing: -1px; }
+.login-brand { gap: 13px; }
+@media (max-width: 480px) { .brand-mobile .wealthcompass-brand-copy { display: none; } }

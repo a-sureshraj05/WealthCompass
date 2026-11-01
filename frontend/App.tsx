@@ -97,8 +97,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       } else {
         setHoldings(h);
       }
+      return true;
     } catch (error) {
       console.error("Failed to fetch holdings:", error);
+      return false;
     }
   }, []);
 
@@ -106,8 +108,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const getBuyingPower = useCallback(async () => {
     try {
       setBuyingPower(await fetchBuyingPower());
+      return true;
     } catch (error) {
       console.error("Failed to fetch buying power:", error);
+      return false;
     }
   }, []);
 
@@ -152,16 +156,20 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const getRealizedGains = useCallback(async () => {
     try {
       setRealizedGains(await fetchRealizedGains());
+      return true;
     } catch (error) {
       console.error("Failed to fetch realized gains:", error);
+      return false;
     }
   }, []);
 
   const getUnrealizedGains = useCallback(async () => {
     try {
       setUnrealizedGains(await fetchUnrealizedGains());
+      return true;
     } catch (error) {
       console.error("Failed to fetch unrealized gains:", error);
+      return false;
     }
   }, []);
 
@@ -204,8 +212,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         finalEndDate
       );
       setTransactions(fetchedTransactions);
+      return true;
     } catch (error) {
       console.error("Failed to fetch transactions:", error);
+      return false;
     }
   }, [setTransactions, selectedBrokerages, selectedTickers, startDate, endDate, dateRangeType]); // Added dependencies
 
@@ -353,16 +363,16 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     {/* h-full (of #root, now pinned to the viewport) rather than h-screen:
         100vh on mobile browsers means the *largest* viewport, ignoring the
         address bar, so the shell would overflow by the toolbar's height. */}
-    <div className="flex h-full overflow-hidden bg-slate-50">
+    <div className="wealth-workspace flex h-full overflow-hidden">
       <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} numbersVisible={numbersVisible} onToggleNumbers={() => setNumbersVisible(v => !v)} />
+        <Navbar activeTab={activeTab} stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} numbersVisible={numbersVisible} onToggleNumbers={() => setNumbersVisible(v => !v)} />
 
         {/* px/pt rather than the p- shorthand: `md:p-8` resets every side, which
             would override .pb-tabbar's clearance between md and lg — exactly the
             range where the bar is still visible. See .pb-tabbar in index.html. */}
-        <main className="flex-1 overflow-y-auto px-4 pt-4 md:px-8 md:pt-8 pb-tabbar">
+        <main className="workspace-canvas flex-1 overflow-y-auto px-4 pt-4 md:px-8 md:pt-8 pb-tabbar">
           <DashboardView
             activeTab={activeTab}
             setActiveTab={handleSetActiveTab}
@@ -375,7 +385,11 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             stats={stats}
             onAddTransactions={handleAddTransactions}
             refreshNonce={refreshNonce}
-            onRefresh={() => { Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower()]); refreshAnalystData(); refreshLivePrices(); setRefreshNonce(n => n + 1); }}
+            onRefresh={async () => {
+              const refreshed = await Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower(), refreshAnalystData(), refreshLivePrices()]);
+              setRefreshNonce(n => n + 1);
+              if (refreshed.some(result => result === false)) throw new Error('Some portfolio records could not refresh.');
+            }}
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
             onSoftDeleteTransaction={handleSoftDeleteTransaction}

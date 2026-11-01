@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { BrokerageAccount, Transaction } from '../types';
 import TickerLogo from './TickerLogo';
+import { AssetTypeValue, ActionValue } from './Transactions/TransactionLabels';
+import { assetTypeLabel } from './Transactions/labelPresentation';
 import SortIndicator from './SortIndicator';
-import { useClickOutside } from '../hooks/useClickOutside';
-import { useSyncedColumnOrder } from '../hooks/useSyncedColumnOrder';
+import { useTableColumns } from '../hooks/useTableColumns';
 import ColumnOrderSheet from './ColumnOrderSheet';
+import { FilterToolbar, MultiSelectFilter, SelectFilter, ColumnsButton, selectionChips } from './TableFilters';
 import { brokerageColor } from '../utils/finance';
 import {
   fetchOpenBuys, fetchLotAssignments, createLotAssignment, deleteLotAssignment, splitTransaction,
@@ -15,7 +17,11 @@ type DateRangeType = 'all' | '30d' | '90d' | 'ytd' | 'custom';
 type SortKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'action' | 'quantity' | 'price' | 'amount';
 type SortDirection = 'asc' | 'desc' | null;
 type ColKey = 'date' | 'brokerage' | 'assetType' | 'ticker' | 'action' | 'quantity' | 'price' | 'amount';
-const DEFAULT_COLS: ColKey[] = ['date', 'brokerage', 'assetType', 'ticker', 'action', 'quantity', 'price', 'amount'];
+const DEFAULT_COLS: ColKey[] = ['date', 'ticker', 'action', 'brokerage', 'assetType', 'quantity', 'price', 'amount'];
+
+const RECOMMENDED_COLS: readonly ColKey[] = DEFAULT_COLS;
+const REQUIRED_COLS: readonly ColKey[] = ['date','ticker'];
+const COLUMN_PRESETS: Record<string, readonly ColKey[]> = { Ledger: RECOMMENDED_COLS, Compact: ['date','ticker','action','quantity','amount'] };
 const COL_LABELS: Record<ColKey, string> = {
   date: 'Date', brokerage: 'Brokerage', assetType: 'Asset Type', ticker: 'Ticker',
   action: 'Action', quantity: 'Quantity', price: 'Price', amount: 'Amount',
@@ -61,8 +67,11 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
   const [mappedSellIds, setMappedSellIds] = useState<Set<string>>(new Set());
 
   // Server-backed so the order matches on the Mac and the phone.
-  const { order: columnOrder, reorder: reorderCol, move: moveCol } =
-    useSyncedColumnOrder<ColKey>('transactions-col-order', DEFAULT_COLS);
+  const { order: allColumns, visible: visibleColumns, columns: columnOrder, reorder: reorderCol, move: moveCol, toggle: toggleColumn, reset: resetColumns, preset: applyColumnPreset } =
+    useTableColumns<ColKey>('transactions-col-order', DEFAULT_COLS, RECOMMENDED_COLS, REQUIRED_COLS);
+  useEffect(() => {
+    if (sortKey && !visibleColumns.includes(sortKey)) { setSortKey(null); setSortDirection(null); }
+  }, [visibleColumns, sortKey]);
   const [showColSheet, setShowColSheet] = useState(false);
   const [dragCol, setDragCol] = useState<ColKey | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ColKey | null>(null);
@@ -187,18 +196,8 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
     }
   };
 
-  const [isBrokerageMenuOpen, setIsBrokerageMenuOpen] = useState(false);
-  const [isAssetTypeMenuOpen, setIsAssetTypeMenuOpen] = useState(false);
-  const [isTickerMenuOpen, setIsTickerMenuOpen] = useState(false);
   
-  const brokerageMenuRef = useRef<HTMLDivElement>(null);
-  const assetTypeMenuRef = useRef<HTMLDivElement>(null);
-  const tickerMenuRef = useRef<HTMLDivElement>(null);
 
-  useClickOutside(
-    [brokerageMenuRef, assetTypeMenuRef, tickerMenuRef],
-    [setIsBrokerageMenuOpen, setIsAssetTypeMenuOpen, setIsTickerMenuOpen],
-  );
 
   const [transferPopoverId, setTransferPopoverId] = useState<string | null>(null);
   const [transferPopoverFlip, setTransferPopoverFlip] = useState(false);
@@ -221,10 +220,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
     return () => document.removeEventListener('mousedown', handler);
   }, [transferPopoverId]);
 
-  const formatAssetType = (type: string) => {
-    if (!type) return '';
-    return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
-  };
+  const formatAssetType = (type: string) => assetTypeLabel(type).label;
 
   const allBrokerages = useMemo(() => {
     const brokers = new Set(transactions.map(t => t.brokerage));
@@ -245,22 +241,8 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
     return Array.from(tickers).sort();
   }, [transactions]);
 
-  const toggleBrokerage = (broker: string) => {
-    setSelectedBrokerages(
-      selectedBrokerages.includes(broker) ? selectedBrokerages.filter(b => b !== broker) : [...selectedBrokerages, broker]
-    );
-  };
 
-  const toggleAssetType = (type: string) => {
-    const normalizedType = type.toUpperCase();
-    setSelectedAssetTypes(
-      selectedAssetTypes.includes(normalizedType) ? selectedAssetTypes.filter(t => t !== normalizedType) : [...selectedAssetTypes, normalizedType]
-    );
-  };
 
-  const toggleTicker = (ticker: string) => {
-    setSelectedTickers(selectedTickers.includes(ticker) ? selectedTickers.filter(t => t !== ticker) : [...selectedTickers, ticker]);
-  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -395,14 +377,14 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
 
   const thCls = (col: ColKey, extra = '') =>
     `px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap select-none cursor-grab active:cursor-grabbing transition-colors
-     ${dragOverCol === col ? 'border-l-2 border-[#0F52BA] bg-[#E6EEFB]/40' : ''}
+     ${dragOverCol === col ? 'border-l-2 border-[#2458d3] bg-[#edf3fc]/40' : ''}
      ${dragCol === col ? 'opacity-40' : ''}
      ${extra}`.replace(/\s+/g, ' ').trim();
 
   const renderTh = (col: ColKey) => {
     const dp = dragProps(col);
     const sortable = (label: string, sk: SortKey, right = false) => (
-      <th key={col} {...dp} className={thCls(col, `hover:text-[#0F52BA]${right ? ' text-right' : ''}`)} onClick={() => handleSort(sk)}>
+      <th key={col} {...dp} className={thCls(col, `hover:text-[#2458d3]${right ? ' text-right' : ''}`)} onClick={() => handleSort(sk)}>
         <div className={`flex items-center gap-1${right ? ' justify-end' : ''}`}>{label}<SI column={sk} /></div>
       </th>
     );
@@ -419,7 +401,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
     }
   };
 
-  const inputCls = "w-full px-2 py-1 text-xs border border-[#0F52BA] rounded bg-white focus:outline-none focus:ring-2 focus:ring-[#0F52BA]";
+  const inputCls = "w-full px-2 py-1 text-xs border border-[#2458d3] rounded bg-white focus:outline-none focus:ring-2 focus:ring-[#2458d3]";
 
   const renderCell = (col: ColKey, t: Transaction, isEditing: boolean) => {
     switch (col) {
@@ -462,21 +444,21 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
         <td key={col} className="px-6 py-2">
           {isEditing
             ? <input className={inputCls} value={editDraft.assetType || ''} onChange={e => setEditDraft(d => ({ ...d, assetType: e.target.value }))} />
-            : <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${(t.assetType || '').toLowerCase() === 'options' ? 'bg-purple-100 text-purple-700' : (t.assetType || '').toLowerCase() === 'equity' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{formatAssetType(t.assetType || '')}</span>}
+            : <AssetTypeValue value={t.assetType} />}
         </td>
       );
       case 'ticker': return (
         <td key={col} className="px-6 py-2">
           {isEditing
             ? <input className={inputCls} value={editDraft.ticker || ''} onChange={e => setEditDraft(d => ({ ...d, ticker: e.target.value.toUpperCase() }))} />
-            : <div className="flex items-center gap-1.5"><TickerLogo ticker={t.ticker} size={24} assetType={t.assetType} /><span className="text-[11px] font-bold text-[#1D1D1F] uppercase tracking-tight">{t.ticker}</span></div>}
+            : <div className="flex items-center gap-1.5"><TickerLogo ticker={t.ticker} size={24} assetType={t.assetType} /><span className="text-[11px] font-bold text-[#192b46] uppercase tracking-tight">{t.ticker}</span></div>}
         </td>
       );
       case 'action': return (
         <td key={col} className="px-6 py-2">
           {isEditing
             ? <input className={inputCls} value={editDraft.action || ''} onChange={e => setEditDraft(d => ({ ...d, action: e.target.value.toUpperCase() }))} />
-            : <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${['BUY','BTO','DEPOSIT','REI','DIV','DIVIDEND'].includes(t.action.toUpperCase()) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{t.action}</span>}
+            : <ActionValue value={t.action} />}
         </td>
       );
       case 'quantity': return (
@@ -511,253 +493,31 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
 
   return (
     <div className="space-y-4">
-      {focusTicker && (
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-[#E6EEFB] border border-[#0F52BA]/20 rounded">
-          <TickerLogo ticker={focusTicker} size={20} />
-          <span className="text-sm font-semibold text-[#0F52BA]">
-            <span className="font-black">{focusTicker}</span>
-            {focusDate && <span className="font-normal"> · {focusDate.substring(0, 10)}</span>}
-          </span>
-          <button
-            onClick={onClearFocus}
-            className="ml-auto flex items-center gap-1 text-xs font-bold text-[#0F52BA] hover:text-[#0A3E8F] transition-colors"
-          >
-            Show all
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
-      <div className="bg-white p-5 rounded border border-[#D2D2D7] relative z-30">
-        <div className="flex flex-wrap items-center gap-6">
-          <div className="flex items-center space-x-2">
-            <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-            <span className="text-sm font-bold text-slate-700">Filter</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4 flex-1">
-            {/* Brokerage Filter */}
-            <div className="relative" ref={brokerageMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Brokerage</label>
-              <button
-                onClick={() => setIsBrokerageMenuOpen(!isBrokerageMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
-              >
-                <span className="truncate max-w-[100px]">
-                  {selectedBrokerages.length === 0 ? 'All Brokers' : 
-                   selectedBrokerages.length === 1 ? selectedBrokerages[0] : 
-                   `${selectedBrokerages.length} Brokers`}
-                </span>
-                <svg className={`w-4 h-4 text-slate-400 transition-transform ${isBrokerageMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-
-              {isBrokerageMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                  <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Brokerages</span>
-                    {selectedBrokerages.length > 0 && (
-                      <button onClick={() => setSelectedBrokerages([])} className="text-[10px] font-bold text-[#0F52BA] hover:text-[#0A3E8F] px-2">Clear</button>
-                    )}
-                  </div>
-                  <div className="max-h-60 overflow-y-auto p-2 space-y-1">
-                    {allBrokerages.map(broker => (
-                      <label key={broker} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]"
-                          checked={selectedBrokerages.includes(broker)}
-                          onChange={() => toggleBrokerage(broker)}
-                        />
-                        <span className="ml-3 text-sm font-bold text-slate-700">{broker}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Asset Type Filter */}
-            <div className="relative" ref={assetTypeMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Asset Type</label>
-              <button
-                onClick={() => setIsAssetTypeMenuOpen(!isAssetTypeMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[130px] text-left"
-              >
-                <span className="truncate max-w-[90px]">
-                  {selectedAssetTypes.length === 0 ? 'All Types' : 
-                   selectedAssetTypes.length === 1 ? formatAssetType(selectedAssetTypes[0]) : 
-                   `${selectedAssetTypes.length} Types`}
-                </span>
-                <svg className={`w-4 h-4 text-slate-400 transition-transform ${isAssetTypeMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-
-              {isAssetTypeMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-slate-200 rounded shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                  <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <span className="text-[10px] font-black text-slate-400 uppercase px-2">Asset Types</span>
-                    {selectedAssetTypes.length > 0 && (
-                      <button onClick={() => setSelectedAssetTypes([])} className="text-[10px] font-bold text-[#0F52BA] hover:text-[#0A3E8F] px-2">Clear</button>
-                    )}
-                  </div>
-                  <div className="p-2 space-y-1">
-                    {allAssetTypes.map(type => (
-                      <label key={type} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]"
-                          checked={selectedAssetTypes.includes(type)}
-                          onChange={() => toggleAssetType(type)}
-                        />
-                        <span className="ml-3 text-sm font-bold text-slate-700">{formatAssetType(type)}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Ticker Filter */}
-            <div className="relative" ref={tickerMenuRef}>
-              <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Ticker</label>
-              <button
-                onClick={() => setIsTickerMenuOpen(!isTickerMenuOpen)}
-                className="flex items-center justify-between pl-3 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[140px] text-left"
-              >
-                <span className="truncate max-w-[100px]">
-                  {selectedTickers.length === 0 ? 'All Tickers' : 
-                   selectedTickers.length === 1 ? selectedTickers[0] : 
-                   `${selectedTickers.length} Tickers`}
-                </span>
-                <svg className={`w-4 h-4 text-slate-400 transition-transform ${isTickerMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-
-              {isTickerMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                  <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <span className="text-[10px] font-black text-slate-400 uppercase px-2">Select Tickers</span>
-                    {selectedTickers.length > 0 && (
-                      <button onClick={() => setSelectedTickers([])} className="text-[10px] font-bold text-[#0F52BA] hover:text-[#0A3E8F] px-2">Clear</button>
-                    )}
-                  </div>
-                  <div className="max-h-60 overflow-y-auto p-2 space-y-1">
-                    {allTickers.map(ticker => (
-                      <label key={ticker} className="flex items-center px-3 py-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-slate-300 text-[#0F52BA] focus:ring-[#0F52BA]"
-                          checked={selectedTickers.includes(ticker)}
-                          onChange={() => toggleTicker(ticker)}
-                        />
-                        <span className="ml-3 text-sm font-bold text-slate-700">{ticker}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="relative group">
-                <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter">Timeframe</label>
-                <select 
-                  value={dateRangeType}
-                  onChange={(e) => setDateRangeType(e.target.value as DateRangeType)}
-                  className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700 focus:ring-2 focus:ring-[#0F52BA] outline-none cursor-pointer min-w-[150px]"
-                >
-                  <option value="all">All Time</option>
-                  <option value="30d">Last 30 Days</option>
-                  <option value="90d">Last 90 Days</option>
-                  <option value="ytd">Year to Date</option>
-                  <option value="custom">Custom Range...</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </div>
-              </div>
-
-              {dateRangeType === 'custom' && (
-                <div className="flex items-center space-x-2 animate-in slide-in-from-left-2 duration-200">
-                  <input 
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-[#0F52BA] outline-none"
-                  />
-                  <span className="text-slate-300 text-xs font-bold">to</span>
-                  <input 
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-[#0F52BA] outline-none"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Visibility Filter */}
-          <div className="relative">
-            <label className="absolute -top-2 left-2 bg-white px-1 text-[9px] font-black text-[#0F52BA] uppercase tracking-tighter z-10">Show</label>
-            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-md overflow-hidden">
-              {(() => {
-                const dupCount = transactions.filter(t => t.is_duplicate).length;
-                const tabs: VisibilityFilter[] = dupCount > 0
-                  ? ['active', 'hidden', 'duplicates', 'all']
-                  : ['active', 'hidden', 'all'];
-                return tabs.map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setVisibilityFilter(v)}
-                    className={`px-3 py-2 text-xs font-bold capitalize transition-colors flex items-center gap-1 ${
-                      visibilityFilter === v
-                        ? v === 'duplicates' ? 'bg-orange-500 text-white' : 'bg-[#0F52BA] text-white'
-                        : v === 'duplicates' ? 'text-orange-500 hover:text-orange-600' : 'text-slate-500 hover:text-[#0F52BA]'
-                    }`}
-                  >
-                    {v}
-                    {v === 'duplicates' && (
-                      <span className={`text-[10px] font-black px-1 rounded-full ${visibilityFilter === 'duplicates' ? 'bg-white/30' : 'bg-orange-100'}`}>{dupCount}</span>
-                    )}
-                  </button>
-                ));
-              })()}
-            </div>
-          </div>
-
-          <button
-            onClick={resetFilters}
-            className="text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2"
-          >
-            Reset
-          </button>
-
-          {/* Header drag-and-drop never fires from touch, so this is the only
-              way to reorder columns on a phone. */}
-          <button
-            onClick={() => setShowColSheet(true)}
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-[#0F52BA] transition-colors uppercase tracking-widest px-2 py-2 min-h-[44px]"
-            title="Reorder columns"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            Columns
-          </button>
-
-        </div>
-      </div>
+      <FilterToolbar resultLabel={`${filteredTransactions.length} ${filteredTransactions.length === 1 ? 'transaction' : 'transactions'}`} onClear={() => { resetFilters(); onClearFocus?.(); }}
+        chips={[
+          ...selectionChips('Brokerage', selectedBrokerages, setSelectedBrokerages),
+          ...selectionChips('Asset type', selectedAssetTypes, setSelectedAssetTypes, formatAssetType),
+          ...selectionChips('Ticker', selectedTickers, setSelectedTickers),
+          ...(dateRangeType !== 'all' ? [{ key: 'date', label: `Period: ${dateRangeType === 'custom' ? `${startDate || 'Any'} → ${endDate || 'Any'}` : dateRangeType === 'ytd' ? 'Year to date' : dateRangeType === '30d' ? 'Last 30 days' : 'Last 90 days'}`, onRemove: () => { setDateRangeType('all'); setStartDate(''); setEndDate(''); } }] : []),
+          ...(visibilityFilter !== 'active' ? [{ key: 'visibility', label: `Status: ${visibilityFilter}`, onRemove: () => setVisibilityFilter('active') }] : []),
+          ...(focusTicker ? [{ key: 'source-lot', label: `Source lot: ${focusTicker}${focusDate ? ` · ${focusDate.slice(0, 10)}` : ''}`, onRemove: () => onClearFocus?.() }] : []),
+        ]}
+        actions={<ColumnsButton count={columnOrder.length} total={allColumns.length} onClick={() => setShowColSheet(true)} />}
+        extra={dateRangeType === 'custom' ? <>
+          <label className="table-filter-field"><span className="table-field-label">From date</span><input type="date" className="table-filter-trigger" value={startDate} max={endDate || undefined} onChange={event => setStartDate(event.target.value)} /></label>
+          <label className="table-filter-field"><span className="table-field-label">To date</span><input type="date" className="table-filter-trigger" value={endDate} min={startDate || undefined} onChange={event => setEndDate(event.target.value)} /></label>
+          {startDate && endDate && startDate > endDate && <p className="table-date-error" role="alert">The end date must be on or after the start date.</p>}
+        </> : undefined}
+      >
+        <MultiSelectFilter label="Brokerage" values={selectedBrokerages} options={allBrokerages} onChange={setSelectedBrokerages} emptyLabel="All brokerages" />
+        <MultiSelectFilter label="Ticker" values={selectedTickers} options={allTickers} onChange={setSelectedTickers} emptyLabel="All tickers" />
+        <MultiSelectFilter label="Asset type" values={selectedAssetTypes} options={allAssetTypes.map(value => ({ value, label: formatAssetType(value) }))} onChange={setSelectedAssetTypes} emptyLabel="All asset types" searchable={false} />
+        <SelectFilter label="Period" value={dateRangeType} onChange={value => setDateRangeType(value as DateRangeType)} options={[{ value: 'all', label: 'All time' }, { value: '30d', label: 'Last 30 days' }, { value: '90d', label: 'Last 90 days' }, { value: 'ytd', label: 'Year to date' }, { value: 'custom', label: 'Custom dates' }]} />
+        <SelectFilter label="Transaction status" value={visibilityFilter} onChange={value => setVisibilityFilter(value as VisibilityFilter)} options={[{ value: 'active', label: 'Active' }, { value: 'hidden', label: 'Hidden' }, { value: 'duplicates', label: `Duplicates (${transactions.filter(t => t.is_duplicate).length})` }, { value: 'all', label: 'All transactions' }]} />
+      </FilterToolbar>
 
       {filteredTransactions.length === 0 ? (
-        <div className="py-20 text-center bg-white border border-[#D2D2D7] rounded">
+        <div className="py-20 text-center bg-white border border-[#e7ecf3] rounded">
           <div className="max-w-xs mx-auto space-y-4">
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -766,14 +526,14 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
             </div>
             <h4 className="text-slate-900 font-bold">No results found</h4>
             <p className="text-sm text-slate-400">No transactions match these criteria.</p>
-            <button onClick={resetFilters} className="text-[#0F52BA] text-sm font-bold hover:underline">Clear all filters</button>
+            <button onClick={resetFilters} className="text-[#2458d3] text-sm font-bold hover:underline">Clear all filters</button>
           </div>
         </div>
       ) : (
-        <div className={`overflow-x-auto rounded border border-[#D2D2D7] bg-white overflow-hidden${!numbersVisible ? ' blur-sm select-none pointer-events-none' : ''}`}>
+        <div className={`overflow-x-auto rounded border border-[#e7ecf3] bg-white overflow-hidden${!numbersVisible ? ' blur-sm select-none pointer-events-none' : ''}`}>
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-[#F5F5F7] border-b border-[#D2D2D7]">
+              <tr className="bg-[#f6f8fc] border-b border-[#e7ecf3]">
                 <th className="px-4 py-2 w-10" title="Hide transaction from calculations">
                   <svg className="w-3.5 h-3.5 text-slate-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
@@ -783,7 +543,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                 <th className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap text-right">Tools</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#D2D2D7]">
+            <tbody className="divide-y divide-[#e7ecf3]">
               {filteredTransactions.map((t) => {
                 const isEditing = editingId === t.id;
 
@@ -814,7 +574,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                 };
 
                 return (
-                  <tr key={`${t.brokerage}-${t.id}`} className={`transition-colors group ${isEditing ? 'bg-[#0F52BA]/5' : t.is_duplicate ? 'bg-orange-50/60 hover:bg-orange-50' : 'hover:bg-[#F5F5F7]'} ${t.is_deleted && !isEditing ? 'opacity-40' : ''}`}>
+                  <tr key={`${t.brokerage}-${t.id}`} className={`transition-colors group ${isEditing ? 'bg-[#2458d3]/5' : t.is_duplicate ? 'bg-orange-50/60 hover:bg-orange-50' : 'hover:bg-[#f6f8fc]'} ${t.is_deleted && !isEditing ? 'opacity-40' : ''}`}>
                     {/* Hide checkbox */}
                     <td className="px-4 py-2 text-center">
                       {!isEditing && (
@@ -834,7 +594,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                     <td className="px-6 py-2 text-right">
                       {isEditing ? (
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={saveEdit} className="p-1.5 text-white bg-[#0F52BA] hover:bg-[#0A3E8F] rounded transition-all" title="Save">
+                          <button onClick={saveEdit} className="p-1.5 text-white bg-[#2458d3] hover:bg-[#24436d] rounded transition-all" title="Save">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                           </button>
                           <button onClick={cancelEdit} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded transition-all" title="Cancel">
@@ -850,8 +610,8 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                                 onClick={(e) => transferPopoverId === t.id ? setTransferPopoverId(null) : openTransferPopover(t.id, e.currentTarget)}
                                 className={`p-1.5 rounded transition-all ${
                                   t.current_brokerage && t.current_brokerage !== t.brokerage
-                                    ? 'text-[#0F52BA] bg-[#0F52BA]/10 hover:bg-[#0F52BA]/20'
-                                    : 'text-slate-200 hover:text-[#0F52BA] hover:bg-[#0F52BA]/10'
+                                    ? 'text-[#2458d3] bg-[#2458d3]/10 hover:bg-[#2458d3]/20'
+                                    : 'text-slate-200 hover:text-[#2458d3] hover:bg-[#2458d3]/10'
                                 }`}
                                 title={t.current_brokerage && t.current_brokerage !== t.brokerage ? `Lots moved to ${t.current_brokerage}` : 'Move lots to another brokerage'}
                               >
@@ -864,7 +624,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                                     <button
                                       key={broker}
                                       onClick={() => { onUpdate(t.id, { current_brokerage: broker }); setTransferPopoverId(null); }}
-                                      className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors ${t.current_brokerage === broker ? 'text-[#0F52BA]' : 'text-slate-700'}`}
+                                      className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors ${t.current_brokerage === broker ? 'text-[#2458d3]' : 'text-slate-700'}`}
                                     >
                                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: brokerageColor(broker) }} />
                                       {broker}
@@ -925,7 +685,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                             className={`p-1.5 rounded transition-all ${
                               t.is_override
                                 ? 'text-amber-500 bg-amber-50 hover:bg-amber-100'
-                                : 'text-slate-200 hover:text-[#0F52BA] hover:bg-[#F5F5F7]'
+                                : 'text-slate-200 hover:text-[#2458d3] hover:bg-[#f6f8fc]'
                             }`}
                             title={t.is_override ? 'Edited — click to edit again' : 'Edit transaction'}
                           >
@@ -1112,7 +872,13 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
       <ColumnOrderSheet
         open={showColSheet}
         onClose={() => setShowColSheet(false)}
-        order={columnOrder}
+        order={allColumns}
+        visible={visibleColumns}
+        required={REQUIRED_COLS}
+        onToggle={toggleColumn}
+        onReset={resetColumns}
+        presets={COLUMN_PRESETS}
+        onPreset={applyColumnPreset}
         labels={COL_LABELS}
         onMove={moveCol}
       />
