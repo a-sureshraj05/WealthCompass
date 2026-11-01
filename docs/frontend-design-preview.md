@@ -1,6 +1,6 @@
 # Portfolio workspace preview
 
-Branch: `feature/frontend-portfolio-enrichment`, based on `staging`.
+Branch: `feature/brokerage-table-styling`, based on `staging` after PR #16.
 
 Run from `frontend/`:
 
@@ -30,7 +30,7 @@ are in collapsed sections rather than the primary transaction toolbar.
 
 Try the brokerage selector, dollars/percentage switch, column ordering, row
 expansion, Stocks & funds / Options switch, Realized / Unrealized switch,
-connection / statement switch and Hide figures control. The development-only
+connection / statement switch and the profile privacy control. The development-only
 API adapter serves supporting data in memory and rejects unsupported requests
 without a network fallback. Preview column-order caches have their own namespace.
 Ledger edits affect sample rows only; position recalculation is illustrative.
@@ -144,3 +144,118 @@ The Total Portfolio Value panel keeps its original navy (`#172d50`) as the
 visual anchor. The same surface tokens apply to filters, tables, gain reports
 and account panels in both the authenticated app and the local preview.
 Short-/long-term tints and financial gain/loss colors retain their meanings.
+
+Brokerage identities in Transactions, Holdings, Options and Gains & Losses now
+share a compact logo-and-name treatment with a light outlined surface. The same
+bundled marks are used in Accounts & Imports. Transaction account names remain
+under the original brokerage, and transferred lots show a clearly labeled
+“Now at” destination. Brokerage names, account IDs, filters and transfer writes
+are unchanged. Unknown brokerages keep their name with a neutral institution
+icon. In Holdings and Options, expand a ticker or group by Brokerage to inspect
+the updated source rows.
+
+A proposed Performance vs SPY module is available in the development preview
+below AI Insights. It includes YTD, trailing 1/3/5-year and calendar-year views,
+a permanent simulated SPY total-return comparison, normalized percent/$10k
+charts, and a reconciled opening/deposit/withdrawal/earnings/ending balance bridge.
+Both series are explicitly simulated. No real performance is exposed in the
+signed-in app; live history and cash-flow classification are not implemented.
+See `docs/portfolio-performance-design.md` for methods, date rules and backend work.
+
+The top-right avatar is now a shared account menu in the preview and signed-in
+app. It shows the account identity, opens an Edit profile form and provides
+Sign out. Names are saved under the existing per-user `profile_display_name`
+preference, preserving saved table layouts; no database migration or backend
+endpoint was added. Avatar initials follow the saved name. Failed preference
+reads remain visible and do not masquerade as a cleared name. Failed real logout
+requests leave the app signed in and show an actionable error.
+
+In the preview, the profile belongs to the fictional Jordan Doe account. Name
+edits stay in the mock adapter's memory. Sign out opens a local preview-session
+exit screen with a Return to design preview button; it never calls real logout
+or changes an authenticated WealthCompass session.
+
+The profile menu includes the Hide financial values switch, the sole visibility
+control. It uses the `financial_numbers_visible` account preference, saved
+automatically through the existing user-scoped preferences API.
+Each login and reload starts masked until that preference loads; saved `false`
+stays hidden and saved `true` restores visible figures. Accounts without a saved
+choice keep the existing visible default after loading. Failed reads remain
+masked with Retry; failed saves preserve the current session choice and clearly
+report that the next-login preference was not saved. Pending saves disable the
+controls to prevent conflicting writes. Sign-out retries any unsaved choice but
+remains available if preference storage fails. No account values are cached in
+browser storage by this feature.
+
+For local preview testing, only the fictional visibility choice also survives
+reloads in the isolated `wealthcompass:design-preview:financial-visibility`
+browser-storage key. It never reads or writes a real account's preference.
+
+Use the visible sample portfolio choices or `/design-preview?portfolio=50-stocks` to
+inspect a fictional fifty-stock portfolio across the same three brokerages.
+This scenario has matching holdings, open lots, buy transactions and sample
+analyst quotes; it has no option positions or realized sales. Its total value
+matches the original fixture so the separately simulated performance example
+retains the same endpoint. Switching scenarios reloads the preview and resets
+sample edits, preserving the profile visibility preference.
+
+The choices also offer `/design-preview?portfolio=50-mixed` (40 stocks,
+10 ETFs and 6 option positions) and `/design-preview?portfolio=100-mixed`
+(80 stocks, 20 ETFs and 12 option positions). The 50/100 counts refer to unique
+stock/ETF holdings; options are additional contract positions on those
+underlyings. Both scenarios span all three brokerages and contain calls, puts,
+retained/sellable contracts, winning/losing positions, short-/long-term open
+lots, and closed stock/ETF/option lots with matching buy/sell ledger entries.
+The larger sample includes multiple option contracts on the same underlying.
+ETF identity icons are preserved when the same symbol also has options.
+
+All scenarios retain the same illustrative ending portfolio value. Equity daily
+contributors exclude options. Option valuations, gains and ledger cash amounts
+apply the 100-share multiplier; the sample options calculator and retention
+updates use the selected scenario's contracts rather than fixed totals.
+
+Sample choices are shown as visible cards above every preview tab, with a Loaded
+count and Open Holdings action. Overview summarizes five rows rather than listing
+all 50/100 holdings; Holdings provides the full list. The normal development app
+also has a Sample portfolios link in its navbar. These controls are excluded
+from production.
+
+Overview stays compact at fifty or one hundred holdings: allocation shows at most
+eight segments. Up to eight positive holdings each get their own slice; larger
+portfolios show seven named holdings and Other with the remaining holding count.
+Every individual holding above 20% of the positive invested-asset total stays
+separate. Other can exceed 20% as a group of smaller holdings; its caption explains
+this and provides View full breakdown. The donut is 208px with smaller gaps when
+there are more than six slices. Daily contributors shows the top ten
+ranked by absolute dollar change or percentage move according to its $/% toggle,
+while its total covers every eligible holding. View all contributors opens a
+scrollable list with both metrics and the same ranking; Show top 10 restores the
+chart. The aggregate percentage remains the weighted return across all eligible
+holdings, rather than a sum of the individual percentages. Largest
+holdings shows five with View all 50/100 leading to Holdings. The Other pie segment
+and legend both open the full Holdings view. Brokerage filters recompute all
+counts and totals. No live data source or financial calculation was changed.
+
+The full contributors list reuses Holdings' sort indicators and three-state
+column sort: ascending, descending, then reset. Holding sorts alphabetically;
+Dollar change and Daily move sort signed values so losses/gains can be inspected
+in either order. Reset restores absolute-move ranking for the selected $/% mode.
+Changing that mode also resets manual table sorting. Active headers expose
+`aria-sort`, including `other` for the default absolute-value ranking. The chart
+retains its top-ten ranking and portfolio totals regardless of table sorting.
+
+Stocks & funds and Options now share display-only holding formatters at ticker,
+brokerage, account and lot levels: quantities omit trailing decimals and retain
+up to eight fractional places (very small nonzero quantities retain significant
+precision); totals show USD with grouping and two decimals; prices/premiums and
+strikes retain up to four decimals when needed, with extra precision for tiny
+prices; percentages show two decimals. Negative amounts retain their sign and
+missing/non-finite values use an em dash. Lot dates remain the recorded ISO day
+without local-timezone shifts. Calculations, option multipliers and editable
+retention quantities keep their original numeric values.
+
+Holdings tables also share a visual hierarchy: semibold ticker symbols and market
+values, medium-weight quantities and P&L, lighter cost/price values, and consistent
+teal/rose financial direction. Short-term, long-term and mixed tax-term labels use
+soft blue, lavender and amber surfaces respectively. Styles are scoped to Stocks
+& funds and Options, including account, brokerage and individual-lot rows.

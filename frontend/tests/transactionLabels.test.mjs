@@ -39,16 +39,17 @@ test('non-trade events are not classified as sales and unknown values remain rea
 
 test('the actual transaction table renders the new cells without mutating source values', async () => {
   const path = fileURLToPath(new URL('../components/TransactionsView.tsx', import.meta.url));
-  const result = await build({ entryPoints: [path], bundle: true, write: false, format: 'cjs', platform: 'node', packages: 'external', define: { 'import.meta.env.DEV': 'true' }, loader: { '.css': 'empty', '.svg': 'dataurl' } });
+  const result = await build({ entryPoints: [path], bundle: true, write: false, format: 'cjs', platform: 'node', packages: 'external', define: { 'import.meta.env.DEV': 'true' }, loader: { '.css': 'empty', '.svg': 'dataurl', '.png': 'dataurl' } });
   const loaded = new Module(path);
   loaded.paths = Module._nodeModulePaths(fileURLToPath(new URL('../', import.meta.url)));
   loaded._compile(result.outputFiles[0].text, path);
   const noop = () => {};
   const rows = [
-    Object.freeze({ id: 'label-check-1', brokerage: 'Schwab', ticker: 'AAPL', name: 'Apple', date: '2026-01-02', quantity: 10, price: 150, costPerShare: 150, totalCost: 1500, assetType: 'Equity', action: 'BUY', is_deleted: false, is_override: false, is_duplicate: false }),
+    Object.freeze({ id: 'label-check-1', brokerage: 'Schwab', current_brokerage: 'Fidelity', account_id: 42, ticker: 'AAPL', name: 'Apple', date: '2026-01-02', quantity: 10, price: 150, costPerShare: 150, totalCost: 1500, assetType: 'Equity', action: 'BUY', is_deleted: false, is_override: false, is_duplicate: false }),
     Object.freeze({ id: 'label-check-2', brokerage: 'Schwab', ticker: 'AAPL', name: 'Apple option', date: '2026-01-03', quantity: 1, price: 10, costPerShare: 10, totalCost: 1000, assetType: 'Options', action: 'STC', is_deleted: false, is_override: false, is_duplicate: false }),
   ];
   const html = renderToStaticMarkup(React.createElement(loaded.exports.default, {
+    accounts: [{ id: 42, brokerage: 'Schwab', name: 'Individual account', snaptrade_account_id: 'fictional-provider' }],
     transactions: rows, onRemove: noop, onSoftDelete: noop, onUpdate: noop, onRevert: noop,
     selectedBrokerages: [], setSelectedBrokerages: noop, selectedAssetTypes: [], setSelectedAssetTypes: noop,
     selectedTickers: [], setSelectedTickers: noop,
@@ -57,6 +58,14 @@ test('the actual transaction table renders the new cells without mutating source
   assert.match(html, />Stock</);
   assert.match(html, /title="Action: STC"/);
   assert.match(html, />Sell to close</);
+  assert.match(html, /class="brokerage-route"/);
+  assert.match(html, /Brokerage: Schwab · Individual account/);
+  assert.match(html, /Brokerage: Fidelity/);
+  assert.match(html, />Now at</);
+  assert.match(html, />Individual account</);
+  assert.equal(rows[0].brokerage, 'Schwab');
+  assert.equal(rows[0].current_brokerage, 'Fidelity');
+  assert.equal(rows[0].account_id, 42);
   assert.equal(rows[0].assetType, 'Equity');
   assert.equal(rows[0].action, 'BUY');
   assert.equal(rows[1].action, 'STC');

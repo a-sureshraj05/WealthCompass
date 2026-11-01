@@ -55,3 +55,68 @@ test('unsupported preview writes and account connections fail closed without liv
   await assert.rejects(() => api.splitTransaction('sample-1', 3));
   assert.equal(networkCalls, 0);
 });
+
+test('preview profile edits stay in memory and real session logout is blocked', async () => {
+  assert.equal((await api.fetchAccountProfile()).email, 'jordan.doe@example.test');
+  await api.saveAccountDisplayName('Preview Person');
+  assert.equal((await api.fetchAccountProfile()).displayName, 'Preview Person');
+  await assert.rejects(() => api.logoutAccount());
+  assert.equal(networkCalls, 0);
+});
+
+test('preview visibility survives a fresh adapter load through an isolated browser key without touching live preferences', async () => {
+  const storage = new Map();
+  globalThis.window.localStorage = { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) };
+  await api.saveFinancialVisibility(false);
+  assert.deepEqual([...storage], [['wealthcompass:design-preview:financial-visibility', 'false']]);
+  // A new bundled module has no in-memory preference state, like reloading the preview.
+  const fresh = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text + '\n// fresh preview adapter').toString('base64')}`);
+  assert.equal(await fresh.fetchFinancialVisibility(), false);
+  assert.equal((await fresh.fetchAccountProfile()).displayName, '');
+  await fresh.saveFinancialVisibility(true);
+  assert.equal(await api.fetchFinancialVisibility(), true);
+  assert.equal(networkCalls, 0);
+});
+
+test('the fifty-stock scenario uses matching quotes and statement rows with no leftover option positions', async () => {
+  globalThis.window.location.search = '?portfolio=50-stocks';
+  try {
+    const quotes = await api.fetchAnalystData(['AAPL']);
+    assert.equal(quotes.length, 50);
+    assert.ok(quotes.some(quote => quote.ticker === 'ABT'));
+    assert.deepEqual(await api.fetchOptionsPositions(), []);
+    const imported = await api.parseStatement('Fictional statement', 'Fidelity');
+    assert.deepEqual(imported.map(row => row.ticker), ['AAPL', 'MSFT']);
+    assert.equal(networkCalls, 0);
+  } finally { delete globalThis.window.location.search; }
+});
+
+for (const size of [50, 100]) {
+  test(`${size}-holding mixed preview serves ETFs and contracts with matching calculator and retention data`, async () => {
+    globalThis.window.location.search = `?portfolio=${size}-mixed`;
+    let original;
+    try {
+      const quotes = await api.fetchAnalystData(['VTI']);
+      assert.equal(quotes.length, size);
+      assert.ok(quotes.some(quote => quote.ticker === 'VTI' && quote.sector === 'Diversified'));
+      const options = await api.fetchOptionsPositions();
+      assert.equal(options.length, size === 50 ? 6 : 12);
+      assert.ok(options.some(option => option.ticker === 'SPY'));
+      const calculator = await api.fetchOptionsCalculator();
+      assert.ok(Math.abs(calculator.outstandingPremium - options.reduce((sum, option) => sum + option.quantity * 100 * option.buyPrice, 0)) < 1e-8);
+      assert.ok(Math.abs(calculator.totalSellableValue - options.reduce((sum, option) => sum + option.sellableQuantity * 100 * option.currentPrice, 0)) < 1e-8);
+      assert.ok(calculator.realizedLosses > 0);
+      original = options[0];
+      await api.updateOptionsRetain(original.brokerage, original.ticker, original.buyDate, 999);
+      const updated = (await api.fetchOptionsPositions()).find(option => option.id === original.id);
+      assert.equal(updated.retainQuantity, original.quantity);
+      assert.equal(updated.sellableQuantity, 0);
+      const nextCalculator = await api.fetchOptionsCalculator();
+      assert.equal(nextCalculator.totalSellableQty, calculator.totalSellableQty - original.sellableQuantity);
+      assert.equal(networkCalls, 0);
+    } finally {
+      if (original) await api.updateOptionsRetain(original.brokerage, original.ticker, original.buyDate, original.retainQuantity);
+      delete globalThis.window.location.search;
+    }
+  });
+}

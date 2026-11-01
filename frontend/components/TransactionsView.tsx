@@ -7,7 +7,7 @@ import SortIndicator from './SortIndicator';
 import { useTableColumns } from '../hooks/useTableColumns';
 import ColumnOrderSheet from './ColumnOrderSheet';
 import { FilterToolbar, MultiSelectFilter, SelectFilter, ColumnsButton, selectionChips } from './TableFilters';
-import { brokerageColor } from '../utils/finance';
+import BrokerageValue, { BrokerageRoute } from './BrokerageValue';
 import {
   fetchOpenBuys, fetchLotAssignments, createLotAssignment, deleteLotAssignment, splitTransaction,
   OpenBuyLot, LotAssignment,
@@ -425,18 +425,8 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
               )}
             </div>
           ) : (
-            <div className="flex flex-col gap-0.5">
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight" style={{ backgroundColor: brokerageColor(t.brokerage) + '22', color: brokerageColor(t.brokerage) }}>{t.brokerage}</span>
-                {t.current_brokerage && t.current_brokerage !== t.brokerage && (
-                  <>
-                    <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                    <span className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight" style={{ backgroundColor: brokerageColor(t.current_brokerage) + '22', color: brokerageColor(t.current_brokerage) }}>{t.current_brokerage}</span>
-                  </>
-                )}
-              </div>
-              {t.account_id != null && accountMap[t.account_id] && <span className="text-[10px] text-slate-400 font-medium pl-0.5">{accountMap[t.account_id]}</span>}
-            </div>
+            <BrokerageRoute from={t.brokerage} to={t.current_brokerage}
+              accountName={t.account_id != null ? accountMap[t.account_id] : undefined} />
           )}
         </td>
       );
@@ -626,8 +616,7 @@ const TransactionsView: React.FC<Props> = ({ transactions, onRemove, onSoftDelet
                                       onClick={() => { onUpdate(t.id, { current_brokerage: broker }); setTransferPopoverId(null); }}
                                       className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors ${t.current_brokerage === broker ? 'text-[#2458d3]' : 'text-slate-700'}`}
                                     >
-                                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: brokerageColor(broker) }} />
-                                      {broker}
+                                      <BrokerageValue name={broker} compact />
                                       {t.current_brokerage === broker && (
                                         <svg className="w-3 h-3 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                                       )}
