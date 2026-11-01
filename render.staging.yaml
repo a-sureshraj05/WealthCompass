@@ -12,16 +12,19 @@
 # here, it gets promoted by merging `staging` -> design/cloud-launch (and,
 # eventually, -> main), which is what actually ships it to production.
 #
-# wealthcompass-demo was previously a public, no-login, fabricated-data
-# showcase (WC_DEMO_MODE=true, auto-resets). It's been repurposed here as a
-# real staging environment instead — same real-app code path as production
+# Named "wealthcompass-stage", not "wealthcompass-demo": this service used
+# to be a public, no-login, fabricated-data showcase (WC_DEMO_MODE=true,
+# auto-resets) under that name. It's been repurposed here as a real staging
+# environment instead — same real-app code path as production
 # (WC_DEMO_MODE=false), own Supabase database, own persistent data — so that
 # testing never touches production data, demo mode's auto-reset is gone, and
-# the data here actually sticks around between test sessions.
+# the data here actually sticks around between test sessions. New name
+# avoids both the stale "demo" framing and any collision with the old
+# wealthcompass-demo service.
 
 services:
   - type: web
-    name: wealthcompass-demo
+    name: wealthcompass-stage
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
