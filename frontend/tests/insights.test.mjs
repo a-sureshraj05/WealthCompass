@@ -84,5 +84,8 @@ test('the complete overview mounts AI Insights between the summary and charts', 
   const charts = html.indexOf('class="overview-chart-grid"');
   assert.ok(summary >= 0 && insights > summary && charts > insights);
   assert.equal((html.match(/class="portfolio-insights"/g) || []).length, 1);
-  assert.match(html, /Position concentration/);
+  assert.match(html, /Insights are hidden/);
+  assert.doesNotMatch(html, /\$212,995\.75/);
+  assert.match(html, /Open account menu for Jordan Doe/);
+  assert.match(html, /aria-haspopup="dialog"/);
 });

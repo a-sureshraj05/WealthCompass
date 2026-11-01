@@ -1,4 +1,6 @@
 import { BrokerageAccount, StockHolding, Transaction, RealizedGain, UnrealizedLot } from "../types";
+import { PROFILE_DISPLAY_NAME_KEY, validateDisplayName } from '../utils/profile';
+import { FINANCIAL_VISIBILITY_KEY } from '../utils/financialVisibility';
 
 // The session lives in an HttpOnly cookie now, not localStorage — the browser
 // attaches it automatically on every same-origin request, so there's no
@@ -21,6 +23,47 @@ const apiFetch = async (url: string, options: RequestInit = {}): Promise<Respons
 const responseError = async (response: Response, fallback: string): Promise<Error> => {
   const body = await response.json().catch(() => null);
   return new Error(typeof body?.detail === 'string' ? body.detail : fallback);
+};
+
+export interface AccountProfile { email: string; displayName: string }
+
+export const fetchAccountProfile = async (): Promise<AccountProfile> => {
+  // A failed preference read must stay an error, rather than making an existing
+  // name look like it was cleared. Generic table preference reads are best-effort.
+  const [identity, preferences] = await Promise.all([
+    apiFetch('/api/v1/auth/me'), apiFetch('/api/v1/preferences'),
+  ]);
+  if (!identity.ok) throw await responseError(identity, 'Could not load your account.');
+  if (!preferences.ok) throw await responseError(preferences, 'Could not load your display name.');
+  const [user, saved] = await Promise.all([identity.json(), preferences.json()]);
+  const displayName = saved.preferences?.[PROFILE_DISPLAY_NAME_KEY];
+  return { email: typeof user.email === 'string' ? user.email : '', displayName: typeof displayName === 'string' ? displayName.trim() : '' };
+};
+
+export const saveAccountDisplayName = async (value: string): Promise<string> => {
+  const name = validateDisplayName(value);
+  // The existing preference API merges this key without replacing table layouts.
+  await savePreferences({ [PROFILE_DISPLAY_NAME_KEY]: name });
+  return name;
+};
+
+export const fetchFinancialVisibility = async (): Promise<boolean> => {
+  const response = await apiFetch('/api/v1/preferences');
+  if (!response.ok) throw await responseError(response, 'Could not load your visibility preference.');
+  const data = await response.json();
+  const saved = data.preferences?.[FINANCIAL_VISIBILITY_KEY];
+  if (saved === undefined) return true; // Preserve the existing default for new accounts.
+  if (typeof saved !== 'boolean') throw new Error('Invalid visibility preference.');
+  return saved;
+};
+
+export const saveFinancialVisibility = async (visible: boolean): Promise<void> => {
+  await savePreferences({ [FINANCIAL_VISIBILITY_KEY]: visible });
+};
+
+export const logoutAccount = async (): Promise<void> => {
+  const response = await apiFetch('/api/v1/auth/logout', { method: 'POST' });
+  if (!response.ok) throw await responseError(response, 'Could not sign out. Please try again.');
 };
 
 export const parseStatement = async (text: string, brokerageName: string): Promise<Transaction[]> => {

@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import TickerLogo from './TickerLogo';
+import BrokerageValue from './BrokerageValue';
+import './holdings-table.css';
 import { useTableColumns } from '../hooks/useTableColumns';
 import ColumnOrderSheet from './ColumnOrderSheet';
 import { FilterToolbar, MultiSelectFilter, GroupByControl, ColumnsButton, selectionChips, TAX_TERM_OPTIONS } from './TableFilters';
 import { SignedValue } from './TrendIndicator';
+import { formatHoldingQuantity, formatHoldingAmount, formatHoldingPrice, formatHoldingPercent, formatHoldingDate } from '../utils/holdingFormats';
 
 type ColKey = 'ticker' | 'washSale' | 'termType' | 'totalQty' | 'avgBuyPrice' | 'strikePrice' | 'totalValue' | 'avgCurrentPrice' | 'marketValue' | 'dailyGain' | 'dailyPct' | 'unrealizedGain' | 'unrealizedPct' | 'retainQty' | 'sellableQty' | 'gainToSell' | 'targetPrice';
 const DEFAULT_COLS: ColKey[] = ['ticker','totalQty','strikePrice','avgBuyPrice','avgCurrentPrice','marketValue','dailyGain','dailyPct','unrealizedGain','unrealizedPct','retainQty','sellableQty','totalValue','termType','washSale','gainToSell','targetPrice'];
@@ -30,11 +33,6 @@ import {
   updateOptionsRetain,
 } from '../services/apiService';
 
-const fmt = (n: number, decimals = 2) =>
-  n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-
-const fmtCurrency = (n: number) => `$${fmt(Math.abs(n))}`;
-
 type TermType = 'Long' | 'Short' | 'Mixed' | null;
 // Long if held > 1 year, Short if held ≤ 1 year (from the backend isLongTerm flag,
 // which encodes the >365-day rule). Aggregated rows with both terms return 'Mixed'.
@@ -47,10 +45,7 @@ const termTypeOf = (items: { isLongTerm: boolean }[]): TermType => {
 const termRank = (t: TermType) => (t === 'Long' ? 2 : t === 'Mixed' ? 1 : t === 'Short' ? 0 : -1);
 const termBadge = (t: TermType) => {
   if (!t) return <span className="text-slate-300 text-xs">—</span>;
-  const cls = t === 'Long' ? 'bg-[#edf3fc] text-[#24436d]'
-    : t === 'Short' ? 'bg-[#E5E5EA] text-[#71829b]'
-    : 'bg-amber-50 text-amber-700';
-  return <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${cls}`}>{t}</span>;
+  return <span className="holdings-tax-term" data-term={t.toLowerCase()}>{t === 'Mixed' ? 'Mixed terms' : `${t} term`}</span>;
 };
 
 interface BrokerageGroup {
@@ -453,12 +448,6 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   type BVBrokerageRow = (typeof brokerageViewCalcs)[0];
   type BVAccountRow = BVBrokerageRow['accounts'][0];
 
-  const brokerageBadgeCls = (b: string) =>
-    b.toLowerCase().includes('robinhood') ? 'bg-[#2458d3] text-white'
-    : b.toLowerCase().includes('schwab') ? 'bg-[#71829b] text-white'
-    : b.toLowerCase().includes('fidelity') ? 'bg-[#417505] text-white'
-    : 'bg-[#E5E5EA] text-[#71829b]';
-
   const parseOCCStrike = (symbol?: string | null): number | null => {
     if (!symbol || symbol.length < 15) return null;
     const n = parseInt(symbol.slice(-8), 10);
@@ -494,74 +483,74 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
   const renderL1 = (col: ColKey, tc: TickerCalc, compact = false) => {
     const sz = compact ? 'text-[11px]' : 'text-sm';
     switch (col) {
-      case 'ticker': return <td key={col} className="px-4 py-2"><div className="flex items-center gap-2"><TickerLogo ticker={tc.ticker} size={compact ? 24 : 32} assetType={assetTypeByTicker[tc.ticker]} /><span className={`${compact ? 'text-[11px]' : 'text-xs'} font-bold text-[#192b46] uppercase tracking-tight`}>{tc.ticker}</span></div></td>;
-      case 'washSale': return <td key={col} className="px-4 py-2">{(() => { const ws = washSaleByTicker[tc.ticker]; const isRed = ws && ((ws.lastLossDaysAgo !== null && ws.lastLossDaysAgo <= 30) || ws.type1Count > 0); const isYellow = !isRed && ws && ws.type2Count > 0; if (isRed) { const detail = ws.type1Count > 0 && ws.minDays !== Infinity ? `${ws.minDays}d to go` : ws.lastLossDaysAgo !== null ? `loss ${ws.lastLossDaysAgo}d ago` : ''; return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" /><div><p className="text-[10px] font-black text-rose-600">Active</p>{detail && <p className="text-[9px] text-rose-400">{detail}</p>}</div></div>; } if (isYellow) return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" /><div><p className="text-[10px] font-black text-amber-600">Caution</p><p className="text-[9px] text-amber-400">don't sell at loss</p></div></div>; return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" /><p className="text-[10px] font-medium text-emerald-600">Clear</p></div>; })()}</td>;
-      case 'termType':       return <td key={col} className="px-4 py-2">{termBadge(tc.termType)}</td>;
-      case 'totalQty':       return <td key={col} className={`px-4 py-2 text-right font-bold text-slate-800 ${sz}`}>{fmt(tc.totalQty, 0)}</td>;
-      case 'avgBuyPrice':    return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>{fmtCurrency(tc.avgBuyPrice)}</td>;
-      case 'strikePrice':    return <td key={col} />;
-      case 'totalValue':     return <td key={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>{fmtCurrency(tc.totalValue)}</td>;
-      case 'avgCurrentPrice':return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>{fmtCurrency(tc.avgCurrentPrice)}</td>;
-      case 'marketValue':    return <td key={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>{fmtCurrency(tc.marketValue)}</td>;
+      case 'ticker': return <td key={col} data-value={col} className="px-4 py-2"><div className="flex items-center gap-2"><TickerLogo ticker={tc.ticker} size={compact ? 24 : 32} assetType={assetTypeByTicker[tc.ticker]} /><span className={`holding-symbol ${compact ? 'text-[11px]' : 'text-xs'} font-bold text-[#192b46] uppercase tracking-tight`}>{tc.ticker}</span></div></td>;
+      case 'washSale': return <td key={col} data-value={col} className="px-4 py-2">{(() => { const ws = washSaleByTicker[tc.ticker]; const isRed = ws && ((ws.lastLossDaysAgo !== null && ws.lastLossDaysAgo <= 30) || ws.type1Count > 0); const isYellow = !isRed && ws && ws.type2Count > 0; if (isRed) { const detail = ws.type1Count > 0 && ws.minDays !== Infinity ? `${ws.minDays}d to go` : ws.lastLossDaysAgo !== null ? `loss ${ws.lastLossDaysAgo}d ago` : ''; return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" /><div><p className="text-[10px] font-black text-rose-600">Active</p>{detail && <p className="text-[9px] text-rose-400">{detail}</p>}</div></div>; } if (isYellow) return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" /><div><p className="text-[10px] font-black text-amber-600">Caution</p><p className="text-[9px] text-amber-400">don't sell at loss</p></div></div>; return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" /><p className="text-[10px] font-medium text-emerald-600">Clear</p></div>; })()}</td>;
+      case 'termType':       return <td key={col} data-value={col} className="px-4 py-2">{termBadge(tc.termType)}</td>;
+      case 'totalQty':       return <td key={col} data-value={col} className={`px-4 py-2 text-right font-bold text-slate-800 ${sz}`}>{formatHoldingQuantity(tc.totalQty)}</td>;
+      case 'avgBuyPrice':    return <td key={col} data-value={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>{formatHoldingPrice(tc.avgBuyPrice)}</td>;
+      case 'strikePrice':    return <td key={col} data-value={col} />;
+      case 'totalValue':     return <td key={col} data-value={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>{formatHoldingAmount(tc.totalValue)}</td>;
+      case 'avgCurrentPrice':return <td key={col} data-value={col} className={`px-4 py-2 text-right ${sz} text-slate-500 font-medium`}>{formatHoldingPrice(tc.avgCurrentPrice)}</td>;
+      case 'marketValue':    return <td key={col} data-value={col} className={`px-4 py-2 text-right font-black text-slate-900 ${sz}`}>{formatHoldingAmount(tc.marketValue)}</td>;
       case 'dailyGain': {
-        if (tc.dailyPrevMV === 0) return <td key={col} className={`px-4 py-2 text-right ${sz} text-slate-300`}>—</td>;
+        if (tc.dailyPrevMV === 0) return <td key={col} data-value={col} className={`px-4 py-2 text-right ${sz} text-slate-300`}>—</td>;
         const dg = tc.dailyGain;
-        return <td key={col} className={`px-4 py-2 text-right ${sz} font-black`}><SignedValue value={dg} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
+        return <td key={col} data-value={col} className={`px-4 py-2 text-right ${sz} font-black`}><SignedValue value={dg} format={v => formatHoldingAmount(v)} arrowClass="w-2.5 h-2.5" /></td>;
       }
       case 'dailyPct': {
         const dp2 = tc.dailyPrevMV > 0 ? (tc.dailyGain / tc.dailyPrevMV) * 100 : null;
-        return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold ${dp2 == null ? 'text-slate-300' : ''}`}>{dp2 != null ? <SignedValue value={dp2} format={() => `${Math.abs(dp2).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : '—'}</td>;
+        return <td key={col} data-value={col} className={`px-4 py-2 text-right ${sz} font-bold ${dp2 == null ? 'text-slate-300' : ''}`}>{dp2 != null ? <SignedValue value={dp2} format={() => formatHoldingPercent(Math.abs(dp2))} arrowClass="w-2.5 h-2.5" /> : '—'}</td>;
       }
-      case 'unrealizedGain': return <td key={col} className={`px-4 py-2 text-right ${sz} font-black`}><SignedValue value={tc.unrealizedGain} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
-      case 'unrealizedPct':  return <td key={col} className={`px-4 py-2 text-right ${sz} font-bold`}>{tc.avgBuyPrice > 0 ? <SignedValue value={tc.unrealizedGain} format={() => `${Math.abs((tc.avgCurrentPrice - tc.avgBuyPrice) / tc.avgBuyPrice * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
-      case 'retainQty':      return <td key={col} className={`px-4 py-2 text-right font-medium text-slate-600 ${sz}`}>{fmt(tc.retainQty, 0)}</td>;
-      case 'sellableQty':    return <td key={col} className={`px-4 py-2 text-right font-medium text-slate-600 ${sz}`}>{fmt(tc.sellableQty, 0)}</td>;
+      case 'unrealizedGain': return <td key={col} data-value={col} className={`px-4 py-2 text-right ${sz} font-black`}><SignedValue value={tc.unrealizedGain} format={v => formatHoldingAmount(v)} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct':  return <td key={col} data-value={col} className={`px-4 py-2 text-right ${sz} font-bold`}>{tc.avgBuyPrice > 0 ? <SignedValue value={tc.unrealizedGain} format={() => formatHoldingPercent(Math.abs((tc.avgCurrentPrice - tc.avgBuyPrice) / tc.avgBuyPrice * 100))} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
+      case 'retainQty':      return <td key={col} data-value={col} className={`px-4 py-2 text-right font-medium text-slate-600 ${sz}`}>{formatHoldingQuantity(tc.retainQty)}</td>;
+      case 'sellableQty':    return <td key={col} data-value={col} className={`px-4 py-2 text-right font-medium text-slate-600 ${sz}`}>{formatHoldingQuantity(tc.sellableQty)}</td>;
       // Not a signed gain: the colour here means covered vs not covered, and the
       // uncovered case deliberately shows a positive percentage in red (how far
       // it still has to move). An arrow would read as direction and invert that.
-      case 'gainToSell':     return <td key={col} className="px-4 py-2 text-right">{tc.projectedGainPct !== null ? <span className={`font-bold ${sz} ${tc.isCovered ? 'text-emerald-700' : 'text-rose-600'}`}>{tc.isCovered ? '✓ Covered' : `+${fmt(tc.projectedGainPct)}%`}</span> : <span className="text-xs text-slate-400">No sellable</span>}</td>;
-      case 'targetPrice':    return <td key={col} className="px-4 py-2 text-right">{tc.targetPrice !== null && !tc.isCovered ? <span className={`font-bold text-[#24436d] ${sz}`}>{fmtCurrency(tc.targetPrice)}</span> : <span className="text-xs text-slate-300">—</span>}</td>;
-      default: return <td key={col} />;
+      case 'gainToSell':     return <td key={col} data-value={col} className="px-4 py-2 text-right">{tc.projectedGainPct !== null ? <span className={`font-bold ${sz} ${tc.isCovered ? 'text-emerald-700' : 'text-rose-600'}`}>{tc.isCovered ? '✓ Covered' : `+${formatHoldingPercent(tc.projectedGainPct)}`}</span> : <span className="text-xs text-slate-400">No sellable</span>}</td>;
+      case 'targetPrice':    return <td key={col} data-value={col} className="px-4 py-2 text-right">{tc.targetPrice !== null && !tc.isCovered ? <span className={`font-bold text-[#24436d] ${sz}`}>{formatHoldingPrice(tc.targetPrice)}</span> : <span className="text-xs text-slate-300">—</span>}</td>;
+      default: return <td key={col} data-value={col} />;
     }
   };
 
   const renderL2 = (col: ColKey, bg: BrokerageGroup) => {
     switch (col) {
-      case 'ticker': return <td key={col} className="px-4 py-2"><span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${bg.brokerage.toLowerCase().includes('robinhood') ? 'bg-[#2458d3] text-white' : bg.brokerage.toLowerCase().includes('schwab') ? 'bg-[#71829b] text-white' : 'bg-[#E5E5EA] text-[#71829b]'}`}>{bg.brokerage}</span></td>;
-      case 'washSale':      return <td key={col} />;
-      case 'termType':      return <td key={col} className="px-4 py-2">{termBadge(bg.termType)}</td>;
-      case 'totalQty':      return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{fmt(bg.totalQty, 0)}</td>;
-      case 'avgBuyPrice':   return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(bg.avgBuyPrice)}</td>;
-      case 'strikePrice':   return <td key={col} />;
-      case 'totalValue':    return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{fmtCurrency(bg.totalValue)}</td>;
-      case 'avgCurrentPrice':return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(bg.avgCurrentPrice)}</td>;
-      case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{fmtCurrency(bg.marketValue)}</td>;
+      case 'ticker': return <td key={col} data-value={col} className="px-4 py-2"><BrokerageValue name={bg.brokerage} /></td>;
+      case 'washSale':      return <td key={col} data-value={col} />;
+      case 'termType':      return <td key={col} data-value={col} className="px-4 py-2">{termBadge(bg.termType)}</td>;
+      case 'totalQty':      return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{formatHoldingQuantity(bg.totalQty)}</td>;
+      case 'avgBuyPrice':   return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{formatHoldingPrice(bg.avgBuyPrice)}</td>;
+      case 'strikePrice':   return <td key={col} data-value={col} />;
+      case 'totalValue':    return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{formatHoldingAmount(bg.totalValue)}</td>;
+      case 'avgCurrentPrice':return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{formatHoldingPrice(bg.avgCurrentPrice)}</td>;
+      case 'marketValue':   return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{formatHoldingAmount(bg.marketValue)}</td>;
       case 'dailyGain': {
-        if (bg.dailyPrevMV === 0) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
+        if (bg.dailyPrevMV === 0) return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
         const dg = bg.dailyGain;
-        return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dg} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
+        return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dg} format={v => formatHoldingAmount(v)} arrowClass="w-2.5 h-2.5" /></td>;
       }
       case 'dailyPct': {
         const dp2 = bg.dailyPrevMV > 0 ? (bg.dailyGain / bg.dailyPrevMV) * 100 : null;
-        return <td key={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 == null ? 'text-slate-300' : ''}`}>{dp2 != null ? <SignedValue value={dp2} format={() => `${Math.abs(dp2).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : '—'}</td>;
+        return <td key={col} data-value={col} className={`px-4 py-2 text-right text-[11px] font-bold ${dp2 == null ? 'text-slate-300' : ''}`}>{dp2 != null ? <SignedValue value={dp2} format={() => formatHoldingPercent(Math.abs(dp2))} arrowClass="w-2.5 h-2.5" /> : '—'}</td>;
       }
-      case 'unrealizedGain':return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={bg.unrealizedGain} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
-      case 'unrealizedPct': return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold">{bg.totalValue > 0 ? <SignedValue value={bg.unrealizedGain} format={() => `${Math.abs(bg.unrealizedGain / bg.totalValue * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
-      case 'retainQty':     return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmt(bg.retainQty, 0)}</td>;
-      case 'sellableQty':   return <td key={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{fmt(bg.sellableQty, 0)}</td>;
-      case 'gainToSell':    return <td key={col} />;
-      case 'targetPrice':   return <td key={col} />;
-      default: return <td key={col} />;
+      case 'unrealizedGain':return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={bg.unrealizedGain} format={v => formatHoldingAmount(v)} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct': return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-bold">{bg.totalValue > 0 ? <SignedValue value={bg.unrealizedGain} format={() => formatHoldingPercent(Math.abs(bg.unrealizedGain / bg.totalValue * 100))} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
+      case 'retainQty':     return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{formatHoldingQuantity(bg.retainQty)}</td>;
+      case 'sellableQty':   return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-semibold text-slate-700">{formatHoldingQuantity(bg.sellableQty)}</td>;
+      case 'gainToSell':    return <td key={col} data-value={col} />;
+      case 'targetPrice':   return <td key={col} data-value={col} />;
+      default: return <td key={col} data-value={col} />;
     }
   };
 
   const renderL3Header = (col: ColKey) => {
-    const s = (label: string, align: 'left'|'right' = 'right') => <td key={col} className={`px-4 py-1.5 text-[9px] font-black text-[#71829b] uppercase tracking-widest whitespace-nowrap text-${align}`}>{label}</td>;
+    const s = (label: string, align: 'left'|'right' = 'right') => <td key={col} data-value={col} className={`px-4 py-1.5 text-[9px] font-black text-[#71829b] uppercase tracking-widest whitespace-nowrap text-${align}`}>{label}</td>;
     switch (col) {
       case 'ticker':        return s('Buy Date', 'left');
       case 'washSale':      return s('Wash Sale', 'left');
       case 'termType':      return s('Tax term', 'left');
-      case 'totalQty':      return s('Qty');
+      case 'totalQty':      return s('Contracts');
       case 'avgBuyPrice':   return s('Avg. premium');
       case 'strikePrice':   return s('Strike');
       case 'totalValue':    return s('Cost basis');
@@ -573,43 +562,43 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       case 'unrealizedPct': return s('Unrealized %');
       case 'retainQty':     return s('Retain');
       case 'sellableQty':   return s('Sellable');
-      case 'gainToSell':    return <td key={col} />;
-      case 'targetPrice':   return <td key={col} />;
-      default: return <td key={col} />;
+      case 'gainToSell':    return <td key={col} data-value={col} />;
+      case 'targetPrice':   return <td key={col} data-value={col} />;
+      default: return <td key={col} data-value={col} />;
     }
   };
 
   const renderL3 = (col: ColKey, pos: OptionsPosition, posTotalValue: number, posMarketValue: number, posUnrealized: number) => {
     switch (col) {
-      case 'ticker': return <td key={col} className="px-4 py-2 text-[11px] text-slate-500 font-bold whitespace-nowrap">{new Date(pos.buyDate).toLocaleDateString('en-CA')}</td>;
-      case 'washSale': return <td key={col} className="px-4 py-2">{(() => { const key = `${pos.ticker}::${pos.brokerage}::${pos.buyDate.slice(0,10)}`; const ws = washSaleByPosition[key]; if (ws?.daysToGo > 0) return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" /><div><p className="text-[9px] font-black text-rose-600">Active</p><p className="text-[9px] text-rose-400">{ws.daysToGo}d to go</p></div></div>; if (ws?.atRisk && ws.riskDaysAgo <= 30) return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" /><div><p className="text-[9px] font-black text-amber-600">Caution</p><p className="text-[9px] text-amber-400">new buy · {ws.riskDaysAgo}d ago</p></div></div>; return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" /><p className="text-[9px] font-medium text-emerald-600">Clear</p></div>; })()}</td>;
-      case 'termType':      return <td key={col} className="px-4 py-2">{termBadge(pos.isLongTerm ? 'Long' : 'Short')}</td>;
-      case 'totalQty':      return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{fmt(pos.quantity, 0)}</td>;
-      case 'avgBuyPrice':   return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(pos.buyPrice)}</td>;
+      case 'ticker': return <td key={col} data-value={col} className="px-4 py-2 text-[11px] text-slate-500 font-bold whitespace-nowrap">{formatHoldingDate(pos.buyDate)}</td>;
+      case 'washSale': return <td key={col} data-value={col} className="px-4 py-2">{(() => { const key = `${pos.ticker}::${pos.brokerage}::${pos.buyDate.slice(0,10)}`; const ws = washSaleByPosition[key]; if (ws?.daysToGo > 0) return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" /><div><p className="text-[9px] font-black text-rose-600">Active</p><p className="text-[9px] text-rose-400">{ws.daysToGo}d to go</p></div></div>; if (ws?.atRisk && ws.riskDaysAgo <= 30) return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" /><div><p className="text-[9px] font-black text-amber-600">Caution</p><p className="text-[9px] text-amber-400">new buy · {ws.riskDaysAgo}d ago</p></div></div>; return <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" /><p className="text-[9px] font-medium text-emerald-600">Clear</p></div>; })()}</td>;
+      case 'termType':      return <td key={col} data-value={col} className="px-4 py-2">{termBadge(pos.isLongTerm ? 'Long' : 'Short')}</td>;
+      case 'totalQty':      return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{formatHoldingQuantity(pos.quantity)}</td>;
+      case 'avgBuyPrice':   return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{formatHoldingPrice(pos.buyPrice)}</td>;
       case 'strikePrice': {
         const strike = parseOCCStrike(pos.option_symbol);
-        return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{strike != null ? `$${fmt(strike)}` : <span className="text-slate-300">—</span>}</td>;
+        return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-700">{strike != null ? formatHoldingPrice(strike) : <span className="text-slate-300">—</span>}</td>;
       }
-      case 'totalValue':    return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(posTotalValue)}</td>;
-      case 'avgCurrentPrice':return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(pos.currentPrice)}</td>;
-      case 'marketValue':   return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{fmtCurrency(posMarketValue)}</td>;
+      case 'totalValue':    return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{formatHoldingAmount(posTotalValue)}</td>;
+      case 'avgCurrentPrice':return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{formatHoldingPrice(pos.currentPrice)}</td>;
+      case 'marketValue':   return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] text-slate-500">{formatHoldingAmount(posMarketValue)}</td>;
       case 'dailyGain': {
-        if (pos.prevClose == null) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
+        if (pos.prevClose == null) return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
         const dg = (pos.currentPrice - pos.prevClose) * pos.quantity * 100;
-        return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dg} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
+        return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dg} format={v => formatHoldingAmount(v)} arrowClass="w-2.5 h-2.5" /></td>;
       }
       case 'dailyPct': {
-        if (pos.prevClose == null || pos.prevClose === 0) return <td key={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
+        if (pos.prevClose == null || pos.prevClose === 0) return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] text-slate-300">—</td>;
         const dp2 = ((pos.currentPrice - pos.prevClose) / pos.prevClose) * 100;
-        return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dp2} format={() => `${Math.abs(dp2).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /></td>;
+        return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-bold"><SignedValue value={dp2} format={() => formatHoldingPercent(Math.abs(dp2))} arrowClass="w-2.5 h-2.5" /></td>;
       }
-      case 'unrealizedGain':return <td key={col} className="px-4 py-2 text-right text-[11px] font-black"><SignedValue value={posUnrealized} format={v => fmtCurrency(v)} arrowClass="w-2.5 h-2.5" /></td>;
-      case 'unrealizedPct': return <td key={col} className="px-4 py-2 text-right text-[11px] font-bold">{pos.buyPrice > 0 ? <SignedValue value={posUnrealized} format={() => `${Math.abs((pos.currentPrice - pos.buyPrice) / pos.buyPrice * 100).toFixed(2)}%`} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
-      case 'retainQty': return <td key={col} className="px-4 py-2"><div className="flex justify-end"><input type="number" min={0} max={pos.quantity} step={1} value={pendingRetain[pos.id] ?? pos.retainQuantity} onChange={e => handleRetainChange(pos.id, e.target.value)} onBlur={() => handleRetainSave(pos)} onKeyDown={e => e.key === 'Enter' && handleRetainSave(pos)} className="w-20 px-2 py-0.5 text-right border border-[#e7ecf3] rounded text-[11px] focus:outline-none focus:ring-2 focus:ring-[#2458d3] bg-[#edf3fc]/20 font-semibold text-[#24436d] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div></td>;
-      case 'sellableQty':   return <td key={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-600">{saving === pos.id ? <span className="text-slate-400">...</span> : fmt(pos.sellableQuantity, 0)}</td>;
-      case 'gainToSell':    return <td key={col} />;
-      case 'targetPrice':   return <td key={col} />;
-      default: return <td key={col} />;
+      case 'unrealizedGain':return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-black"><SignedValue value={posUnrealized} format={v => formatHoldingAmount(v)} arrowClass="w-2.5 h-2.5" /></td>;
+      case 'unrealizedPct': return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-bold">{pos.buyPrice > 0 ? <SignedValue value={posUnrealized} format={() => formatHoldingPercent(Math.abs((pos.currentPrice - pos.buyPrice) / pos.buyPrice * 100))} arrowClass="w-2.5 h-2.5" /> : <span className="text-slate-300">—</span>}</td>;
+      case 'retainQty': return <td key={col} data-value={col} className="px-4 py-2"><div className="flex justify-end"><input type="number" min={0} max={pos.quantity} step={1} value={pendingRetain[pos.id] ?? pos.retainQuantity} onChange={e => handleRetainChange(pos.id, e.target.value)} onBlur={() => handleRetainSave(pos)} onKeyDown={e => e.key === 'Enter' && handleRetainSave(pos)} className="w-20 px-2 py-0.5 text-right border border-[#e7ecf3] rounded text-[11px] focus:outline-none focus:ring-2 focus:ring-[#2458d3] bg-[#edf3fc]/20 font-semibold text-[#24436d] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div></td>;
+      case 'sellableQty':   return <td key={col} data-value={col} className="px-4 py-2 text-right text-[11px] font-medium text-slate-600">{saving === pos.id ? <span className="text-slate-400">...</span> : formatHoldingQuantity(pos.sellableQuantity)}</td>;
+      case 'gainToSell':    return <td key={col} data-value={col} />;
+      case 'targetPrice':   return <td key={col} data-value={col} />;
+      default: return <td key={col} data-value={col} />;
     }
   };
 
@@ -631,7 +620,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       {filteredPositions.length ? <div className={!numbersVisible ? 'blur-sm select-none pointer-events-none' : ''}>
       {/* Ticker View */}
       {viewMode === 'ticker' && <div className="overflow-x-auto rounded border border-[#e7ecf3] bg-white shadow-sm overflow-hidden">
-        <table className="w-full text-left">
+        <table className="holdings-data-table w-full text-left">
           <thead>
             <tr className="bg-slate-50/50 border-b border-slate-200">
               <th className="px-4 py-2 w-8">
@@ -731,7 +720,7 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
       {/* Brokerage View */}
       {viewMode === 'brokerage' && (
         <div className="overflow-x-auto rounded border border-[#e7ecf3] bg-white shadow-sm overflow-hidden">
-          <table className="w-full text-left">
+          <table className="holdings-data-table w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-200">
                 <th className="px-4 py-2 w-8">
@@ -751,7 +740,6 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
             <tbody>
               {brokerageViewCalcs.map(bvRow => {
                 const isL1 = expandedBV_L1.has(bvRow.brokerage);
-                const fmtVal = (v: number) => `$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 return (
                   <React.Fragment key={bvRow.brokerage}>
                     {/* L1 — Brokerage */}
@@ -762,11 +750,11 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                         </button>
                       </td>
                       {columnOrder.map(c => {
-                        if (c === 'ticker') return <td key={c} className="px-4 py-2"><span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight ${brokerageBadgeCls(bvRow.brokerage)}`}>{bvRow.brokerage}</span></td>;
-                        if (c === 'totalValue') return <td key={c} className="px-4 py-2 text-right font-black text-slate-900 text-sm">{fmtVal(bvRow.totalValue)}</td>;
-                        if (c === 'marketValue') return <td key={c} className="px-4 py-2 text-right font-black text-slate-900 text-sm">{fmtVal(bvRow.marketValue)}</td>;
-                        if (c === 'unrealizedGain') return <td key={c} className="px-4 py-2 text-right text-sm font-black"><SignedValue value={bvRow.unrealizedGain} format={v => fmtVal(v)} arrowClass="w-2.5 h-2.5" /></td>;
-                        return <td key={c} />;
+                        if (c === 'ticker') return <td key={c} data-value={c} className="px-4 py-2"><BrokerageValue name={bvRow.brokerage} /></td>;
+                        if (c === 'totalValue') return <td key={c} data-value={c} className="px-4 py-2 text-right font-black text-slate-900 text-sm">{formatHoldingAmount(bvRow.totalValue)}</td>;
+                        if (c === 'marketValue') return <td key={c} data-value={c} className="px-4 py-2 text-right font-black text-slate-900 text-sm">{formatHoldingAmount(bvRow.marketValue)}</td>;
+                        if (c === 'unrealizedGain') return <td key={c} data-value={c} className="px-4 py-2 text-right text-sm font-black"><SignedValue value={bvRow.unrealizedGain} format={v => formatHoldingAmount(v)} arrowClass="w-2.5 h-2.5" /></td>;
+                        return <td key={c} data-value={c} />;
                       })}
                     </tr>
 
@@ -812,11 +800,11 @@ const OptionsView: React.FC<OptionsViewProps> = ({ selectedBrokerages = [], sele
                                 </button>
                               </td>
                               {columnOrder.map(c => {
-                                if (c === 'ticker') return <td key={c} className="px-4 py-2"><span className="text-sm font-semibold text-slate-700">{displayName ?? <span className="text-slate-400 italic">Default</span>}</span></td>;
-                                if (c === 'totalValue') return <td key={c} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">{fmtVal(acct.totalValue)}</td>;
-                                if (c === 'marketValue') return <td key={c} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">{fmtVal(acct.marketValue)}</td>;
-                                if (c === 'unrealizedGain') return <td key={c} className="px-4 py-2 text-right text-xs font-bold"><SignedValue value={acct.unrealizedGain} format={v => fmtVal(v)} arrowClass="w-2.5 h-2.5" /></td>;
-                                return <td key={c} />;
+                                if (c === 'ticker') return <td key={c} data-value={c} className="px-4 py-2"><span className="text-sm font-semibold text-slate-700">{displayName ?? <span className="text-slate-400 italic">Default</span>}</span></td>;
+                                if (c === 'totalValue') return <td key={c} data-value={c} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">{formatHoldingAmount(acct.totalValue)}</td>;
+                                if (c === 'marketValue') return <td key={c} data-value={c} className="px-4 py-2 text-right text-xs font-semibold text-slate-700">{formatHoldingAmount(acct.marketValue)}</td>;
+                                if (c === 'unrealizedGain') return <td key={c} data-value={c} className="px-4 py-2 text-right text-xs font-bold"><SignedValue value={acct.unrealizedGain} format={v => formatHoldingAmount(v)} arrowClass="w-2.5 h-2.5" /></td>;
+                                return <td key={c} data-value={c} />;
                               })}
                             </tr>
                             {isL2 && renderTickers(acct, l2Key)}

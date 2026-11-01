@@ -6,9 +6,11 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import MobileTabBar from './components/MobileTabBar';
 import LoginPage from './components/LoginPage';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchBuyingPowerCached, fetchAnalystData, fetchAnalystDataCached, fetchAccounts, refreshPrices } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchBuyingPowerCached, fetchAnalystData, fetchAnalystDataCached, fetchAccounts, refreshPrices, logoutAccount } from './services/apiService';
 import { BrokerageAccount } from './types';
 import TickerTypeContext from './contexts/TickerTypeContext';
+import useFinancialVisibility from './hooks/useFinancialVisibility';
+import FinancialVisibilityNotice from './components/FinancialVisibilityNotice';
 
 const App: React.FC = () => {
   // The session lives in an HttpOnly cookie — nothing for this component to
@@ -28,14 +30,8 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    // Previously this only cleared client state and never told the server —
-    // the DEK session stayed alive server-side for its full 24h TTL
-    // regardless of "logging out". This is the actual fix.
-    try {
-      await fetch('/api/v1/auth/logout', { method: 'POST' });
-    } finally {
-      setIsAuthenticated(false);
-    }
+    await logoutAccount();
+    setIsAuthenticated(false);
   };
 
   if (validating) return null;
@@ -43,7 +39,7 @@ const App: React.FC = () => {
   return <AuthenticatedApp onLogout={handleLogout} />;
 };
 
-const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
+const AuthenticatedApp: React.FC<{ onLogout: () => void | Promise<void> }> = ({ onLogout }) => {
   const [accounts, setAccounts] = useState<BrokerageAccount[]>([]);
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
   const [cashBalance, setCashBalance] = useState<number>(0);
@@ -52,7 +48,8 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [realizedGains, setRealizedGains] = useState<RealizedGain[]>([]);
   const [unrealizedGains, setUnrealizedGains] = useState<UnrealizedLot[]>([]);
   const [loading, setLoading] = useState(false);
-  const [numbersVisible, setNumbersVisible] = useState(true);
+  const privacy = useFinancialVisibility();
+  const numbersVisible = privacy.visible;
   // Incremented by an explicit refresh so the insights panel knows to
   // regenerate. A deliberate user action, unlike a page load, so it is a safe
   // thing to spend on — and the backend cooldown still bounds repeat clicks.
@@ -367,17 +364,17 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar activeTab={activeTab} stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} numbersVisible={numbersVisible} onToggleNumbers={() => setNumbersVisible(v => !v)} />
+        <Navbar activeTab={activeTab} stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} numbersVisible={numbersVisible} privacy={privacy} />
 
         {/* px/pt rather than the p- shorthand: `md:p-8` resets every side, which
             would override .pb-tabbar's clearance between md and lg — exactly the
             range where the bar is still visible. See .pb-tabbar in index.html. */}
         <main className="workspace-canvas flex-1 overflow-y-auto px-4 pt-4 md:px-8 md:pt-8 pb-tabbar">
+          <FinancialVisibilityNotice privacy={privacy} />
           <DashboardView
             activeTab={activeTab}
             setActiveTab={handleSetActiveTab}
             numbersVisible={numbersVisible}
-            onToggleNumbers={() => setNumbersVisible(v => !v)}
             holdings={holdings}
             transactions={transactions}
             realizedGains={realizedGains}

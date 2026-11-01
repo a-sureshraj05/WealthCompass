@@ -4,6 +4,7 @@ import PortfolioOverview from './PortfolioOverview';
 import HoldingsView from '../HoldingsView';
 import ImportDataView from '../ImportDataView';
 import AIInsights from './AIInsights';
+import PreviewPerformance from '../../preview/PreviewPerformance';
 import TransactionsView from '../TransactionsView';
 import GainsLossesView from '../GainsLossesView';
 import OptionsView from '../OptionsView';
@@ -33,7 +34,6 @@ interface Props {
   onProcessGains: () => void;
   setLoading: (l: boolean) => void;
   numbersVisible?: boolean;
-  onToggleNumbers?: () => void;
   selectedBrokerages: string[];
   setSelectedBrokerages: (v: string[]) => void;
   selectedAssetTypes: string[];
@@ -68,7 +68,6 @@ const DashboardView: React.FC<Props> = ({
   onProcessGains,
   setLoading,
   numbersVisible = true,
-  onToggleNumbers,
   selectedBrokerages,
   setSelectedBrokerages,
   selectedAssetTypes,
@@ -164,6 +163,7 @@ const DashboardView: React.FC<Props> = ({
     <div className="space-y-6">
       <PortfolioOverview
         preview={preview}
+        performance={import.meta.env.DEV && preview ? <PreviewPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} /> : undefined}
         insights={<AIInsights holdings={holdings} cashByBrokerage={buyingPower} refreshNonce={refreshNonce}
           preview={preview} numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0}
           onOpenHoldings={ticker => { setSelectedBrokerages([]); setSelectedTickers(ticker ? [ticker] : []); setSelectedAssetTypes([]); setSelectedTerms([]); setActiveTab('holdings'); }}
@@ -177,6 +177,10 @@ const DashboardView: React.FC<Props> = ({
         onConnect={() => setActiveTab('importData')}
         onOpenHoldings={ticker => {
           setSelectedTickers(ticker ? [ticker] : []);
+          setSelectedAssetTypes([]);
+          setSelectedTerms([]);
+          setHoldingsSection('equity');
+          setAutoExpand(null);
           setActiveTab('holdings');
         }}
       />

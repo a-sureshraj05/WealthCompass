@@ -1,10 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, PieChart, Pie } from 'recharts';
 import { StockHolding } from '../../types';
 import { formatCurrency } from '../../utils/finance';
-import { cashBrokerage, portfolioModel } from './portfolioModel';
+import { cashBrokerage, portfolioModel, rankContributors } from './portfolioModel';
+import ContributorTable from './ContributorTable';
 import './portfolio-overview.css';
 import TickerLogo from '../TickerLogo';
+import BrokerageMark from '../BrokerageMark';
 
 interface Props {
   holdings: StockHolding[];
@@ -17,6 +19,7 @@ interface Props {
   onConnect: () => void;
   preview?: boolean;
   insights?: React.ReactNode;
+  performance?: React.ReactNode;
 }
 
 const money = formatCurrency;
@@ -37,17 +40,22 @@ export function Icon({ name, size = 18 }: { name: 'arrow' | 'refresh' | 'plus' |
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>;
 }
 
-const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbersVisible = true, selectedBrokerages = [], onBrokeragesChange, onOpenHoldings, onRefresh, onConnect, preview = false, insights }) => {
+const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbersVisible = true, selectedBrokerages = [], onBrokeragesChange, onOpenHoldings, onRefresh, onConnect, preview = false, insights, performance }) => {
   const [unit, setUnit] = useState<'dollars' | 'percent'>('dollars');
+  const [showAllContributors, setShowAllContributors] = useState(false);
+  const contributorsId = useId();
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState('');
   const model = useMemo(() => portfolioModel(holdings, cashByBrokerage, selectedBrokerages), [holdings, cashByBrokerage, selectedBrokerages]);
   const brokers = [...new Set([...holdings.map(h => h.brokerage), ...Object.keys(cashByBrokerage).map(cashBrokerage)])].sort();
   const mask = '••••••';
   const display = (value: number, isSigned = false) => numbersVisible ? (isSigned ? signed(value) : money(value)) : mask;
-  const chartData = model.contributors.slice(0, 7).map(d => ({ ...d, amount: unit === 'dollars' ? d.change : d.percent }));
+  const ranked = useMemo(() => rankContributors(model.contributors, unit), [model.contributors, unit]);
+  const chartData = ranked.slice(0, 10).map(d => ({ ...d, amount: unit === 'dollars' ? d.change : d.percent }));
+  const expandedContributors = showAllContributors && ranked.length > 10;
   const maxChange = Math.max(...chartData.map(d => Math.abs(d.amount)), 1) * 1.18;
   const dailyAvailable = model.contributors.length > 0;
+  const contributorSummary = !dailyAvailable ? '—' : !numbersVisible ? mask : unit === 'percent' ? percent(model.dayPercent) : signed(model.dayChange);
   const refresh = async () => {
     setRefreshing(true);
     setRefreshError('');
@@ -83,14 +91,19 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
     </section>
 
     {insights}
+    {performance}
 
     <div className="overview-chart-grid">
       <section className="overview-panel daily-panel">
         <div className="panel-heading"><div><p className="overview-eyebrow">WHAT MOVED YOUR PORTFOLIO</p><h2>Today's contributors</h2></div><div className="chart-unit" aria-label="Chart units"><button aria-pressed={unit === 'dollars'} className={unit === 'dollars' ? 'active' : ''} onClick={() => setUnit('dollars')}>$</button><button aria-pressed={unit === 'percent'} className={unit === 'percent' ? 'active' : ''} onClick={() => setUnit('percent')}>%</button></div></div>
-        <div className="chart-summary"><strong className={!numbersVisible || !dailyAvailable ? '' : model.dayChange >= 0 ? 'positive' : 'negative'}>{dailyAvailable ? display(model.dayChange, true) : '—'}</strong><span>equity change across {model.contributors.length} holdings</span></div>
-        <div className="contributors-chart">
-          {!numbersVisible ? <div className="chart-empty"><Icon name="grid" size={26} /><p>Portfolio figures are hidden</p><span>Use the visibility control to reveal charts.</span></div> : !chartData.length ? <div className="chart-empty"><Icon name="trend" size={28} /><p>No daily comparison available</p><span>Holdings need a current price and previous close.</span></div> : <>
-            <ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 20, bottom: 0, left: 4 }} accessibilityLayer>
+        <div className="chart-summary"><strong aria-live="polite" className={!numbersVisible || !dailyAvailable ? '' : model.dayChange >= 0 ? 'positive' : 'negative'}>{contributorSummary}</strong><span>equity change across {model.contributors.length} holdings</span></div>
+        {numbersVisible && dailyAvailable && <div className="contributors-controls">
+          <p className="overview-chart-context" aria-live="polite">Showing {expandedContributors ? ranked.length : chartData.length} of {ranked.length} holdings · {expandedContributors ? 'use column headers to sort' : `largest ${unit === 'dollars' ? 'dollar changes' : 'percentage moves'} first`}</p>
+          {ranked.length > 10 && <button type="button" aria-expanded={expandedContributors} aria-controls={contributorsId} onClick={() => setShowAllContributors(value => !value)}>{expandedContributors ? 'Show top 10' : `View all ${ranked.length} contributors`}</button>}
+        </div>}
+        <div className="contributors-chart" id={contributorsId}>
+          {!numbersVisible ? <div className="chart-empty"><Icon name="grid" size={26} /><p>Portfolio figures are hidden</p><span>Use the profile visibility control to reveal charts.</span></div> : !chartData.length ? <div className="chart-empty"><Icon name="trend" size={28} /><p>No daily comparison available</p><span>Holdings need a current price and previous close.</span></div> : expandedContributors ? <ContributorTable key={unit} contributors={ranked} unit={unit} onOpenHolding={onOpenHoldings} /> : <>
+            <div className="contributors-chart-canvas" style={{ height: Math.max(242, chartData.length * 28 + 38) }}><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 20, bottom: 0, left: 4 }} accessibilityLayer>
               <CartesianGrid horizontal={false} stroke="#e9eef5" strokeDasharray="3 5" />
               <XAxis type="number" domain={[-maxChange, maxChange]} tickFormatter={n => unit === 'dollars' ? compact(n) : `${n.toFixed(1)}%`} axisLine={false} tickLine={false} tick={{ fill: '#8692a5', fontSize: 11 }} ticks={[-maxChange / 1.18, 0, maxChange / 1.18]} />
               <YAxis type="category" dataKey="ticker" width={56} axisLine={false} tickLine={false} tick={{ fill: '#44536b', fontSize: 12, fontWeight: 600 }} />
@@ -103,7 +116,7 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
               <Bar dataKey="amount" barSize={19} radius={4} onClick={(data: any) => onOpenHoldings(data.ticker)} style={{ cursor: 'pointer' }} isAnimationActive={false}>
                 {chartData.map(d => <Cell key={d.ticker} fill={d.change >= 0 ? '#259b86' : '#dd7a83'} />)}
               </Bar>
-            </BarChart></ResponsiveContainer>
+            </BarChart></ResponsiveContainer></div>
             <details className="chart-accessible"><summary>View chart data</summary><ul>{chartData.map(d => <li key={d.ticker}><button onClick={() => onOpenHoldings(d.ticker)}>{d.ticker}<span>{unit === 'dollars' ? signed(d.change) : percent(d.percent)}</span></button></li>)}</ul></details>
           </>}
         </div>
@@ -113,8 +126,9 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
       <section className="overview-panel allocation-panel">
         <div className="panel-heading"><div><p className="overview-eyebrow">HOW YOU'RE INVESTED</p><h2>Holdings allocation</h2></div><Icon name="grid" size={18} /></div>
         {numbersVisible && model.allocation.length > 0 ? <>
-          <div className="allocation-donut"><ResponsiveContainer width="100%" height="100%"><PieChart accessibilityLayer><Pie data={model.allocation} dataKey="value" nameKey="name" innerRadius="72%" outerRadius="96%" paddingAngle={3} cornerRadius={4} stroke="none" isAnimationActive={false} onClick={(data: any) => { if (data.name !== 'Other') onOpenHoldings(data.name); }} style={{ cursor: 'pointer' }}>{model.allocation.map(d => <Cell key={d.name} fill={d.color} />)}</Pie><Tooltip formatter={(v: number) => money(v)} contentStyle={{ borderRadius: 12, border: '1px solid #e7ecf3', fontSize: 12 }} /></PieChart></ResponsiveContainer><div className="donut-center"><strong>{model.tickers.length}</strong><span>holdings</span></div></div>
-          <div className="allocation-legend">{model.allocation.map(d => <button key={d.name} onClick={() => onOpenHoldings(d.name === 'Other' ? undefined : d.name)}><span className="legend-dot" style={{ background: d.color }} /><span>{d.name}</span><strong>{(d.value / model.allocationTotal * 100).toFixed(1)}%</strong></button>)}</div>
+          <div className="allocation-donut"><ResponsiveContainer width="100%" height="100%"><PieChart accessibilityLayer><Pie data={model.allocation} dataKey="value" nameKey="name" innerRadius="72%" outerRadius="96%" paddingAngle={model.allocation.length > 6 ? 1.5 : 3} cornerRadius={4} stroke="none" isAnimationActive={false} onClick={(data: any) => onOpenHoldings(data.name === 'Other' ? undefined : data.name)} style={{ cursor: 'pointer' }}>{model.allocation.map(d => <Cell key={d.name} fill={d.color} />)}</Pie><Tooltip formatter={(v: number, name: string) => [money(v), name === 'Other' ? `Other · ${model.allocationOtherCount} holdings` : name]} wrapperStyle={{ zIndex: 5 }} contentStyle={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #d9e3ef', boxShadow: '0 5px 18px #19335918', fontSize: 12 }} /></PieChart></ResponsiveContainer><div className="donut-center"><strong>{model.tickers.length}</strong><span>holdings</span></div></div>
+          <div className="allocation-legend">{model.allocation.map(d => <button key={d.name} onClick={() => onOpenHoldings(d.name === 'Other' ? undefined : d.name)}><span className="legend-dot" style={{ background: d.color }} /><span>{d.name === 'Other' ? `Other · ${model.allocationOtherCount}` : d.name}</span><strong>{(d.value / model.allocationTotal * 100).toFixed(1)}%</strong></button>)}</div>
+          {model.allocationOtherCount > 0 && <div className="allocation-group-note"><p>Other combines {model.allocationOtherCount} smaller holdings. Each holding above 20% is shown separately.</p><button type="button" onClick={() => onOpenHoldings()}>View full breakdown →</button></div>}
         </> : <div className="chart-empty allocation-empty"><Icon name="grid" size={26} /><p>{numbersVisible ? 'No positive holdings to display' : 'Allocation is hidden'}</p><span>{numbersVisible ? 'Connect a brokerage to get started.' : 'Reveal your figures to see the breakdown.'}</span></div>}
         <p className="allocation-note">Positive invested assets · cash excluded{model.hasShorts ? ' · short positions excluded' : ''}</p>
       </section>
@@ -122,7 +136,7 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
 
     <div className="overview-detail-grid">
       <section className="overview-panel overview-holdings">
-        <div className="panel-heading"><div><p className="overview-eyebrow">THE BUILDING BLOCKS</p><h2>Largest holdings</h2></div><button className="overview-text-button" onClick={() => onOpenHoldings()}>View all<Icon name="chevron" size={14} /></button></div>
+        <div className="panel-heading"><div><p className="overview-eyebrow">THE BUILDING BLOCKS</p><h2>Largest holdings</h2></div><button className="overview-text-button" onClick={() => onOpenHoldings()}>View all{model.tickers.length > 5 ? ` ${model.tickers.length}` : ''}<Icon name="chevron" size={14} /></button></div>
         {model.tickers.length ? <div className="overview-table-wrap"><table className="overview-table"><thead><tr><th>Asset</th><th>Market value</th><th>Unrealized P&amp;L</th><th className="weight-column">Weight</th><th><span className="sr-only">Open holding</span></th></tr></thead><tbody>{model.tickers.slice(0, 5).map(t => {
           const gain = t.value - t.cost;
           return <tr key={t.ticker}><td><button className="holding-identity" onClick={() => onOpenHoldings(t.ticker)}><TickerLogo ticker={t.ticker} size={31} assetType={holdings.find(h => h.ticker === t.ticker)?.assetType} /><span><strong>{t.ticker}</strong><small>Across selected brokerages</small></span></button></td><td>{display(t.value)}</td><td className={!numbersVisible ? '' : gain >= 0 ? 'positive' : 'negative'}>{display(gain, true)}</td><td className="weight-column">{numbersVisible && model.allocationTotal > 0 ? `${(Math.max(t.value, 0) / model.allocationTotal * 100).toFixed(1)}%` : numbersVisible ? '—' : mask}</td><td><button className="holding-open" aria-label={`Open ${t.ticker} holdings`} onClick={() => onOpenHoldings(t.ticker)}><Icon name="chevron" size={15} /></button></td></tr>;
@@ -131,9 +145,9 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
 
       <section className="overview-panel brokerage-panel">
         <div className="panel-heading"><div><p className="overview-eyebrow">CONNECTED ACCOUNTS</p><h2>By brokerage</h2></div><button className="broker-add" aria-label="Connect a brokerage" onClick={onConnect}><Icon name="plus" size={17} /></button></div>
-        <div className="broker-list">{model.brokers.map((b, i) => {
+        <div className="broker-list">{model.brokers.map(b => {
           const positiveAssets = Math.max(0, b.invested) + Math.max(0, b.cash);
-          return <div className="broker-item" key={b.name}><div className="broker-title"><span className={`broker-avatar ticker-tone-${i % 5}`}>{b.name.slice(0, 1)}</span><strong>{b.name}</strong><span>{display(b.invested + b.cash)}</span></div>{numbersVisible && <div className="broker-track" aria-hidden="true"><span style={{ width: `${positiveAssets > 0 ? Math.max(0, b.invested) / positiveAssets * 100 : 0}%` }} /><i style={{ width: `${positiveAssets > 0 ? Math.max(0, b.cash) / positiveAssets * 100 : 0}%` }} /></div>}<p>Invested {display(b.invested)}<span>{b.cash < 0 ? 'Margin' : 'Cash'} {display(b.cash)}</span></p></div>;
+          return <div className="broker-item" key={b.name}><div className="broker-title"><span className="broker-avatar"><BrokerageMark name={b.name} size={23} decorative /></span><strong>{b.name}</strong><span>{display(b.invested + b.cash)}</span></div>{numbersVisible && <div className="broker-track" aria-hidden="true"><span style={{ width: `${positiveAssets > 0 ? Math.max(0, b.invested) / positiveAssets * 100 : 0}%` }} /><i style={{ width: `${positiveAssets > 0 ? Math.max(0, b.cash) / positiveAssets * 100 : 0}%` }} /></div>}<p>Invested {display(b.invested)}<span>{b.cash < 0 ? 'Margin' : 'Cash'} {display(b.cash)}</span></p></div>;
         })}{!model.brokers.length && <p className="broker-empty">No brokerages in this view.</p>}</div>
         <div className="broker-legend"><span className="legend-dot" style={{ background: '#416bce' }} />Invested<span className="legend-dot" style={{ background: '#bfcee9' }} />Cash</div>
       </section>
