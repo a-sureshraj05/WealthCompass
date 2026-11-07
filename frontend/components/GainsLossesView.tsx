@@ -22,12 +22,13 @@ interface Props {
   setLtTaxRate: (value: number) => void;
   numbersVisible?: boolean;
   heatmapTarget?: HeatmapMode | null;
+  alternativeHeatmapViews?: boolean;
   onReturnOverview?: () => void;
 }
 
 const countLabel = (count: number, label: string) => `${count} ${label}${count === 1 ? '' : 's'}`;
 
-export default function GainsLossesView({ realizedGains, unrealizedGains, selectedBrokerages, setSelectedBrokerages, selectedTickers, setSelectedTickers, stTaxRate, setStTaxRate, ltTaxRate, setLtTaxRate, numbersVisible = true, heatmapTarget, onReturnOverview }: Props) {
+export default function GainsLossesView({ realizedGains, unrealizedGains, selectedBrokerages, setSelectedBrokerages, selectedTickers, setSelectedTickers, stTaxRate, setStTaxRate, ltTaxRate, setLtTaxRate, numbersVisible = true, heatmapTarget, onReturnOverview, alternativeHeatmapViews = false }: Props) {
   const [mode, setMode] = useState<GainsMode>('unrealized');
   const heatmap = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -72,16 +73,6 @@ export default function GainsLossesView({ realizedGains, unrealizedGains, select
       {mode === 'realized' && <SelectFilter label="Tax year" value={year} onChange={setYear} options={[{ value: 'all', label: 'All years' }, ...years.map(value => ({ value, label: value }))]} />}
     </FilterToolbar>
 
-    <GainsReconciliation rows={rows} mode={mode} numbersVisible={numbersVisible} />
-
-    {numbersVisible ? mode === 'unrealized' ? (
-      <div className="gains-heatmap-only" ref={heatmap} tabIndex={heatmapTarget ? -1 : undefined} aria-label={heatmapTarget ? 'Holdings heatmap opened from Overview' : undefined} style={{ scrollMarginTop: 20 }}>{heatmapTarget && <div className="gains-navigation-context">{onReturnOverview ? <button type="button" onClick={onReturnOverview}>← Portfolio Overview</button> : <span>From Portfolio Overview</span>}<span>Open positions · {selectedBrokerages.length ? selectedBrokerages.join(', ') : 'All brokerages'}</span></div>}<GainsHeatmap overall={holdingResults} daily={dailyResults} initialMode={heatmapTarget || 'overall'} /></div>
-    ) : (
-      <div className="gains-charts-grid"><RealizedGainsChart periods={periods} year={year} hasData={rows.length > 0} /><TaxTermBreakdown shortGain={summary.shortGain} longGain={summary.longGain} shortLots={summary.shortLots} longLots={summary.longLots} /></div>
-    ) : <div className="gains-privacy-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg><strong>Your portfolio figures are hidden</strong><p>Use your profile’s visibility setting to reveal charts and lot details.</p></div>}
-
-    <section className="gains-tax-assumptions" aria-label="Tax rate assumptions"><div><h2>Tax assumptions</h2><p>Shared with Gain to Sell in Holdings. These are adjustable inputs, not your actual tax liability.</p></div><div className="gains-tax-controls"><div className="gains-tax-impact"><span>{mode === 'unrealized' ? 'Illustrative tax if sold' : 'Illustrative tax estimate'}</span><strong>{money(summary.tax.total)}</strong><small>ST {money(summary.tax.shortTax)} · LT {money(summary.tax.longTax)}</small></div><div className="gains-rate-fields"><label><span><i className="gains-short-dot" />Short-term rate</span><div><input aria-label="Short-term tax rate percent" type="number" min="0" max="100" step="0.1" value={stTaxRate} onChange={event => setStTaxRate(clampTaxRate(Number(event.target.value)))} /><span>%</span></div></label><label><span><i className="gains-long-dot" />Long-term rate</span><div><input aria-label="Long-term tax rate percent" type="number" min="0" max="100" step="0.1" value={ltTaxRate} onChange={event => setLtTaxRate(clampTaxRate(Number(event.target.value)))} /><span>%</span></div></label></div></div><p className="gains-tax-method">The estimate uses the existing simplified offset between short- and long-term net gains, then applies these rates to remaining positive gains. It is based only on the filtered records shown here.</p></section>
-
     {numbersVisible && <section className="gains-detail-section"><header className="gains-detail-heading"><div><p className="gains-eyebrow">FROM THE TOTAL TO EACH TAX LOT</p><h2>Lot breakdown</h2><p>Expand a tax term, then a holding to inspect its individual lots.</p></div><span>{countLabel(rows.length, 'lot')} in this view</span></header>
       {!rows.length ? <div className="table-no-results"><strong>{source.length ? 'No lots match these filters' : mode === 'realized' ? 'No completed sales yet' : 'No open lots yet'}</strong><p>{source.length ? 'Remove a filter or choose a different year to see more results.' : 'Your results will appear after transactions are imported and processed.'}</p>{source.length > 0 && <button onClick={clear}>Clear all filters</button>}</div> : (['short', 'long'] as const).map(term => {
         const lots = rows.filter(row => row.term === term);
@@ -91,6 +82,17 @@ export default function GainsLossesView({ realizedGains, unrealizedGains, select
         return <section key={term} className="gains-term-section" data-term={term}><button className="gains-term-heading" aria-expanded={open} onClick={() => toggleTerm(term)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true" style={{ transform: open ? 'rotate(90deg)' : undefined }}><path d="m9 5 7 7-7 7" /></svg><div><strong><i className={term === 'short' ? 'gains-short-dot' : 'gains-long-dot'} />{term === 'short' ? 'Short-term' : 'Long-term'} positions</strong><span>{countLabel(lots.length, 'lot')} · based on recorded tax-term classification</span></div><div className="gains-term-total"><strong className={total.gain >= 0 ? 'gain-positive' : 'gain-negative'}>{signedMoney(total.gain)}</strong><span>{signedPercent(total.percent)} on cost basis</span></div></button>{open && <div className="gains-term-content">{[false, true].map(isOption => { const group = lots.filter(row => row.isOption === isOption); return group.length ? <GainLotTable key={isOption ? 'options' : 'stocks'} rows={group} mode={mode} isOption={isOption} /> : null; })}</div>}</section>;
       })}
     </section>}
+
+    <section className="gains-tax-assumptions" aria-label="Tax rate assumptions"><div><h2>Tax assumptions</h2><p>Shared with Gain to Sell in Holdings. These are adjustable inputs, not your actual tax liability.</p></div><div className="gains-tax-controls"><div className="gains-tax-impact"><span>{mode === 'unrealized' ? 'Illustrative tax if sold' : 'Illustrative tax estimate'}</span><strong>{money(summary.tax.total)}</strong><small>ST {money(summary.tax.shortTax)} · LT {money(summary.tax.longTax)}</small></div><div className="gains-rate-fields"><label><span><i className="gains-short-dot" />Short-term rate</span><div><input aria-label="Short-term tax rate percent" type="number" min="0" max="100" step="0.1" value={stTaxRate} onChange={event => setStTaxRate(clampTaxRate(Number(event.target.value)))} /><span>%</span></div></label><label><span><i className="gains-long-dot" />Long-term rate</span><div><input aria-label="Long-term tax rate percent" type="number" min="0" max="100" step="0.1" value={ltTaxRate} onChange={event => setLtTaxRate(clampTaxRate(Number(event.target.value)))} /><span>%</span></div></label></div></div><p className="gains-tax-method">The estimate uses the existing simplified offset between short- and long-term net gains, then applies these rates to remaining positive gains. It is based only on the filtered records shown here.</p></section>
+
+    <GainsReconciliation rows={rows} mode={mode} numbersVisible={numbersVisible} />
+
+    {numbersVisible ? mode === 'unrealized' ? (
+      <div className="gains-heatmap-only" ref={heatmap} tabIndex={heatmapTarget ? -1 : undefined} aria-label={heatmapTarget ? 'Holdings heatmap opened from Overview' : undefined} style={{ scrollMarginTop: 20 }}>{heatmapTarget && <div className="gains-navigation-context">{onReturnOverview ? <button type="button" onClick={onReturnOverview}>← Portfolio Overview</button> : <span>From Portfolio Overview</span>}<span>Open positions · {selectedBrokerages.length ? selectedBrokerages.join(', ') : 'All brokerages'}</span></div>}<GainsHeatmap alternativeViews={alternativeHeatmapViews} overall={holdingResults} daily={dailyResults} initialMode={heatmapTarget || 'overall'} /></div>
+    ) : (
+      <div className="gains-charts-grid"><RealizedGainsChart periods={periods} year={year} hasData={rows.length > 0} /><TaxTermBreakdown shortGain={summary.shortGain} longGain={summary.longGain} shortLots={summary.shortLots} longLots={summary.longLots} /></div>
+    ) : <div className="gains-privacy-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg><strong>Your portfolio figures are hidden</strong><p>Use your profile’s visibility setting to reveal charts and lot details.</p></div>}
+
     <p className="gains-page-footnote">P&amp;L values come from the recorded lots. Percentage figures compare P&amp;L with positive cost basis; they are not annualized or cash-flow-adjusted returns. Daily map figures exclude options and missing previous-close quotes.</p>
   </div>;
 }

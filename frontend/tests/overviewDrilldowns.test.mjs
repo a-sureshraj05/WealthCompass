@@ -58,3 +58,15 @@ test('V3 balance details start collapsed while the current comparison keeps the 
   const current=renderToStaticMarkup(React.createElement(Performance,{numbersVisible:true}));
   assert.doesNotMatch(current,/perf-balance-disclosure/);assert.match(current,/How the account balance changed/);
 });
+
+
+test('Gains & Losses follows filters, lots, tax assumptions, net result, then chart tabs',()=>{
+  const html=renderGains({alternativeHeatmapViews:true});
+  const markers=['aria-label="Table filters"','class="gains-detail-section"','class="gains-tax-assumptions"','UNDERSTAND THE NET RESULT','class="gains-heatmap-only"'];
+  const positions=markers.map(marker=>html.indexOf(marker));
+  assert.ok(positions.every(position=>position>=0));
+  assert.deepEqual(positions,[...positions].sort((a,b)=>a-b));
+  assert.match(html,/aria-expanded="false"/);
+  const hidden=renderGains({alternativeHeatmapViews:true,numbersVisible:false});
+  assert.doesNotMatch(hidden,/role="tablist"|Holdings heatmap|ranked-holdings|gains-detail-section/);
+});

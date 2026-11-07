@@ -28,11 +28,18 @@ const responseError = async (response: Response, fallback: string): Promise<Erro
 
 export interface AccountProfile { email: string; displayName: string }
 
-export const fetchPerformanceDemoEnabled = async (): Promise<boolean> => {
+export interface RuntimeFeatures { performanceDemo:boolean; refinedUi:boolean; holdingPerformancePreview:boolean }
+export function parseRuntimeFeatures(status: Record<string,unknown>): RuntimeFeatures {
+  const refinedUi = status?.refined_ui === true;
+  return { performanceDemo:status?.performance_demo === true, refinedUi, holdingPerformancePreview:refinedUi && status?.holding_performance_preview === true };
+}
+export const fetchRuntimeFeatures = async (): Promise<RuntimeFeatures> => {
   const response = await apiFetch('/api/v1/auth/me');
-  if (!response.ok) return false;
-  const status = await response.json();
-  return status.performance_demo === true;
+  if (!response.ok) throw await responseError(response, 'Could not load workspace settings.');
+  return parseRuntimeFeatures(await response.json());
+};
+export const fetchPerformanceDemoEnabled = async (): Promise<boolean> => {
+  try { return (await fetchRuntimeFeatures()).performanceDemo; } catch { return false; }
 };
 
 export interface PerformanceHistory {
@@ -630,5 +637,20 @@ export const updateOptionsRetain = async (
 export const fetchOptionsCalculator = async (): Promise<OptionsCalculator> => {
   const response = await apiFetch("/api/v1/options/calculator");
   if (!response.ok) throw new Error("Failed to fetch options calculator");
+  return response.json();
+};
+
+export interface PortfolioNewsStory {
+  title:string; summary:string; source:string; url:string | null;
+  publishedAt:string; tickers:string[]; weight:number; category:string;
+}
+export interface PortfolioNewsFeed {
+  status:'ready' | 'partial' | 'empty' | 'unavailable'; checkedAt:string;
+  items:PortfolioNewsStory[]; totalHoldings:number; checkedHoldings:number;
+  coverageWeight:number; failedHoldings:number; preview:boolean; message?:string | null;
+}
+export const fetchPortfolioNews = async (): Promise<PortfolioNewsFeed> => {
+  const response = await apiFetch('/api/v1/news/refresh', { method:'POST', cache:'no-store' });
+  if (!response.ok) throw await responseError(response, 'News could not be refreshed.');
   return response.json();
 };

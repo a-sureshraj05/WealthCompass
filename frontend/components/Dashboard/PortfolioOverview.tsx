@@ -22,6 +22,7 @@ interface Props {
   onConnect: () => void;
   preview?: boolean;
   insights?: React.ReactNode;
+  news?: React.ReactNode;
   performance?: React.ReactNode;
   refined?: boolean;
   initialSection?: OverviewSection;
@@ -49,7 +50,7 @@ export function Icon({ name, size = 18 }: { name: 'arrow' | 'refresh' | 'plus' |
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>;
 }
 
-const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbersVisible = true, selectedBrokerages = [], onBrokeragesChange, onOpenHoldings, onRefresh, onConnect, preview = false, insights, performance, refined = false, initialSection = 'snapshot', activeSection, onSectionChange, onOpenHeatmap }) => {
+const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbersVisible = true, selectedBrokerages = [], onBrokeragesChange, onOpenHoldings, onRefresh, onConnect, preview = false, insights, news, performance, refined = false, initialSection = 'snapshot', activeSection, onSectionChange, onOpenHeatmap }) => {
   const [localSection, setLocalSection] = useState<OverviewSection>(initialSection);
   const section = activeSection ?? localSection;
   const setSection = (next: OverviewSection) => { setLocalSection(next); onSectionChange?.(next); };
@@ -175,6 +176,7 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
         <div className="broker-legend"><span className="legend-dot" style={{ background: '#416bce' }} />Invested<span className="legend-dot" style={{ background: '#bfcee9' }} />Cash</div>
       </section>
     </div>
+    {news}
     <div className="portfolio-observation"><span className="observation-icon"><Icon name="trend" size={20} /></span><div><strong>Portfolio perspective</strong><p>{!numbersVisible ? 'Your portfolio figures are hidden across this overview.' : model.allocationTotal > 0 ? `Your five largest holdings represent ${model.topFivePercent.toFixed(1)}% of positive invested assets. Explore individual holdings to see their cost basis and tax lots.` : 'Add investments to see allocation and position-level insights.'}</p></div><button className="overview-text-button" onClick={() => onOpenHoldings()}>Explore holdings<Icon name="arrow" size={15} /></button></div>
     </div>}
     <p className="overview-disclosure">Daily change estimates price movement on current equity positions, not account performance adjusted for trading or cash flows. Unrealized P&amp;L covers open positions only.</p>

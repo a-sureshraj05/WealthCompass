@@ -10,6 +10,7 @@ preserve the versions that were in those environments on this date.
 | Version 2 | Current staging | `ui-v2` | `staging` | `13cb12c0e106532b488ad0cde0d125799251af9f` |
 | Version 3, draft 1 | Refined design for local review; not deployed | `ui-v3-draft-1` | `design/local-portfolio-studio` | Resolve with `git rev-parse 'ui-v3-draft-1^{commit}'` |
 | Version 3, draft 2 | Actionable summary cards, clearer view navigation and compact balance details; not deployed | `ui-v3-draft-2` | `design/local-portfolio-studio` | Resolve with `git rev-parse 'ui-v3-draft-2^{commit}'` |
+| Version 3, staging candidate 1 | Approved V3 workspace enabled for authenticated staging; not deployed | `ui-v3-rc-1` | `design/local-portfolio-studio` | Resolve with `git rev-parse 'ui-v3-rc-1^{commit}'` |
 
 All checkpoints above are annotated tags pushed to GitHub. V3's branch is also pushed as a
 backup, without merging it into staging or production. The dated bookmark
@@ -75,6 +76,16 @@ layout, open http://127.0.0.1:5182/design-preview. This explicit DEV-only route 
 fictional data and needs no backend login. See [local preview details](local-refined-preview.md).
 V1 predates that preview route; use its saved source as the reference rather than
 assuming it has the same preview capabilities.
+
+## Staging candidate after draft 2
+
+The `design/local-portfolio-studio` candidate adds an individual-holding
+multi-stock performance prototype inside Holdings and a ranked holdings view
+available as a tab beside the heatmap. Overview performance is unchanged. It uses fictional local transactions and simulated price paths. The candidate also includes an enriched sign-in page and portfolio news
+(frontend and authenticated backend endpoint). These changes are saved as `ui-v3-rc-1` for staging review and are not deployed. The
+[staging candidate](staging-v3-release.md) now enables the approved V3 workspace
+in the authenticated release build and isolates the sample holding chart. See the
+[local preview details](local-refined-preview.md#holdings-performance-working-draft).
 
 ## Save future checkpoints
 

@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { BarChart, Bar, Cell, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatCurrency } from '../../utils/finance';
 import { HoldingResult, PeriodResult, layoutGainTiles } from './gainsModel';
+import RankedHoldings from './RankedHoldings';
 
 export const GAIN_COLOR = '#259b86';
 export const LOSS_COLOR = '#dd7a83';
@@ -34,8 +35,16 @@ export function RealizedGainsChart({ periods, year, hasData }: { periods: Period
 
 export type HeatmapMode = 'overall' | 'daily';
 
-export function GainsHeatmap({ overall, daily, initialMode = 'overall' }: { overall: HoldingResult[]; daily: HoldingResult[]; initialMode?: HeatmapMode }) {
+export function GainsHeatmap({ overall, daily, initialMode = 'overall', alternativeViews = false, initialLayout = 'map' }: { overall: HoldingResult[]; daily: HoldingResult[]; initialMode?: HeatmapMode; alternativeViews?: boolean; initialLayout?: 'map' | 'ranked' }) {
   const [mode, setMode] = useState<HeatmapMode>(initialMode);
+  const [layout,setLayout] = useState<'map' | 'ranked'>(alternativeViews ? initialLayout : 'map');
+  const tabsId = useId();
+  const tabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const next = event.key === 'Home' ? 'map' : event.key === 'End' ? 'ranked' : ['ArrowLeft','ArrowRight'].includes(event.key) ? layout === 'map' ? 'ranked' : 'map' : null;
+    if (!next) return;
+    event.preventDefault(); setLayout(next);
+    event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-layout="${next}"]`)?.focus();
+  };
   const [active, setActive] = useState<string | null>(null);
   const container = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 330, height: 235 });
@@ -48,8 +57,12 @@ export function GainsHeatmap({ overall, daily, initialMode = 'overall' }: { over
     observer.observe(container.current);
     return () => observer.disconnect();
   }, []);
+  const periodSwitch = <div className="gains-switch" aria-label="Heatmap gain period"><button aria-pressed={mode === 'overall'} onClick={() => { setMode('overall'); setActive(null); }}>Open P&amp;L</button><button aria-pressed={mode === 'daily'} onClick={() => { setMode('daily'); setActive(null); }}>Day</button></div>;
   return <section className="gains-card gains-map-card">
-    <header className="gains-card-heading"><div><p className="gains-eyebrow">THE SHAPE OF YOUR POSITIONS</p><h2>Holdings map</h2></div><div className="gains-switch" aria-label="Heatmap gain period"><button aria-pressed={mode === 'overall'} onClick={() => { setMode('overall'); setActive(null); }}>Open P&amp;L</button><button aria-pressed={mode === 'daily'} onClick={() => { setMode('daily'); setActive(null); }}>Day</button></div></header>
+    <header className="gains-card-heading"><div><p className="gains-eyebrow">THE SHAPE OF YOUR POSITIONS</p><h2>{alternativeViews ? 'Holdings analysis' : 'Holdings map'}</h2></div>{!alternativeViews && periodSwitch}</header>
+    {alternativeViews && <div className="gains-chart-tabs-row"><div className="gains-chart-tabs" role="tablist" aria-label="Holdings visualization">{(['map','ranked'] as const).map(value => <button key={value} type="button" role="tab" data-layout={value} id={`${tabsId}-${value}-tab`} aria-controls={`${tabsId}-${value}-panel`} aria-selected={layout === value} tabIndex={layout === value ? 0 : -1} onClick={() => setLayout(value)} onKeyDown={tabKeyDown}>{value === 'map' ? 'Heatmap' : 'Ranked holdings'}</button>)}</div>{periodSwitch}</div>}
+    <div className="gains-chart-panels">
+    <div className="gains-position-map gains-chart-tab-panel" hidden={alternativeViews && layout !== 'map'} role={alternativeViews ? 'tabpanel' : undefined} id={`${tabsId}-map-panel`} aria-labelledby={alternativeViews ? `${tabsId}-map-tab` : undefined} tabIndex={alternativeViews ? 0 : undefined}>
     <p className="gains-chart-description">Size: absolute lot value · colour: {mode === 'overall' ? 'unrealized' : 'daily equity'} P&amp;L %</p>
     <div className="gains-map-canvas" ref={container}>
       {tiles.length ? <svg width="100%" height="100%" viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} role="group" aria-label="Holdings heatmap">
@@ -74,6 +87,9 @@ export function GainsHeatmap({ overall, daily, initialMode = 'overall' }: { over
     <div className="gains-map-detail" aria-live="polite">{focused ? <><strong>{focused.ticker}</strong><span className={focused.gain >= 0 ? 'gain-positive' : 'gain-negative'}>{signedMoney(focused.gain)} <small>({signedPercent(focused.percent)})</small></span></> : <span>Hover, focus or tap a tile for its P&amp;L.</span>}</div>
     <footer className="gains-chart-footer gains-map-legend"><span><i style={{ background: '#bfd9cf' }} />Gain<i style={{ background: '#e8c5ce' }} />Loss</span><small>Darker colour = larger % move</small></footer>
     <p className="gains-map-note">{mode === 'daily' ? 'Current equity lots vs. previous close; includes only valid quotes.' : 'Open positions only. Options use the contract multiplier; zero-value tiles are omitted.'}</p>
+    </div>
+    {alternativeViews && <div className="gains-position-ranking gains-chart-tab-panel" hidden={layout !== 'ranked'} role="tabpanel" id={`${tabsId}-ranked-panel`} aria-labelledby={`${tabsId}-ranked-tab`} tabIndex={0}><RankedHoldings entries={entries} daily={mode === 'daily'} /></div>}
+    </div>
   </section>;
 }
 

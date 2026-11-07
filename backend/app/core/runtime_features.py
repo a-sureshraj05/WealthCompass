@@ -1,4 +1,4 @@
-"""Presentation policy for the single staging performance-demo account."""
+"""Server-controlled staging presentation and per-account performance policy."""
 import os
 
 PERFORMANCE_DEMO_EMAIL = "demouser@gmail.com"
@@ -29,3 +29,23 @@ def performance_demo_for_user(user) -> bool:
         performance_demo_enabled()
         and str(getattr(user, "email", "")).strip().casefold() == PERFORMANCE_DEMO_EMAIL
     )
+
+
+def staging_environment() -> bool:
+    """Trust deployment configuration/service identity, never a request hostname."""
+    environment = os.getenv('WC_APP_ENV', '').strip().lower()
+    if environment:
+        return environment == 'staging'
+    return (
+        os.getenv('RENDER', '').strip().lower() == 'true'
+        and os.getenv('RENDER_SERVICE_ID', '') == STAGING_RENDER_SERVICE_ID
+        and os.getenv('RENDER_GIT_BRANCH', '') == 'staging'
+    )
+
+
+def refined_ui_enabled() -> bool:
+    return staging_environment() and os.getenv('WC_REFINED_UI', 'true').strip().lower() == 'true'
+
+
+def holding_performance_preview_enabled() -> bool:
+    return refined_ui_enabled() and os.getenv('WC_HOLDING_PERFORMANCE_PREVIEW', 'true').strip().lower() == 'true'

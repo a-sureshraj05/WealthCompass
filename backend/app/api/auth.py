@@ -16,7 +16,8 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from backend.app.core import crypto, session_store
-from backend.app.core.runtime_features import performance_demo_enabled, performance_demo_for_user
+from backend.app.core.runtime_features import (performance_demo_enabled, performance_demo_for_user,
+                                               refined_ui_enabled, holding_performance_preview_enabled)
 from backend.app.core.crypto_migrate import enable_encryption_for_user
 from backend.app.core.database import get_db
 from backend.app.db.schema import InviteCode, User
@@ -393,7 +394,9 @@ def change_password(
 
 @router.get("/auth/me")
 def me(current_user: User = Depends(get_current_user)):
-    return {"email": current_user.email, "performance_demo": performance_demo_for_user(current_user)}
+    return {"email": current_user.email, "performance_demo": performance_demo_for_user(current_user),
+            "refined_ui": refined_ui_enabled(),
+            "holding_performance_preview": holding_performance_preview_enabled()}
 
 
 @router.get("/auth/status")

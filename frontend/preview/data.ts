@@ -27,6 +27,8 @@ export const previewRealized: RealizedGain[] = [
 ];
 export const previewTransactions: Transaction[] = [
   ...previewHoldings.map((h, i) => ({ id: h.id, date: previewUnrealized[i].buyDate, quantity: h.quantity, price: h.averageCostPerShare, brokerage: h.brokerage, account_id: h.account_id, ticker: h.ticker, name: h.ticker, action: 'BUY', costPerShare: h.averageCostPerShare, totalCost: h.totalCost, assetType: h.assetType, is_deleted: false, is_override: false, is_duplicate: false, is_backend_verified: true })),
+  // Complete the fictional ledger: closed lots need their original purchase too.
+  ...previewRealized.map(g => ({ id: `${g.id}-buy`, date: g.buyDate, quantity: g.quantity, price: g.buyPrice, brokerage: g.brokerage, account_id: accountId(g.brokerage), ticker: g.ticker, name: g.ticker, action: 'BUY', costPerShare: g.buyPrice, totalCost: g.quantity * g.buyPrice, assetType: g.assetType, is_deleted: false, is_override: false, is_duplicate: false, is_backend_verified: true })),
   ...previewRealized.map(g => ({ id: g.id, date: g.sellDate, quantity: g.quantity, price: g.sellPrice, brokerage: g.brokerage, account_id: accountId(g.brokerage), ticker: g.ticker, name: g.ticker, action: 'SELL', costPerShare: g.buyPrice, totalCost: g.quantity * g.sellPrice, assetType: g.assetType, is_deleted: false, is_override: false, is_duplicate: false, is_backend_verified: true })),
 ];
 export const previewOptions: OptionsPosition[] = [{ id: 901, ticker: 'NVDA', brokerage: 'Schwab', account_id: 2, buyDate: '2026-09-18', quantity: 3, retainQuantity: 1, sellableQuantity: 2, buyPrice: 8, currentPrice: 12, prevClose: 11.4, unrealizedGain: 1200, isLongTerm: false, option_symbol: 'NVDA270115C00160000' }];

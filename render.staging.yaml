@@ -46,6 +46,12 @@ services:
         value: "staging"
       - key: WC_PERFORMANCE_DEMO
         value: "true"
+      # Runtime presentation flags, read after authenticated sign-in. These do
+      # not turn on the public DEV preview route or substitute account records.
+      - key: WC_REFINED_UI
+        value: "true"
+      - key: WC_HOLDING_PERFORMANCE_PREVIEW
+        value: "true"
 
       - key: JWT_SECRET
         generateValue: true
