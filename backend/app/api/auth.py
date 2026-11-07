@@ -16,7 +16,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from backend.app.core import crypto, session_store
-from backend.app.core.runtime_features import performance_demo_enabled
+from backend.app.core.runtime_features import performance_demo_enabled, performance_demo_for_user
 from backend.app.core.crypto_migrate import enable_encryption_for_user
 from backend.app.core.database import get_db
 from backend.app.db.schema import InviteCode, User
@@ -393,7 +393,7 @@ def change_password(
 
 @router.get("/auth/me")
 def me(current_user: User = Depends(get_current_user)):
-    return {"email": current_user.email}
+    return {"email": current_user.email, "performance_demo": performance_demo_for_user(current_user)}
 
 
 @router.get("/auth/status")
@@ -409,14 +409,15 @@ def auth_status(db: Session = Depends(get_db)):
     now carries no demo labelling, and an endpoint that advertised the
     credentials anyway would simply relocate what was deliberately taken off the
     page. The `demo` flag stays: it is a property of the instance, not a
-    credential, and /healthz reports it too. The performance_demo boolean is
-    likewise non-secret presentation metadata; it neither signs a user in nor
-    changes their portfolio data.
+    credential, and /healthz reports it too. Demo availability is non-secret
+    deployment metadata. The effective per-user flag is returned only by
+    /auth/me; legacy callers of this public endpoint must not enable it globally.
     """
     has_user = db.query(User).first() is not None
     return {
         "registered": has_user,
         "registration_open": ALLOW_REGISTRATION,
         "demo": _demo,
-        "performance_demo": performance_demo_enabled(),
+        "performance_demo": False,
+        "performance_demo_available": performance_demo_enabled(),
     }

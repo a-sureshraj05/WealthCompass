@@ -41,7 +41,7 @@ services:
         value: "false"
 
       # Show the clearly labelled, simulated portfolio/SPY comparison after
-      # sign-in. This is independent of demo-user/database seeding.
+      # sign-in to demouser@gmail.com only. This does not seed or change user data.
       - key: WC_APP_ENV
         value: "staging"
       - key: WC_PERFORMANCE_DEMO

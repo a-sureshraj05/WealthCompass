@@ -8,12 +8,25 @@ or live market data.
 
 ## Staging demo
 
+Only the authenticated `demouser@gmail.com` account receives simulated history.
+The signed-in app reads its effective `performance_demo` flag from `/auth/me`.
+Other users, including the personal owner, receive false. A query parameter or
+client-provided email cannot select the recipient. This is presentation of an
+existing fictional dataset, not database seeding or account-data replacement.
+
 `render.staging.yaml` enables `WC_APP_ENV=staging` and
-`WC_PERFORMANCE_DEMO=true`. Both are required; production and unset/false values
-disable the module. `/api/v1/auth/status` exposes the resulting non-secret
-`performance_demo` boolean. The signed-in app reads it on mount and passes the
-flag into Overview. A failed or older status response leaves the feature off.
-This works with the deployed Vite production build, independent of `DEV`.
+`WC_PERFORMANCE_DEMO=true`. The already-deployed service did not apply the new
+Blueprint settings automatically. To support that service directly, its verified
+Render service ID `srv-dbj87tm7bikc73empnng` on branch `staging` also opts in by
+default, using Render's server-provided environment identity rather than a Host
+header. An explicit false flag or non-staging app environment overrides that
+default. Other services, production and PR previews do not inherit it.
+
+Public `/auth/status` exposes only `performance_demo_available` for deployment
+verification, while its legacy `performance_demo` value stays false. It cannot
+enable the chart for unauthenticated or arbitrary users. A failed or older
+authenticated response leaves the feature off. This works with the deployed
+Vite production build, independent of `DEV`.
 
 The staging presentation is headed **Demo performance vs SPY**, carries
 **STAGING · DEMO DATA**, and labels the comparison series **Demo portfolio**.
@@ -29,9 +42,10 @@ controls presentation; the shipped frontend includes fictional fixture code.
 It does not enable the full development preview, sample-account switching or any
 authentication bypass.
 
-After merging this change to staging, the Render Blueprint must sync the two
-settings and deploy the new commit. Confirm `/api/v1/auth/status` reports
-`performance_demo: true`, then sign in and open Overview. Disable the demo by
+After deploying, confirm `/api/v1/auth/status` reports
+`performance_demo_available: true`, then sign in as `demouser@gmail.com` and
+confirm `/api/v1/auth/me` reports `performance_demo: true`. Other authenticated
+users must receive false. Open Overview to see the sample. Disable the demo by
 setting `WC_PERFORMANCE_DEMO=false` and redeploying the service configuration.
 On an existing deployment of older code, an environment change alone cannot
 expose a chart that was removed from its frontend build.
