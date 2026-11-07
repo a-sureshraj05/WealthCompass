@@ -159,3 +159,13 @@
 
 .broker-title > .broker-avatar { width: 32px; height: 32px; flex: 0 0 32px; display: inline-flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #dfe7f1; border-radius: 8px; color: #7187a5; }
 .broker-avatar :is(img, svg) { display: block; width: 23px; height: 23px; object-fit: contain; border-radius: 3px; }
+
+/* Match the shared Holdings gain/loss indicator at the surrounding text scale. */
+.overview-change { display:inline-flex; align-items:center; gap:4px; vertical-align:baseline; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.overview-change-arrow { display:block; width:10px; height:10px; flex-shrink:0; }
+.overview-change--metric .overview-change-arrow { width:16px; height:16px; }
+.overview-change.is-neutral { color:#7b8ba1; }
+.overview-tooltip .overview-change { vertical-align:middle; }
+.contributors-all td .overview-change { justify-content:flex-end; }
+.portfolio-performance .perf-scoreboard strong .overview-change-arrow { width:16px; height:16px; }
+@media(max-width:600px) { .overview-change--metric .overview-change-arrow { width:14px; height:14px; } }

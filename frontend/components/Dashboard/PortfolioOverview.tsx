@@ -10,6 +10,7 @@ import BrokerageMark from '../BrokerageMark';
 import type { OverviewSection } from '../../preview/previewDesign';
 import type { HeatmapMode } from '../GainsLosses/GainsCharts';
 import OverviewSummaryTiles from './OverviewSummaryTiles';
+import OverviewChange from './OverviewChange';
 
 interface Props {
   holdings: StockHolding[];
@@ -32,8 +33,8 @@ interface Props {
 }
 
 const money = formatCurrency;
-const signed = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${money(Math.abs(value))}`;
-const percent = (value: number | null) => value === null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+const signed = (value:number, size:'metric' | 'compact' = 'compact') => <OverviewChange value={value} format={money} size={size} />;
+const percent = (value:number | null, size:'metric' | 'compact' = 'compact') => <OverviewChange value={value} format={absolute => `${absolute.toFixed(2)}%`} size={size} />;
 const compact = (value: number) => `${value < 0 ? '−' : ''}$${Math.abs(value) >= 1000 ? `${(Math.abs(value) / 1000).toFixed(Math.abs(value) >= 10000 ? 0 : 1)}k` : Math.abs(value).toFixed(0)}`;
 
 export function Icon({ name, size = 18 }: { name: 'arrow' | 'refresh' | 'plus' | 'wallet' | 'trend' | 'grid' | 'chevron' | 'sparkle'; size?: number }) {
@@ -71,13 +72,13 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
   const model = useMemo(() => portfolioModel(holdings, cashByBrokerage, selectedBrokerages), [holdings, cashByBrokerage, selectedBrokerages]);
   const brokers = [...new Set([...holdings.map(h => h.brokerage), ...Object.keys(cashByBrokerage).map(cashBrokerage)])].sort();
   const mask = '••••••';
-  const display = (value: number, isSigned = false) => numbersVisible ? (isSigned ? signed(value) : money(value)) : mask;
+  const display = (value:number, isSigned = false, size:'metric' | 'compact' = 'compact') => numbersVisible ? (isSigned ? signed(value,size) : money(value)) : mask;
   const ranked = useMemo(() => rankContributors(model.contributors, unit), [model.contributors, unit]);
   const chartData = ranked.slice(0, 10).map(d => ({ ...d, amount: unit === 'dollars' ? d.change : d.percent }));
   const expandedContributors = showAllContributors && ranked.length > 10;
   const maxChange = Math.max(...chartData.map(d => Math.abs(d.amount)), 1) * 1.18;
   const dailyAvailable = model.contributors.length > 0;
-  const contributorSummary = !dailyAvailable ? '—' : !numbersVisible ? mask : unit === 'percent' ? percent(model.dayPercent) : signed(model.dayChange);
+  const contributorSummary = !dailyAvailable ? '—' : !numbersVisible ? mask : unit === 'percent' ? percent(model.dayPercent,'metric') : signed(model.dayChange,'metric');
   const refresh = async () => {
     setRefreshing(true);
     setRefreshError('');
@@ -106,8 +107,8 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
         <div className="hero-footer"><span className="status-dot" />{preview ? 'Sample prices · illustrative data' : 'Latest available prices · not a live feed'}</div>
       </div>
       <div className="hero-secondary">
-        <div className="hero-metric"><span>Daily equity change<Icon name="trend" size={16} /></span><strong className={!numbersVisible || !dailyAvailable ? '' : model.dayChange >= 0 ? 'is-positive' : 'is-negative'}>{dailyAvailable ? display(model.dayChange, true) : '—'}</strong><p><b className={!numbersVisible || !dailyAvailable ? '' : model.dayChange >= 0 ? 'is-positive' : 'is-negative'}>{numbersVisible ? percent(model.dayPercent) : mask}</b> vs. previous close</p></div>
-        <div className="hero-metric"><span>Unrealized gain / loss<Icon name="arrow" size={16} /></span><strong className={!numbersVisible ? '' : model.gain >= 0 ? 'is-positive' : 'is-negative'}>{display(model.gain, true)}</strong><p><b>{numbersVisible ? percent(model.gainPercent) : mask}</b> on open-position cost basis</p></div>
+        <div className="hero-metric"><span>Daily equity change<Icon name="trend" size={16} /></span><strong className={!numbersVisible || !dailyAvailable ? '' : model.dayChange >= 0 ? 'is-positive' : 'is-negative'}>{dailyAvailable ? display(model.dayChange, true, 'metric') : '—'}</strong><p><b className={!numbersVisible || !dailyAvailable ? '' : model.dayChange >= 0 ? 'is-positive' : 'is-negative'}>{numbersVisible ? percent(model.dayPercent) : mask}</b> vs. previous close</p></div>
+        <div className="hero-metric"><span>Unrealized gain / loss<Icon name="arrow" size={16} /></span><strong className={!numbersVisible ? '' : model.gain >= 0 ? 'is-positive' : 'is-negative'}>{display(model.gain, true, 'metric')}</strong><p><b>{numbersVisible ? percent(model.gainPercent) : mask}</b> on open-position cost basis</p></div>
         <div className="hero-metric"><span>{model.cashValue < 0 ? 'Net cash / margin' : 'Cash balance'}<Icon name="wallet" size={16} /></span><strong>{display(model.cashValue)}</strong><p>{model.cashValue < 0 ? 'Negative cash balance includes margin' : `${model.brokers.length} brokerages in this view`}</p></div>
       </div>
     </section>}
@@ -163,7 +164,7 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
         <div className="panel-heading"><div><p className="overview-eyebrow">THE BUILDING BLOCKS</p><h2>Largest holdings</h2></div><button className="overview-text-button" onClick={() => onOpenHoldings()}>View all{model.tickers.length > 5 ? ` ${model.tickers.length}` : ''}<Icon name="chevron" size={14} /></button></div>
         {model.tickers.length ? <div className="overview-table-wrap"><table className="overview-table"><thead><tr><th>Asset</th><th>Market value</th><th>Unrealized P&amp;L</th><th className="weight-column">Weight</th><th><span className="sr-only">Open holding</span></th></tr></thead><tbody>{model.tickers.slice(0, 5).map(t => {
           const gain = t.value - t.cost;
-          return <tr key={t.ticker}><td><button className="holding-identity" onClick={() => onOpenHoldings(t.ticker)}><TickerLogo ticker={t.ticker} size={31} assetType={holdings.find(h => h.ticker === t.ticker)?.assetType} /><span><strong>{t.ticker}</strong><small>Across selected brokerages</small></span></button></td><td>{display(t.value)}</td><td className={!numbersVisible ? '' : gain >= 0 ? 'positive' : 'negative'}>{display(gain, true)}</td><td className="weight-column">{numbersVisible && model.allocationTotal > 0 ? `${(Math.max(t.value, 0) / model.allocationTotal * 100).toFixed(1)}%` : numbersVisible ? '—' : mask}</td><td><button className="holding-open" aria-label={`Open ${t.ticker} holdings`} onClick={() => onOpenHoldings(t.ticker)}><Icon name="chevron" size={15} /></button></td></tr>;
+          return <tr key={t.ticker}><td><button className="holding-identity" onClick={() => onOpenHoldings(t.ticker)}><TickerLogo ticker={t.ticker} size={31} assetType={holdings.find(h => h.ticker === t.ticker)?.assetType} /><span><strong>{t.ticker}</strong><small>Across selected brokerages</small></span></button></td><td>{display(t.value)}</td><td className={!numbersVisible ? '' : gain >= 0 ? 'positive' : 'negative'}>{display(gain, true, 'compact')}</td><td className="weight-column">{numbersVisible && model.allocationTotal > 0 ? `${(Math.max(t.value, 0) / model.allocationTotal * 100).toFixed(1)}%` : numbersVisible ? '—' : mask}</td><td><button className="holding-open" aria-label={`Open ${t.ticker} holdings`} onClick={() => onOpenHoldings(t.ticker)}><Icon name="chevron" size={15} /></button></td></tr>;
         })}</tbody></table></div> : <div className="chart-empty"><p>Your portfolio starts here</p><span>Connect a brokerage or import a statement.</span><button className="overview-button primary" onClick={onConnect}><Icon name="plus" size={16} />Add investments</button></div>}
       </section>
 

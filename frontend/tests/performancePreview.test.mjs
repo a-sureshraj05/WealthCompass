@@ -75,7 +75,7 @@ test('transaction presentation uses supplied dates and balances without any simu
   assert.match(html, /TRANSACTION-BASED HISTORY/);
   assert.match(html, /Available history/);
   assert.match(html, /May 2, 2024 – May 3, 2024/);
-  assert.match(html, /\+20.00%/);
+  assert.match(html, /class="sr-only">up<\/span>20.00%/);
   assert.match(html, /\$1,200.00/);
   assert.doesNotMatch(html, /fictional|simulated|sample|212,995|2026/);
   assert.equal(renderToStaticMarkup(React.createElement(Preview, { numbersVisible: true, presentation: 'transaction-history' })), '');
@@ -91,7 +91,7 @@ test('transaction mode shows three comparisons and separates account dollars fro
   assert.match(html, /SPY · your trade timing/);
   assert.match(html, /SPY · buy and hold/);
   assert.match(html, /What if your trades had been SPY/);
-  assert.match(html, /\+10.00%/);
+  assert.match(html, /class="sr-only">up<\/span>10.00%/);
   assert.match(html, /\$1,100.00/);
   assert.match(html, /changing periods does not restart it/);
   assert.match(html, /sell SPY for each recorded sale amount/);
@@ -104,7 +104,7 @@ test('transaction mode shows three comparisons and separates account dollars fro
 test('a missing third benchmark leaves portfolio and ordinary SPY comparison visible', () => {
   const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible:true, presentation:'transaction-history', history })).replaceAll('<!-- -->','');
   assert.match(html, /Complete trade-timing history unavailable/);
-  assert.match(html, /\+20.00%/);
+  assert.match(html, /class="sr-only">up<\/span>20.00%/);
   assert.match(html, /SPY · buy and hold/);
   assert.doesNotMatch(html, /perf-trade-account-values/);
 });
