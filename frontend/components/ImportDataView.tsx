@@ -1,584 +1,376 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { parseStatement, getBrokerageConnectUrl, fetchBrokerageConnections, fetchBrokerageAccounts, ignoreBrokerageAccount, syncBrokerageTransactions, deleteBrokerageConnection, deleteRawData } from '../services/apiService';
-import { Transaction } from '../types';
+import type { BrokerageConnection, ProviderAccount } from '../services/apiService';
+import type { Transaction } from '../types';
+import { buildSyncRequest, normalizeSyncTickers, validateStatementFile, MAX_STATEMENT_BYTES } from './Accounts/accountsModel';
+import type { SyncScope, SyncPeriod } from './Accounts/accountsModel';
+import AccountConnections from './Accounts/AccountConnections';
+import BrokerageLogo from './Accounts/BrokerageLogo';
+import StatementPreview from './Accounts/StatementPreview';
+import { inspectStatement } from './Accounts/statementInspection';
+import './Accounts/accounts.css';
 
 interface Props {
   onAddTransactions: (t: Transaction[]) => void;
   setLoading: (l: boolean) => void;
   initialTab?: 'manual' | 'connect';
   onRefresh?: () => void | Promise<unknown>;
+  onViewTransactions?: () => void;
 }
 
-const BROKERAGES = [
-  { name: 'Robinhood', domain: 'robinhood.com' },
-  { name: 'Schwab', domain: 'schwab.com' },
-  { name: 'Fidelity', domain: 'fidelity.com' },
-  { name: 'Other', domain: null },
-];
+type Notice = { kind: 'success' | 'error' | 'info'; text: string; };
+const CONNECT_BROKERS = ['Fidelity', 'Schwab', 'Robinhood', 'Other'];
+// These are the production CSV parser configurations, not the connection catalog.
+const IMPORT_BROKERS = ['Robinhood', 'Schwab'];
+const errorText = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 
-const BrokerageLogo: React.FC<{ name: string; domain: string | null; size?: number }> = ({ name, domain, size = 40 }) => {
-  const [failed, setFailed] = useState(false);
-
-  if (!domain || failed) {
-    return (
-      <div
-        className="rounded bg-[#EFEFF4] flex items-center justify-center shrink-0"
-        style={{ width: size, height: size }}
-      >
-        <svg className="w-5 h-5 text-[#6E6E73]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
-      alt={name}
-      className="rounded object-contain shrink-0"
-      style={{ width: size, height: size }}
-      onError={() => setFailed(true)}
-    />
-  );
-};
-
-const ImportDataView: React.FC<Props> = ({ onAddTransactions, setLoading, initialTab = 'manual', onRefresh }) => {
-  const [activeTab, setActiveTab] = useState<'manual' | 'connect'>(initialTab);
-
-  // Manual state
-  const [selectedBroker, setSelectedBroker] = useState('');
-  const [manualText, setManualText] = useState('');
-  const [uploadError, setUploadError] = useState('');
-  const [showSuccessPrompt, setShowSuccessPrompt] = useState(false);
-
-  // Connect state
-  const [connectBroker, setConnectBroker] = useState('');
-  const [connections, setConnections] = useState<{ id: number; brokerage: string; authorization_id: string }[]>([]);
-  const [accounts, setAccounts] = useState<{ id: string; name: string; brokerage: string; authorization_id: string }[]>([]);
-  const [connectStatus, setConnectStatus] = useState('');
-  const [syncStartDate, setSyncStartDate] = useState('2026-01-01');
-  const [syncEndDate, setSyncEndDate] = useState('');
-  const [syncBrokerage, setSyncBrokerage] = useState('');
-  const [syncAccountIds, setSyncAccountIds] = useState<string[]>([]);
-  const [syncTickerInput, setSyncTickerInput] = useState('');
-  const [syncTickers, setSyncTickers] = useState<string[]>([]);
+export default function ImportDataView({ onAddTransactions, initialTab = 'connect', onRefresh, onViewTransactions }: Props) {
+  const preview = import.meta.env.DEV && typeof window !== 'undefined' && window.location.pathname === '/design-preview';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [connections, setConnections] = useState<BrokerageConnection[]>([]);
+  const [accounts, setAccounts] = useState<ProviderAccount[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [refreshedAt, setRefreshedAt] = useState('');
+  const [pending, setPending] = useState('');
+  const operation = useRef(false);
+  const mounted = useRef(true);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [connectBroker, setConnectBroker] = useState('Fidelity');
+  const [scope, setScope] = useState<SyncScope>('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [period, setPeriod] = useState<SyncPeriod>('history');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [tickerInput, setTickerInput] = useState('');
+  const [broker, setBroker] = useState('');
+  const [source, setSource] = useState<'file' | 'paste'>('file');
+  const [fileText, setFileText] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [pasteText, setPasteText] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [importedBroker, setImportedBroker] = useState('');
+  const [importHasLedger, setImportHasLedger] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const busy = !!pending;
+  const statementText = source === 'file' ? fileText : pasteText;
+  const effectiveTickers = normalizeSyncTickers(tickerInput);
+  const activeIds = scope === 'all' ? accounts.map(a => a.id) : selectedIds;
+  const tooLarge = useMemo(() => new TextEncoder().encode(statementText).length > MAX_STATEMENT_BYTES, [statementText]);
+  const inspection = useMemo(() => tooLarge ? { headers: [], columns: [], rows: [], rowCount: 0, error: 'The statement exceeds the 5 MB limit.' } : inspectStatement(statementText, broker), [statementText, broker, tooLarge]);
+  const canReview = !!broker && !!statementText.trim() && !inspection.error;
+  const importReady = reviewing && canReview && acknowledged;
+  const selectedAccounts = loadError ? [] : accounts.filter(account => activeIds.includes(account.id));
+  const importStep = reviewing ? 3 : broker ? 2 : 1;
+  let syncError = '';
+  try { buildSyncRequest({ scope, selectedIds, availableIds: accounts.map(a => a.id), period, start, end, tickerInput }); }
+  catch (error) { syncError = errorText(error); }
 
   const loadConnections = useCallback(async () => {
     try {
-      const [conns, accts] = await Promise.all([fetchBrokerageConnections(), fetchBrokerageAccounts()]);
-      setConnections(conns);
-      setAccounts(accts);
-    } catch (e) {
-      console.error(e);
-    }
+      const [nextConnections, nextAccounts] = await Promise.all([fetchBrokerageConnections(), fetchBrokerageAccounts()]);
+      if (!mounted.current) return;
+      setConnections(nextConnections);
+      setAccounts(nextAccounts);
+      setSelectedIds(ids => ids.filter(id => nextAccounts.some(a => a.id === id)));
+      setLoadError('');
+      setRefreshedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+    } catch (error) {
+      if (mounted.current) setLoadError(errorText(error));
+      throw error;
+    } finally { if (mounted.current) setLoaded(true); }
   }, []);
 
   useEffect(() => {
-    loadConnections();
+    mounted.current = true;
+    void loadConnections().catch(() => { });
+    return () => { mounted.current = false; };
   }, [loadConnections]);
 
-  // --- Manual handlers ---
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!selectedBroker) { setUploadError('Please select a brokerage first.'); return; }
-    setUploadError('');
-    setLoading(true);
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target?.result as string;
+  const run = async (name: string, task: () => Promise<void>) => {
+    if (operation.current) return;
+    operation.current = true;
+    setPending(name);
+    setNotice(null);
+    try { await task(); }
+    catch (error) { if (mounted.current) setNotice({ kind: 'error', text: errorText(error) }); }
+    finally { operation.current = false; if (mounted.current) setPending(''); }
+  };
+
+  const refreshPortfolio = async () => {
+    try { await onRefresh?.(); return ''; }
+    catch { return ' The operation completed, but the portfolio view could not refresh. Reload the page to see the latest records.'; }
+  };
+  const refreshAfterManagement = async (message: string) => {
+    let warning = '';
+    try { await loadConnections(); }
+    catch { warning = ' The account list could not refresh. Refresh it before synchronizing.'; }
+    warning += await refreshPortfolio();
+    setNotice({ kind: warning ? 'info' : 'success', text: message + warning });
+  };
+  const switchTab = (tab: 'connect' | 'manual') => { setActiveTab(tab); setNotice(null); };
+  const toggleAccount = (id: string) => {
+    setScope('selected');
+    setSelectedIds(ids => scope === 'all' ? accounts.filter(a => a.id !== id).map(a => a.id) : ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id]);
+  };
+
+  const connect = () => {
+    if (preview) { setNotice({ kind: 'info', text: 'Design preview: brokerage sign-in is disabled. Explore the fictional connections below.' }); return; }
+    if (operation.current) return;
+    // Open during the click, before awaiting the provider URL, to avoid popup blockers.
+    const popup = window.open('about:blank', '_blank');
+    if (!popup) { setNotice({ kind: 'error', text: 'Allow a new tab for this site, then try connecting again.' }); return; }
+    popup.opener = null;
+    void run('connect', async () => {
       try {
-        const extracted = await parseStatement(text || "", selectedBroker);
-        onAddTransactions(extracted);
-        setManualText('');
-        setShowSuccessPrompt(true);
-      } catch {
-        setUploadError('Failed to parse statement.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    reader.readAsText(file);
+        const url = new URL(await getBrokerageConnectUrl(connectBroker));
+        if (!['https:', 'http:'].includes(url.protocol)) throw new Error('The provider returned an invalid sign-in link.');
+        if (popup.closed) throw new Error('The sign-in tab was closed. Try connecting again.');
+        popup.location.href = url.href;
+        setNotice({ kind: 'info', text: 'Complete brokerage sign-in in the new tab, then return here and refresh accounts.' });
+      } catch (error) { popup.close(); throw error; }
+    });
   };
 
-  const handleManualImport = async () => {
-    if (!selectedBroker || !manualText) return;
-    setLoading(true);
-    setUploadError('');
-    try {
-      const extracted = await parseStatement(manualText, selectedBroker);
-      onAddTransactions(extracted);
-      setManualText('');
-      setShowSuccessPrompt(true);
-    } catch {
-      setUploadError('AI failed to find stock holdings in that text.');
-    } finally {
-      setLoading(false);
-    }
+  const sync = () => void run('sync', async () => {
+    if (!loaded || loadError) throw new Error('Refresh the account list before synchronizing.');
+    const request = buildSyncRequest({ scope, selectedIds, availableIds: accounts.map(a => a.id), period, start, end, tickerInput });
+    const result = await syncBrokerageTransactions(request.startDate, request.endDate, request.accountIds, request.tickers);
+    const warning = await refreshPortfolio();
+    setNotice({ kind: warning ? 'info' : 'success', text: result.message + warning });
+  });
+
+  const manage = (kind: 'hide' | 'disconnect', id: string, name: string) => {
+    if (preview) { setNotice({ kind: 'info', text: 'Design preview: hiding accounts and disconnecting brokerages are disabled.' }); return; }
+    const prompt = kind === 'hide' ? `Hide “${name}” from future synchronization? This keeps the brokerage connection.` : `Disconnect ${name} from WealthCompass? You will need to connect again to synchronize it.`;
+    if (!window.confirm(prompt)) return;
+    void run(kind, async () => {
+      if (kind === 'hide') await ignoreBrokerageAccount(id);
+      else await deleteBrokerageConnection(id);
+      await refreshAfterManagement(kind === 'hide' ? `${name} hidden from future synchronization.` : `${name} disconnected.`);
+    });
   };
 
-  // --- Connect handlers ---
-  const handleConnect = async () => {
-    if (!connectBroker) { setConnectStatus('Please select a brokerage first.'); return; }
-    setConnectStatus('');
-    setLoading(true);
-    try {
-      const url = await getBrokerageConnectUrl(connectBroker);
-      window.open(url, '_blank');
-      setConnectStatus(`A new tab has opened. Connect your ${connectBroker} account, then click "Refresh Connections" below.`);
-    } catch {
-      setConnectStatus('Failed to get connection URL.');
-    } finally {
-      setLoading(false);
-    }
+  const readFile = (file?: File) => {
+    if (!file) return;
+    void run('file', async () => {
+      setFileText(''); setFileName(''); setAcknowledged(false); setReviewing(false); setImportedBroker('');
+      validateStatementFile(file);
+      const text = await file.text();
+      if (!text.trim()) throw new Error('This statement has no content. Choose another export.');
+      setFileText(text); setFileName(file.name);
+    });
   };
 
-  const handleRefreshConnections = async () => {
-    setLoading(true);
-    try {
-      await loadConnections();
-      setConnectStatus('Connections refreshed.');
-    } catch {
-      setConnectStatus('Failed to refresh connections.');
-    } finally {
-      setLoading(false);
-    }
+  const importStatement = () => void run('import', async () => {
+    if (!importReady) throw new Error('Choose a brokerage, add a statement and confirm replacement before importing.');
+    const transactions = await parseStatement(statementText.replace(/^\uFEFF/, ''), broker);
+    let warning = '';
+    // The live response is one brokerage's ledger, not the complete portfolio.
+    // Reload all datasets when possible instead of replacing unrelated rows.
+    try { if (preview || !onRefresh) onAddTransactions(transactions); }
+    catch { warning = ' The statement was saved, but the local ledger could not update.'; }
+    warning += await refreshPortfolio();
+    setImportedBroker(broker); setImportHasLedger(transactions.length > 0); setFileName(''); setFileText(''); setPasteText(''); setAcknowledged(false); setReviewing(false);
+    if (fileInput.current) fileInput.current.value = '';
+    setNotice({ kind: warning ? 'info' : 'success', text: `${preview ? 'Sample statement processed' : 'Statement processed'} for ${broker}.${warning}` });
+  });
+
+  const deleteSource = (source?: 'manual' | 'snaptrade') => {
+    if (preview) { setNotice({ kind: 'info', text: 'Design preview: deleting source data is disabled.' }); return; }
+    const label = source === 'manual' ? 'all manual statement source records' : source === 'snaptrade' ? 'all SnapTrade source records' : 'ALL source and processed portfolio data';
+    if (!window.confirm(`Permanently delete ${label}? This also clears ALL transactions, holdings and gains. Source records from the other import method are kept. This cannot be undone.`)) return;
+    void run('delete', async () => {
+      const result = await deleteRawData(source);
+      const warning = await refreshPortfolio();
+      setNotice({ kind: warning ? 'info' : 'success', text: result.message + warning });
+    });
   };
 
-  const handleDeleteConnection = async (authorizationId: string, brokerage: string) => {
-    if (!window.confirm(`Remove ${brokerage} connection?`)) return;
-    setLoading(true);
-    try {
-      await deleteBrokerageConnection(authorizationId);
-      await loadConnections();
-      setConnectStatus(`${brokerage} disconnected.`);
-    } catch {
-      setConnectStatus('Failed to remove connection.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSync = async () => {
-    setLoading(true);
-    setConnectStatus('');
-    try {
-      // If specific accounts selected, use those. If only a brokerage selected with no accounts,
-      // use all accounts under that brokerage. Otherwise sync everything.
-      let accountIds: string[] | undefined;
-      if (syncAccountIds.length > 0) {
-        accountIds = syncAccountIds;
-      } else if (syncBrokerage) {
-        accountIds = accounts.filter(a => a.authorization_id === syncBrokerage).map(a => a.id);
-      }
-      // Include any ticker still typed in the input field (user may not have pressed Enter)
-      const effectiveTickers = [...syncTickers];
-      if (syncTickerInput.trim() && !effectiveTickers.includes(syncTickerInput.trim())) {
-        effectiveTickers.push(syncTickerInput.trim());
-      }
-      const result = await syncBrokerageTransactions(syncStartDate || undefined, syncEndDate || undefined, accountIds, effectiveTickers.length > 0 ? effectiveTickers : undefined);
-      setConnectStatus(result.message);
-      onRefresh?.();
-    } catch {
-      setConnectStatus('Failed to sync transactions.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4">
-      <div className="space-y-1">
-        <h2 className="font-display text-2xl font-bold text-[#1D1D1F]">Import Your Portfolio</h2>
-        <p className="text-[#6E6E73] text-sm">Connect your brokerage or upload a statement manually.</p>
+  return <div className="ac-workspace" aria-busy={busy}>
+    <div className="ac-toolbar">
+      <div className="workspace-segments" aria-label="Account workspace">
+        <button className={activeTab === 'connect' ? 'active' : ''} aria-pressed={activeTab === 'connect'} disabled={busy} onClick={() => switchTab('connect')}>Connected accounts</button>
+        <button className={activeTab === 'manual' ? 'active' : ''} aria-pressed={activeTab === 'manual'} disabled={busy} onClick={() => switchTab('manual')}>Statement import</button>
       </div>
-
-      {/* Tab switcher */}
-      <div className="flex items-center p-1 bg-[#EFEFF4] rounded w-fit">
-        <button
-          onClick={() => setActiveTab('manual')}
-          className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'manual' ? 'bg-white text-[#0F52BA] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          Manual Upload
-        </button>
-        <button
-          onClick={() => setActiveTab('connect')}
-          className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'connect' ? 'bg-white text-[#0F52BA] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          Connect Brokerage
-        </button>
-      </div>
-
-      <div className="bg-white rounded border border-[#D2D2D7] shadow-sm overflow-hidden">
-        <div className="p-8 space-y-8">
-
-          {/* ── Manual Tab ── */}
-          {activeTab === 'manual' && (
-            <>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-4">1. Select your Brokerage</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {BROKERAGES.map((broker) => (
-                    <button
-                      key={broker.name}
-                      onClick={() => setSelectedBroker(broker.name)}
-                      className={`flex flex-col items-center justify-center p-6 rounded border-2 transition-all duration-200 ${
-                        selectedBroker === broker.name
-                          ? 'border-[#0F52BA] bg-[#E6EEFB]/20 text-[#0A3E8F]'
-                          : 'border-[#D2D2D7] hover:border-[#D2D2D7] text-[#6E6E73]'
-                      }`}
-                    >
-                      <BrokerageLogo name={broker.name} domain={broker.domain} size={40} />
-                      <span className="font-bold text-sm mt-3">{broker.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <label className="block text-sm font-bold text-slate-700">2. Upload Statement or Paste Content</label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="border-2 border-dashed border-[#D2D2D7] rounded p-8 flex flex-col items-center justify-center text-center space-y-4 hover:border-[#0F52BA] transition-colors bg-[#F5F5F7]">
-                    <div className="w-16 h-16 rounded-full bg-white shadow-sm flex items-center justify-center text-[#0F52BA]">
-                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-900">Upload CSV or Text</p>
-                      <p className="text-sm text-slate-500 mt-1">Export your data from your broker</p>
-                    </div>
-                    <input type="file" id="file-upload" className="hidden" onChange={handleFileUpload} accept=".csv,.txt" />
-                    <label htmlFor="file-upload" className="px-6 py-2 bg-[#0F52BA] text-white font-bold rounded cursor-pointer hover:bg-[#0A3E8F] transition-colors shadow-sm">
-                      Select File
-                    </label>
-                  </div>
-                  <div className="space-y-4">
-                    <textarea
-                      className="w-full h-44 p-4 rounded border border-[#D2D2D7] focus:ring-2 focus:ring-[#0F52BA] focus:border-[#0F52BA] transition-all text-sm font-medium outline-none resize-none"
-                      placeholder="Or paste your CSV/text statement here..."
-                      value={manualText}
-                      onChange={(e) => setManualText(e.target.value)}
-                    />
-                    <button
-                      onClick={handleManualImport}
-                      disabled={!manualText || !selectedBroker}
-                      className="w-full py-3 bg-slate-900 text-white font-bold rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors shadow-xl"
-                    >
-                      Parse Statement
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {uploadError && (
-                <div className="p-4 bg-rose-50 border border-rose-100 rounded flex items-center space-x-3 text-[#FF3B30]">
-                  <span className="text-sm font-medium">{uploadError}</span>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ── Connect Tab ── */}
-          {activeTab === 'connect' && (
-            <div className="space-y-8">
-              {/* Connected brokerages */}
-              {connections.length > 0 && (
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-3">Connected Brokerages</label>
-                  <div className="flex flex-wrap gap-2">
-                    {connections.map((item) => (
-                      <span key={item.id} className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-sm font-bold">
-                        ✓ {item.brokerage}
-                        <button
-                          onClick={() => handleDeleteConnection(item.authorization_id, item.brokerage)}
-                          className="text-emerald-400 hover:text-rose-600 transition-colors ml-1"
-                          title="Remove connection"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Select brokerage */}
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-4">1. Select Brokerage to Connect</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {BROKERAGES.map((broker) => (
-                    <button
-                      key={broker.name}
-                      onClick={() => setConnectBroker(broker.name)}
-                      className={`flex flex-col items-center justify-center p-6 rounded border-2 transition-all duration-200 ${
-                        connectBroker === broker.name
-                          ? 'border-[#0F52BA] bg-[#E6EEFB]/20 text-[#0A3E8F]'
-                          : 'border-[#D2D2D7] hover:border-[#D2D2D7] text-[#6E6E73]'
-                      }`}
-                    >
-                      <BrokerageLogo name={broker.name} domain={broker.domain} size={40} />
-                      <span className="font-bold text-sm mt-3">{broker.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Connect button */}
-              <div className="space-y-3">
-                <label className="block text-sm font-bold text-slate-700">2. Connect Your Brokerage</label>
-                <button
-                  onClick={handleConnect}
-                  disabled={!connectBroker}
-                  className="w-full py-3 bg-[#0F52BA] text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0A3E8F] transition-colors shadow-sm"
-                >
-                  Connect Brokerage
-                </button>
-              </div>
-
-              {/* Refresh + Sync */}
-              <div className="space-y-3">
-                <label className="block text-sm font-bold text-slate-700">3. After Connecting</label>
-
-                {/* Hierarchical brokerage → account selector */}
-                {connections.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Brokerage</label>
-                      <select
-                        value={syncBrokerage}
-                        onChange={e => { setSyncBrokerage(e.target.value); setSyncAccountIds([]); }}
-                        className="w-full px-3 py-2 rounded border border-[#D2D2D7] text-sm text-[#1D1D1F] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
-                      >
-                        <option value="">All Brokerages</option>
-                        {connections.map(c => (
-                          <option key={c.authorization_id} value={c.authorization_id}>{c.brokerage}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {syncBrokerage && (() => {
-                      const filteredAccounts = accounts.filter(a => a.authorization_id === syncBrokerage);
-                      return filteredAccounts.length > 0 ? (
-                        <div className="space-y-1">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Accounts</label>
-                          <div className="flex flex-col gap-2">
-                            {filteredAccounts.map(a => (
-                              <div key={a.id} className={`flex items-center gap-3 px-4 py-3 rounded border text-sm transition-colors ${syncAccountIds.includes(a.id) ? 'bg-[#E6EEFB]/20 border-[#0F52BA]/30' : 'bg-[#F5F5F7] border-[#D2D2D7]'}`}>
-                                <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
-                                  <input
-                                    type="checkbox"
-                                    className="w-4 h-4 accent-[#0F52BA] shrink-0"
-                                    checked={syncAccountIds.includes(a.id)}
-                                    onChange={() => setSyncAccountIds(prev => prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id])}
-                                  />
-                                  <p className={`font-semibold ${syncAccountIds.includes(a.id) ? 'text-[#0A3E8F]' : 'text-[#1D1D1F]'}`}>
-                                    {a.name || 'Brokerage Account'}
-                                  </p>
-                                </label>
-                                <button
-                                  onClick={async () => {
-                                    if (!window.confirm(`Hide "${a.name || 'this account'}" from WealthCompass?`)) return;
-                                    await ignoreBrokerageAccount(a.id);
-                                    setSyncAccountIds(prev => prev.filter(id => id !== a.id));
-                                    await loadConnections();
-                                  }}
-                                  className="text-slate-300 hover:text-rose-500 transition-colors shrink-0"
-                                  title="Hide account"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                          <p className="text-xs text-slate-400">Leave all unchecked to sync all accounts for this brokerage.</p>
-                        </div>
-                      ) : null;
-                    })()}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Start Date</label>
-                    <input
-                      type="date"
-                      value={syncStartDate}
-                      onChange={e => setSyncStartDate(e.target.value)}
-                      className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">End Date</label>
-                    <input
-                      type="date"
-                      value={syncEndDate}
-                      onChange={e => setSyncEndDate(e.target.value)}
-                      className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Filter by Ticker (optional)</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={syncTickerInput}
-                      onChange={e => setSyncTickerInput(e.target.value.toUpperCase())}
-                      onKeyDown={e => {
-                        if ((e.key === 'Enter' || e.key === ',') && syncTickerInput.trim()) {
-                          e.preventDefault();
-                          const t = syncTickerInput.trim();
-                          if (!syncTickers.includes(t)) setSyncTickers(prev => [...prev, t]);
-                          setSyncTickerInput('');
-                        }
-                      }}
-                      placeholder="e.g. AAPL"
-                      className="flex-1 px-3 py-2 rounded-md border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
-                    />
-                    <button
-                      onClick={() => {
-                        const t = syncTickerInput.trim();
-                        if (t && !syncTickers.includes(t)) setSyncTickers(prev => [...prev, t]);
-                        setSyncTickerInput('');
-                      }}
-                      disabled={!syncTickerInput.trim()}
-                      className="px-3 py-2 bg-[#E6EEFB] text-[#0A3E8F] font-bold rounded text-sm disabled:opacity-40 hover:bg-[#D2D2D7] transition-colors"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  {syncTickers.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {syncTickers.map(t => (
-                        <span key={t} className="flex items-center gap-1 px-2.5 py-1 bg-[#E6EEFB]/30 text-[#0A3E8F] border border-[#D2D2D7] rounded text-xs font-bold">
-                          {t}
-                          <button onClick={() => setSyncTickers(prev => prev.filter(x => x !== t))} className="text-[#AEAEB2] hover:text-[#FF3B30] transition-colors">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </span>
-                      ))}
-                      <button onClick={() => setSyncTickers([])} className="text-xs text-slate-400 hover:text-rose-500 transition-colors">Clear all</button>
-                    </div>
-                  )}
-                  <p className="text-xs text-slate-400">Leave empty to import all tickers. Press Enter or comma to add.</p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={handleRefreshConnections}
-                    className="py-3 bg-slate-100 text-slate-700 font-bold rounded-md hover:bg-slate-200 transition-colors"
-                  >
-                    Refresh Connections
-                  </button>
-                  <button
-                    onClick={handleSync}
-                    disabled={connections.length === 0}
-                    className="py-3 bg-slate-900 text-white font-bold rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors shadow-xl"
-                  >
-                    Sync Transactions
-                  </button>
-                </div>
-              </div>
-
-              {connectStatus && (
-                <div className={`p-4 rounded border text-sm font-medium ${
-                  connectStatus.includes('Synced') || connectStatus.includes('refreshed') || connectStatus.includes('tab has opened')
-                    ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                    : 'bg-rose-50 border-rose-100 text-rose-700'
-                }`}>
-                  {connectStatus}
-                </div>
-              )}
-
-              {/* Danger Zone */}
-              <div className="border border-rose-100 rounded p-5 space-y-3">
-                <p className="text-xs font-bold text-rose-400 uppercase tracking-widest">Danger Zone</p>
-                <div className="grid grid-cols-1 gap-2">
-                  <button
-                    onClick={async () => {
-                      if (!window.confirm('Delete all SnapTrade raw transaction data? This cannot be undone.')) return;
-                      setLoading(true);
-                      try {
-                        const res = await deleteRawData('snaptrade');
-                        setConnectStatus(res.message);
-                      } catch { setConnectStatus('Failed to delete SnapTrade raw data.'); }
-                      finally { setLoading(false); }
-                    }}
-                    className="w-full py-2.5 text-sm font-semibold text-rose-600 border border-rose-200 rounded-md hover:bg-rose-50 transition-colors"
-                  >
-                    Delete SnapTrade Raw Data
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!window.confirm('Delete all manually uploaded raw transaction data? This cannot be undone.')) return;
-                      setLoading(true);
-                      try {
-                        const res = await deleteRawData('manual');
-                        setConnectStatus(res.message);
-                      } catch { setConnectStatus('Failed to delete manual raw data.'); }
-                      finally { setLoading(false); }
-                    }}
-                    className="w-full py-2.5 text-sm font-semibold text-rose-600 border border-rose-200 rounded-md hover:bg-rose-50 transition-colors"
-                  >
-                    Delete Manual Upload Raw Data
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!window.confirm('Delete ALL raw data (SnapTrade + manual uploads) and all processed data? This is a full reset and cannot be undone.')) return;
-                      setLoading(true);
-                      try {
-                        const res = await deleteRawData();
-                        setConnectStatus(res.message);
-                      } catch { setConnectStatus('Failed to delete all raw data.'); }
-                      finally { setLoading(false); }
-                    }}
-                    className="w-full py-2.5 text-sm font-bold text-white bg-rose-500 rounded-md hover:bg-rose-600 transition-colors"
-                  >
-                    Delete All Data (Full Reset)
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-[#F5F5F7] p-6 border-t border-[#D2D2D7] flex items-center justify-between text-[#6E6E73]">
-          <div className="flex items-center space-x-2">
-            <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <span className="text-xs font-semibold uppercase tracking-wider">End-to-End Encrypted</span>
-          </div>
-          <span className="text-xs italic">Statements processed locally and securely</span>
-        </div>
-      </div>
-
-      {showSuccessPrompt && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded border border-[#D2D2D7] shadow-sm flex flex-col items-center space-y-4">
-            <svg className="w-16 h-16 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h3 className="font-display text-xl font-bold text-[#1D1D1F]">Upload Successful!</h3>
-            <p className="text-slate-600">Your statement has been successfully parsed and processed.</p>
-            <button
-              onClick={() => setShowSuccessPrompt(false)}
-              className="px-6 py-3 bg-[#0F52BA] text-white font-bold rounded hover:bg-[#0A3E8F] transition-colors shadow-sm"
-            >
-              OK
-            </button>
-          </div>
-        </div>
-      )}
+      <span className="ac-toolbar-note">{activeTab === 'connect' ? 'Choose the accounts. Control the sync.' : 'Bring in the history behind your portfolio.'}</span>
     </div>
-  );
-};
+    {notice && <div className={`ac-notice is-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}>
+      <strong>{notice.kind === 'error' ? 'Action needed' : notice.kind === 'success' ? 'Completed' : 'Please note'}</strong>
+      <span>{notice.text}</span>
+    </div>}
 
-export default ImportDataView;
+    {activeTab === 'connect' ? <div className="ac-layout">
+      <div className="ac-main-stack">
+        <AccountConnections connections={connections} accounts={accounts} loaded={loaded} loadError={loadError}
+          refreshedAt={refreshedAt} busy={busy} refreshing={pending === 'refresh'} scope={scope}
+          selectedIds={selectedIds} onToggle={toggleAccount} onManage={manage}
+          onSelection={(ids, nextScope) => { setSelectedIds(ids); setScope(nextScope); }}
+          onRefresh={() => void run('refresh', async () => { await loadConnections(); setNotice({ kind: 'success', text: 'Connections and accounts refreshed.' }); })} />
+        <section className="ac-panel ac-add-connection" aria-labelledby="ac-add">
+          <div>
+            <p className="ac-eyebrow">GROW YOUR WORKSPACE</p>
+            <h2 id="ac-add">Add a brokerage</h2>
+            <p>Sign in through the brokerage connection portal. Return here to refresh your account list.</p>
+          </div>
+          <div className="ac-connect-catalog" aria-label="Brokerage to connect">
+            {CONNECT_BROKERS.map(name => <button key={name} className={connectBroker === name ? 'is-selected' : ''} disabled={busy} aria-pressed={connectBroker === name} onClick={() => setConnectBroker(name)}>
+              <BrokerageLogo name={name} />
+              <span>{name === 'Other' ? 'More brokers' : name}</span>
+            </button>)}
+          </div>
+          <div className="ac-connect-footer">
+            <span>{connectBroker === 'Other' ? 'Choose a provider in the connection portal.' : `Connect another ${connectBroker} account through the sign-in portal.`}</span>
+            <button className="ac-button ac-primary" disabled={busy} onClick={connect}>{pending === 'connect' ? 'Opening…' : `Connect ${connectBroker === 'Other' ? 'brokerage' : connectBroker} ↗`}</button>
+          </div>
+        </section>
+      </div>
+      <aside className="ac-panel ac-sync-panel" aria-labelledby="ac-sync">
+        <header>
+          <p className="ac-eyebrow">ON YOUR TERMS</p>
+          <h2 id="ac-sync">Synchronize activity</h2>
+          <p>Import activity from the accounts and period you choose.</p>
+        </header>
+        <fieldset disabled={busy || !loaded || !!loadError}>
+          <legend>Choose the period</legend>
+          <label className="ac-field">Activity period<select value={period} onChange={e => setPeriod(e.target.value as SyncPeriod)}>
+            <option value="history">Available history</option>
+            <option value="ytd">Year to date</option>
+            <option value="custom">Custom dates</option>
+          </select>
+          </label>{period === 'custom' && <div className="ac-date-fields">
+            <label className="ac-field">From<input type="date" value={start} onChange={e => setStart(e.target.value)} />
+            </label>
+            <label className="ac-field">Through<input type="date" value={end} min={start || undefined} onChange={e => setEnd(e.target.value)} />
+            </label>
+          </div>}<details className="ac-optional-filters">
+            <summary>Limit to specific tickers <span>optional</span>
+            </summary>
+            <label className="ac-field">Tickers<input value={tickerInput} onChange={e => setTickerInput(e.target.value)} placeholder="AAPL, MSFT, VTI" autoCapitalize="characters" spellCheck={false} />
+            </label>
+            <p className="ac-help">Separate tickers with commas or spaces. Leave blank for all tickers.</p>
+          </details>
+        </fieldset>
+        <div className="ac-sync-review">
+          <span>YOUR NEXT SYNC</span>
+          <strong>{activeIds.length} {activeIds.length === 1 ? 'account' : 'accounts'} · {period === 'history' ? 'available history' : period === 'ytd' ? 'year to date' : 'custom dates'}</strong>
+          <p>{effectiveTickers.length ? effectiveTickers.join(' · ') : 'All tickers'}{period === 'custom' && ` · ${start || 'earliest available'} → ${end || 'latest available'}`}</p>
+          {!!selectedAccounts.length && <ul className="ac-sync-accounts">{selectedAccounts.map(account => <li key={account.id}>
+            <BrokerageLogo name={account.brokerage} />
+            <span>{account.name || 'Brokerage account'}<small>{account.brokerage}</small>
+            </span>
+          </li>)}</ul>}
+        </div>
+        {loaded && !loadError && syncError && <p className="ac-validation">{syncError}</p>}<button className="ac-button ac-primary ac-full" disabled={busy || !loaded || !!loadError || !!syncError} onClick={sync}>{pending === 'sync' ? 'Synchronizing…' : 'Sync transactions →'}</button>
+        <p className="ac-help ac-sync-footnote">Available history depends on your brokerage. This action synchronizes transactions; it does not place trades.</p>
+      </aside>
+    </div> : <div className="ac-import-workflow">
+      <ol className="ac-steps" aria-label="Statement import progress">{['Choose format', 'Add source', 'Review & import'].map((label, index) => <li key={label} className={index + 1 < importStep ? 'is-complete' : index + 1 === importStep ? 'is-current' : ''} aria-current={index + 1 === importStep ? 'step' : undefined}>
+        <span>{index + 1 < importStep ? '✓' : index + 1}</span>{label}</li>)}</ol>
+      <div className="ac-layout ac-import-layout">
+        {reviewing ? <StatementPreview inspection={inspection} brokerage={broker} sourceName={source === 'file' ? fileName : 'Pasted CSV'} busy={busy} onEdit={() => { setReviewing(false); setAcknowledged(false); }} /> : <section className="ac-panel ac-import-editor" aria-labelledby="ac-statement">
+          <header>
+            <p className="ac-eyebrow">HISTORY, WITH CONTEXT</p>
+            <h2 id="ac-statement">Prepare your statement</h2>
+            <p>Select the export format, then add the file or paste its CSV contents.</p>
+          </header>
+          <fieldset disabled={busy}>
+            <legend>1. Choose the export format</legend>
+            <div className="ac-broker-choices">{IMPORT_BROKERS.map(name => <button key={name} className={broker === name ? 'is-selected' : ''} aria-pressed={broker === name} onClick={() => { setBroker(name); setAcknowledged(false); setReviewing(false); setImportedBroker(''); }}>
+              <BrokerageLogo name={name} />
+              <span>{name}<small>Transaction CSV</small>
+              </span>
+              <span className="ac-choice-dot" />
+            </button>)}</div>
+            <p className="ac-help">CSV templates currently supported: Robinhood and Schwab. Use brokerage connections for other providers. PDF statements are not supported.</p>
+          </fieldset>
+          <fieldset disabled={busy}>
+            <legend>2. Add your statement</legend>
+            <div className="ac-source-tabs" aria-label="Statement source">
+              <button className={source === 'file' ? 'active' : ''} aria-pressed={source === 'file'} onClick={() => { setSource('file'); setAcknowledged(false); setReviewing(false); }}>Upload file</button>
+              <button className={source === 'paste' ? 'active' : ''} aria-pressed={source === 'paste'} onClick={() => { setSource('paste'); setAcknowledged(false); setReviewing(false); }}>Paste CSV</button>
+            </div>{source === 'file' ? <>
+              <div className={`ac-dropzone ${fileName ? 'has-file' : ''}`}>
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 0v6h6M8 13h8m-8 4h6" />
+                </svg>
+                <strong>{fileName || 'Choose a transaction export'}</strong>
+                <p>{fileName ? 'File ready for review. Nothing has been imported yet.' : 'CSV or TXT · up to 5 MB'}</p>
+                <input ref={fileInput} aria-label="Statement file" type="file" accept=".csv,.txt" onChange={e => { readFile(e.target.files?.[0]); e.target.value = ''; }} />
+                <button className="ac-button" onClick={() => fileInput.current?.click()}>{pending === 'file' ? 'Reading file…' : fileName ? 'Choose another file' : 'Browse files'}</button>
+              </div>{fileText && <details className="ac-content-preview">
+                <summary>View file contents <span>first 1,800 characters</span>
+                </summary>
+                <pre>{fileText.slice(0, 1800)}</pre>
+              </details>}</> : <label className="ac-field ac-paste-label">CSV contents<textarea value={pasteText} onChange={e => { setPasteText(e.target.value); setAcknowledged(false); setReviewing(false); setImportedBroker(''); }} placeholder="Paste the header row and transaction rows from your brokerage export…" rows={10} spellCheck={false} />
+              <span className="ac-help">Keep the original column names and date format. This is a source preview; records are parsed when you import.</span>
+            </label>}{tooLarge && <p className="ac-validation" role="alert">The statement exceeds the 5 MB limit.</p>}
+            {preview && <button className="ac-sample-button" onClick={() => { setBroker('Schwab'); setSource('paste'); setPasteText('Date,Action,Symbol,Description,Quantity,Price,Commissions & Fees,Amount,Settlement Date\n2025-06-10,Buy,AAPL,Apple Inc,10,150,0,-1500,2025-06-11'); setAcknowledged(false); setReviewing(false); setImportedBroker(''); setNotice(null); }}>Try a fictional sample export →</button>}</fieldset>
+        </section>}
+        <aside className="ac-import-side">
+          <section className="ac-panel ac-import-review" aria-labelledby="ac-review">
+            <p className="ac-eyebrow">BEFORE YOU IMPORT</p>
+            <h2 id="ac-review">{reviewing ? 'Ready to import?' : 'Your import'}</h2>
+            <dl>
+              <div>
+                <dt>Brokerage</dt>
+                <dd className="ac-review-broker">{broker && <BrokerageLogo name={broker} />}{broker || 'Choose a format'}</dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd>{source === 'file' ? fileName || 'No file selected' : pasteText.trim() ? 'Pasted CSV' : 'No content added'}</dd>
+              </div>
+              <div>
+                <dt>Destination</dt>
+                <dd>{preview ? 'Fictional preview ledger' : 'Your portfolio ledger'}</dd>
+              </div>
+            </dl>
+            {!!broker && !!statementText.trim() && inspection.error && <p className="ac-validation" role="alert">{inspection.error}</p>}
+            {canReview && <div className="ac-format-match">
+              <span>✓</span>
+              <div>
+                <strong>{broker} headers found</strong>
+                <small>{inspection.rowCount.toLocaleString()} source {inspection.rowCount === 1 ? 'row' : 'rows'} · ready for review</small>
+              </div>
+            </div>}
+            <div className="ac-replace-note">
+              <strong>This replaces manual history</strong>
+              <p>Existing manually imported records for {broker || 'the selected brokerage'} are replaced. Brokerage-synced records and verified seed transactions are kept.</p>
+            </div>
+            {reviewing && <label className="ac-acknowledge">
+              <input type="checkbox" checked={acknowledged} disabled={busy || !broker || !statementText.trim() || tooLarge} onChange={e => setAcknowledged(e.target.checked)} />
+              <span>I understand this replaces the selected brokerage’s manual import history.</span>
+            </label>}
+            {reviewing ? <button className="ac-button ac-primary ac-full" disabled={busy || !importReady} onClick={importStatement}>{pending === 'import' ? 'Importing statement…' : 'Import statement →'}</button> : <button className="ac-button ac-primary ac-full" disabled={busy || !canReview} onClick={() => { setReviewing(true); setAcknowledged(false); setNotice(null); }}>Review statement →</button>}
+            <p className="ac-help">{preview ? 'Preview imports create fictional example rows only. No statement is sent to a server.' : 'The statement is sent to the server only when you select Import statement.'}</p>
+          </section>
+          {importedBroker && <section className="ac-import-result" role="status">
+            <span>✓</span>
+            <div>
+              <h3>{preview ? 'Sample statement processed' : 'Statement processed'}</h3>
+              <p>{importHasLedger ? `${importedBroker} statement saved. Review the combined brokerage ledger below.` : `${importedBroker} source statement saved. No ledger records were returned; manual history fills gaps before brokerage-synced coverage.`}</p>{onViewTransactions && <button disabled={busy} onClick={onViewTransactions}>View transactions →</button>}</div>
+          </section>}
+          <section className="ac-import-guide">
+            <h3>Make your history useful</h3>
+            <p>Use a full transaction export rather than a holdings snapshot. Manual rows extend history before each ticker’s earliest brokerage-synced transaction; other rows stay in source history. Sync the brokerage first to establish coverage.</p>
+            <p>Keep the original header row. Export formats can vary; the parser will report missing columns before replacing records.</p>
+          </section>
+        </aside>
+      </div>
+    </div>}
+
+    <details className="ac-management">
+      <summary>Advanced data management <span>Remove source records or reset portfolio data</span>
+      </summary>
+      <div>
+        <p>Deleting either source also clears all transactions, holdings and gains. Source records from the other method are kept. These actions cannot be undone.</p>
+        <div className="ac-management-actions">
+          <button className="ac-button ac-danger" disabled={busy} onClick={() => deleteSource('manual')}>Delete manual source records</button>
+          <button className="ac-button ac-danger" disabled={busy} onClick={() => deleteSource('snaptrade')}>Delete SnapTrade source records</button>
+          <button className="ac-button ac-danger" disabled={busy} onClick={() => deleteSource()}>Reset all portfolio data</button>
+        </div>
+      </div>
+    </details>
+  </div>;
+}

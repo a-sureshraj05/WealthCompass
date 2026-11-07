@@ -1,0 +1,20 @@
+/* Shared visual hierarchy for Stocks & funds and Options, at every drill-down. */
+.holdings-data-table { font-variant-numeric: tabular-nums; }
+.holdings-data-table td[data-value] { color: #64748b; font-weight: 400; line-height: 1.6; }
+.holdings-data-table td[data-value] :is(.font-black, .font-bold, .font-semibold) { font-weight: 500; }
+.holdings-data-table td:is([data-value="quantity"], [data-value="totalQty"], [data-value="retainQty"], [data-value="sellableQty"]) { font-weight: 500; color: #52647e; }
+.holdings-data-table td[data-value="marketValue"] { color: #354e70; font-weight: 600; }
+.holdings-data-table td:is([data-value="avgCost"], [data-value="avgBuyPrice"], [data-value="avgCurrentPrice"], [data-value="currentPrice"], [data-value="strikePrice"], [data-value="totalCost"], [data-value="totalValue"]) { color: #697b94; font-weight: 400; }
+.holdings-data-table td:is([data-value="dailyGain"], [data-value="dailyPct"], [data-value="unrealizedGain"], [data-value="unrealizedPct"], [data-value="realized"], [data-value="totalGain"]) { font-weight: 500; }
+.holdings-data-table td[data-value="ticker"] .holding-symbol { color: #344e70; font-weight: 600; letter-spacing: .01em; }
+.holdings-data-table .text-emerald-700 { color: #16816d; }
+.holdings-data-table .text-rose-600 { color: #b15366; }
+.holdings-data-table td:is([data-value="analystPrice"], [data-value="targetPrice"]) { color: #5a79a1; font-weight: 500; }
+.holdings-data-table td[data-value="targetPrice"] > span:not(.text-xs) { color: #5a79a1; }
+.holdings-data-table :is(th.font-black, th.font-bold) { font-weight: 500; text-transform: none; letter-spacing: .03em; }
+.holdings-data-table td[data-value].tracking-widest { color: #73859f; font-weight: 500; font-size: 10px; letter-spacing: .03em; text-transform: none; }
+.holdings-data-table td[data-value="retainQty"] input { background: #f6f9fd; border-color: #dce5f1; color: #54739b; font-weight: 500; padding-block: 4px; border-radius: 7px; }
+.holdings-data-table .holdings-tax-term { display: inline-flex; align-items: center; padding: 4px 7px; border: 1px solid #dce6f4; border-radius: 6px; color: #5274a5; background: #f0f5fd; font-size: 10px; font-weight: 500; line-height: 1.4; white-space: nowrap; }
+.holdings-data-table .holdings-tax-term[data-term="long"] { background: #f6f2fb; border-color: #e5dded; color: #816595; }
+.holdings-data-table .holdings-tax-term[data-term="mixed"] { background: #faf7ef; border-color: #e9e2d2; color: #8a734e; }
+@media (prefers-contrast: more) { .holdings-data-table td[data-value] { color: #405473; }.holdings-data-table .holdings-tax-term { border-color: #9cacbf; }.holdings-data-table .text-emerald-700 { color: #047857; }.holdings-data-table .text-rose-600 { color: #a33851; } }

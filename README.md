@@ -2,6 +2,13 @@
 
 WealthCompass is a web application designed to consolidate and analyze personal stock and ETF holdings. It uses AI to parse brokerage statements and provide a unified view of your portfolio.
 
+## Frontend Design Versions
+
+The saved design snapshots are **V1 (production)**, **V2 (staging)** and
+**V3 (draft refinement)**. See the [UI version registry](docs/ui-versions.md)
+for Git tags, source branches, comparisons and isolated preview instructions.
+These labels bookmark code; they do not change either deployed environment.
+
 ## Technology Stack
 
 *   **Backend:** Python with [FastAPI](https://fastapi.tiangolo.com/)

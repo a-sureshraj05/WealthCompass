@@ -357,6 +357,53 @@ class SnaptradeTransaction(Base):
                                        name="uq_snaptrade_txn"),)
 
 
+class HistoricalPrice(Base):
+    """Public historical market data; closes restored to the as-traded share basis."""
+    __tablename__ = "historical_prices"
+    symbol = Column(String, primary_key=True)
+    date = Column(Date, primary_key=True)
+    close = Column(Float, nullable=True)  # a split-only metadata row need not have a quote
+    adjusted_close = Column(Float, nullable=True)
+    split_ratio = Column(Float, nullable=False, default=1.0)
+    currency = Column(String, nullable=False)
+    fetched_at = Column(DateTime, nullable=False)
+
+
+class PortfolioDailyValue(Base):
+    __tablename__ = "portfolio_daily_values"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    date = Column(Date, nullable=False)
+    holdings_value = Column(EncryptedFloat, nullable=True)
+    cash = Column(EncryptedFloat, nullable=False)
+    total_value = Column(EncryptedFloat, nullable=True)
+    deposits = Column(EncryptedFloat, nullable=False)
+    withdrawals = Column(EncryptedFloat, nullable=False)
+    spy_index = Column(Float, nullable=True)
+    complete = Column(Boolean, nullable=False)
+    __table_args__ = (UniqueConstraint("user_id", "date", name="uq_portfolio_daily_user_date"),)
+
+
+class PortfolioTradeBenchmark(Base):
+    """Private SPY account replacing recorded trades at the same dollar amounts."""
+    __tablename__ = "portfolio_trade_benchmark"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    date = Column(Date, nullable=False)
+    total_value = Column(EncryptedFloat, nullable=True)
+    cash = Column(EncryptedFloat, nullable=True)
+    __table_args__ = (UniqueConstraint("user_id", "date", name="uq_trade_benchmark_user_date"),)
+
+
+class PortfolioPerformanceState(Base):
+    __tablename__ = "portfolio_performance_state"
+    user_id = Column(Integer, primary_key=True)
+    opening_cash = Column(EncryptedFloat, nullable=True)
+    fingerprint = Column(String, nullable=True)
+    result = Column(EncryptedJSON, nullable=True)
+    generated_at = Column(DateTime, nullable=True)
+
+
 # Authoritative list of user-scoped models. Anything added here is automatically
 # covered by the scoping helper, the migration, and the leak test.
 USER_SCOPED_MODELS = (
@@ -374,4 +421,7 @@ USER_SCOPED_MODELS = (
     SnaptradeConnection,
     SnaptradeIgnoredAccount,
     PortfolioSummary,
+    PortfolioDailyValue,
+    PortfolioTradeBenchmark,
+    PortfolioPerformanceState,
 )

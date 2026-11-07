@@ -1,15 +1,116 @@
 import { BrokerageAccount, StockHolding, Transaction, RealizedGain, UnrealizedLot } from "../types";
+import { PROFILE_DISPLAY_NAME_KEY, validateDisplayName } from '../utils/profile';
+import { FINANCIAL_VISIBILITY_KEY } from '../utils/financialVisibility';
+import type { PerformanceSnapshot } from '../components/Dashboard/Performance/performanceModel';
 
 // The session lives in an HttpOnly cookie now, not localStorage — the browser
 // attaches it automatically on every same-origin request, so there's no
 // header to build here. (fetch()'s default credentials mode is
 // "same-origin", and every request this app makes is same-origin.)
 const apiFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  // Only this explicit dev route gets in-memory data. Unknown requests fail
+  // closed in the adapter; none fall through to the real brokerage backend.
+  if (import.meta.env.DEV && window.location.pathname === '/design-preview') {
+    const { previewApiFetch } = await import('../preview/api');
+    return previewApiFetch(url, options);
+  }
   const res = await fetch(url, options);
   if (res.status === 401) {
     window.location.reload();
   }
   return res;
+};
+
+const responseError = async (response: Response, fallback: string): Promise<Error> => {
+  const body = await response.json().catch(() => null);
+  return new Error(typeof body?.detail === 'string' ? body.detail : fallback);
+};
+
+export interface AccountProfile { email: string; displayName: string }
+
+export interface RuntimeFeatures { performanceDemo:boolean; refinedUi:boolean; holdingPerformancePreview:boolean }
+export function parseRuntimeFeatures(status: Record<string,unknown>): RuntimeFeatures {
+  const refinedUi = status?.refined_ui === true;
+  return { performanceDemo:status?.performance_demo === true, refinedUi, holdingPerformancePreview:refinedUi && status?.holding_performance_preview === true };
+}
+export const fetchRuntimeFeatures = async (): Promise<RuntimeFeatures> => {
+  const response = await apiFetch('/api/v1/auth/me');
+  if (!response.ok) throw await responseError(response, 'Could not load workspace settings.');
+  return parseRuntimeFeatures(await response.json());
+};
+export const fetchPerformanceDemoEnabled = async (): Promise<boolean> => {
+  try { return (await fetchRuntimeFeatures()).performanceDemo; } catch { return false; }
+};
+
+export interface PerformanceHistory {
+  status: 'needs_rebuild' | 'building' | 'ready' | 'empty' | 'incomplete' | 'error';
+  snapshots?: PerformanceSnapshot[];
+  progress?: string;
+  issues?: { code: string; message: string; date?: string; symbol?: string; transactionId?: number }[];
+  tradeBenchmarkIssues?: { code: string; message: string; date?: string }[];
+  asOf?: string;
+  firstYear?: number;
+  coverageStart?: string;
+  coverageEnd?: string;
+  marketDates?: string[];
+  requestedStart?: string;
+  generatedAt?: string;
+  method?: string;
+  requiresOpeningCash?: boolean;
+  openingCash?: number | null;
+}
+
+export const fetchPerformanceHistory = async (signal?: AbortSignal): Promise<PerformanceHistory> => {
+  const response = await apiFetch('/api/v1/performance/history', { signal });
+  if (!response.ok) throw await responseError(response, 'Could not load performance history.');
+  return response.json();
+};
+
+export const rebuildPerformanceHistory = async (signal?: AbortSignal, openingCash?: number | null): Promise<void> => {
+  const response = await apiFetch('/api/v1/performance/rebuild', {
+    method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(openingCash === undefined ? {} : { opening_cash: openingCash, set_opening_cash: true }),
+  });
+  if (!response.ok) throw await responseError(response, 'Could not rebuild performance history.');
+};
+
+export const fetchAccountProfile = async (): Promise<AccountProfile> => {
+  // A failed preference read must stay an error, rather than making an existing
+  // name look like it was cleared. Generic table preference reads are best-effort.
+  const [identity, preferences] = await Promise.all([
+    apiFetch('/api/v1/auth/me'), apiFetch('/api/v1/preferences'),
+  ]);
+  if (!identity.ok) throw await responseError(identity, 'Could not load your account.');
+  if (!preferences.ok) throw await responseError(preferences, 'Could not load your display name.');
+  const [user, saved] = await Promise.all([identity.json(), preferences.json()]);
+  const displayName = saved.preferences?.[PROFILE_DISPLAY_NAME_KEY];
+  return { email: typeof user.email === 'string' ? user.email : '', displayName: typeof displayName === 'string' ? displayName.trim() : '' };
+};
+
+export const saveAccountDisplayName = async (value: string): Promise<string> => {
+  const name = validateDisplayName(value);
+  // The existing preference API merges this key without replacing table layouts.
+  await savePreferences({ [PROFILE_DISPLAY_NAME_KEY]: name });
+  return name;
+};
+
+export const fetchFinancialVisibility = async (): Promise<boolean> => {
+  const response = await apiFetch('/api/v1/preferences');
+  if (!response.ok) throw await responseError(response, 'Could not load your visibility preference.');
+  const data = await response.json();
+  const saved = data.preferences?.[FINANCIAL_VISIBILITY_KEY];
+  if (saved === undefined) return true; // Preserve the existing default for new accounts.
+  if (typeof saved !== 'boolean') throw new Error('Invalid visibility preference.');
+  return saved;
+};
+
+export const saveFinancialVisibility = async (visible: boolean): Promise<void> => {
+  await savePreferences({ [FINANCIAL_VISIBILITY_KEY]: visible });
+};
+
+export const logoutAccount = async (): Promise<void> => {
+  const response = await apiFetch('/api/v1/auth/logout', { method: 'POST' });
+  if (!response.ok) throw await responseError(response, 'Could not sign out. Please try again.');
 };
 
 export const parseStatement = async (text: string, brokerageName: string): Promise<Transaction[]> => {
@@ -22,7 +123,7 @@ export const parseStatement = async (text: string, brokerageName: string): Promi
   });
 
   if (!response.ok) {
-    throw new Error("Failed to parse statement");
+    throw await responseError(response, "Failed to import statement");
   }
 
   const parsedData = await response.json();
@@ -271,31 +372,34 @@ export const fetchConnectedBrokerages = async (): Promise<{ id: number; brokerag
 
 export const getBrokerageConnectUrl = async (brokerage: string): Promise<string> => {
   const response = await apiFetch(`/api/v1/brokerage/connect-url?brokerage=${encodeURIComponent(brokerage)}`);
-  if (!response.ok) throw new Error("Failed to get connect URL");
+  if (!response.ok) throw await responseError(response, "Failed to get connect URL");
   const data = await response.json();
   return data.url;
 };
 
-export const fetchBrokerageConnections = async (): Promise<{ id: number; brokerage: string; authorization_id: string }[]> => {
+export interface BrokerageConnection { id: number; brokerage: string; authorization_id: string }
+export interface ProviderAccount { id: string; name: string; brokerage: string; authorization_id: string }
+
+export const fetchBrokerageConnections = async (): Promise<BrokerageConnection[]> => {
   const response = await apiFetch("/api/v1/brokerage/connections");
-  if (!response.ok) throw new Error("Failed to fetch connections");
+  if (!response.ok) throw await responseError(response, "Failed to fetch connections");
   return response.json();
 };
 
-export const fetchBrokerageAccounts = async (): Promise<{ id: string; name: string; brokerage: string; authorization_id: string }[]> => {
-  const response = await apiFetch("/api/v1/brokerage/accounts");
-  if (!response.ok) throw new Error("Failed to fetch accounts");
+export const fetchBrokerageAccounts = async (): Promise<ProviderAccount[]> => {
+  const response = await apiFetch("/api/v1/brokerage/provider-accounts");
+  if (!response.ok) throw await responseError(response, "Failed to fetch provider accounts");
   return response.json();
 };
 
 export const ignoreBrokerageAccount = async (accountId: string): Promise<void> => {
-  const response = await apiFetch(`/api/v1/brokerage/accounts/${encodeURIComponent(accountId)}`, { method: "DELETE" });
-  if (!response.ok) throw new Error("Failed to hide account");
+  const response = await apiFetch(`/api/v1/brokerage/accounts/${encodeURIComponent(accountId)}/ignore`, { method: "DELETE" });
+  if (!response.ok) throw await responseError(response, "Failed to hide account");
 };
 
 export const deleteBrokerageConnection = async (authorizationId: string): Promise<void> => {
-  const response = await apiFetch(`/api/v1/brokerage/connections/${authorizationId}`, { method: "DELETE" });
-  if (!response.ok) throw new Error("Failed to delete connection");
+  const response = await apiFetch(`/api/v1/brokerage/connections/${encodeURIComponent(authorizationId)}`, { method: "DELETE" });
+  if (!response.ok) throw await responseError(response, "Failed to delete connection");
 };
 
 export const syncBrokerageTransactions = async (startDate?: string, endDate?: string, accountIds?: string[], tickers?: string[]): Promise<{ message: string }> => {
@@ -306,14 +410,14 @@ export const syncBrokerageTransactions = async (startDate?: string, endDate?: st
   if (tickers && tickers.length > 0) tickers.forEach(t => params.append("tickers", t));
   const query = params.toString() ? `?${params.toString()}` : "";
   const response = await apiFetch(`/api/v1/brokerage/sync${query}`, { method: "POST" });
-  if (!response.ok) throw new Error("Failed to sync transactions");
+  if (!response.ok) throw await responseError(response, "Failed to sync transactions");
   return response.json();
 };
 
 export const deleteRawData = async (source?: 'manual' | 'snaptrade'): Promise<{ message: string }> => {
   const params = source ? `?source=${source}` : "";
   const response = await apiFetch(`/api/v1/transactions/raw${params}`, { method: "DELETE" });
-  if (!response.ok) throw new Error("Failed to delete raw data");
+  if (!response.ok) throw await responseError(response, "Failed to delete raw data");
   return response.json();
 };
 
@@ -533,5 +637,20 @@ export const updateOptionsRetain = async (
 export const fetchOptionsCalculator = async (): Promise<OptionsCalculator> => {
   const response = await apiFetch("/api/v1/options/calculator");
   if (!response.ok) throw new Error("Failed to fetch options calculator");
+  return response.json();
+};
+
+export interface PortfolioNewsStory {
+  title:string; summary:string; source:string; url:string | null;
+  publishedAt:string; tickers:string[]; weight:number; category:string;
+}
+export interface PortfolioNewsFeed {
+  status:'ready' | 'partial' | 'empty' | 'unavailable'; checkedAt:string;
+  items:PortfolioNewsStory[]; totalHoldings:number; checkedHoldings:number;
+  coverageWeight:number; failedHoldings:number; preview:boolean; message?:string | null;
+}
+export const fetchPortfolioNews = async (): Promise<PortfolioNewsFeed> => {
+  const response = await apiFetch('/api/v1/news/refresh', { method:'POST', cache:'no-store' });
+  if (!response.ok) throw await responseError(response, 'News could not be refreshed.');
   return response.json();
 };

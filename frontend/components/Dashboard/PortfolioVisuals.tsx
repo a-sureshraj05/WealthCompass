@@ -153,7 +153,7 @@ const PortfolioVisuals: React.FC<Props> = ({ holdings, cashByBrokerage = {}, num
 
         {brokerageData.length > 0 && (
           <p className="text-[11px] text-slate-400 mt-4 pt-4 border-t border-[#D2D2D7]">
-            Last synced: just now
+            Latest available balances · refresh to update
           </p>
         )}
       </div>

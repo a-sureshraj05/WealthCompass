@@ -35,21 +35,17 @@ const PARQET_BLOCKLIST = new Set(['SPCX']);
 
 type LoadState = 'parqet' | 'fmp' | 'failed';
 
-const TickerLogo: React.FC<Props> = ({ ticker, size = 28, assetType }) => {
+// A keyed child resets failed-provider state when a row changes ticker.
+const CompanyLogo: React.FC<{ ticker: string; size: number }> = ({ ticker, size }) => {
   const [loadState, setLoadState] = useState<LoadState>(
     PARQET_BLOCKLIST.has(ticker) ? 'fmp' : 'parqet'
   );
-  const resolvedType = useTickerType(ticker, assetType);
-  const isETF = resolvedType.toUpperCase() === 'ETF';
-
-  if (isETF) {
-    return <ETFIcon size={size} />;
-  }
-
   if (loadState === 'failed') {
     return (
       <span
         className="inline-flex items-center justify-center bg-[#1D1D1F] text-white font-bold rounded shrink-0"
+        role="img"
+        aria-label={`${ticker} logo unavailable`}
         style={{ width: size, height: size, fontSize: Math.round(size * 0.35) }}
       >
         {ticker.slice(0, 2)}
@@ -58,8 +54,8 @@ const TickerLogo: React.FC<Props> = ({ ticker, size = 28, assetType }) => {
   }
 
   const src = loadState === 'parqet'
-    ? `https://assets.parqet.com/logos/symbol/${ticker}?format=png`
-    : `https://financialmodelingprep.com/image-stock/${ticker}.png`;
+    ? `https://assets.parqet.com/logos/symbol/${encodeURIComponent(ticker)}?format=png`
+    : `https://financialmodelingprep.com/image-stock/${encodeURIComponent(ticker)}.png`;
 
   const handleError = () =>
     setLoadState(prev => prev === 'parqet' ? 'fmp' : 'failed');
@@ -68,14 +64,25 @@ const TickerLogo: React.FC<Props> = ({ ticker, size = 28, assetType }) => {
     <img
       key={src}
       src={src}
-      alt={ticker}
+      alt={`${ticker} logo`}
       width={size}
       height={size}
       className="rounded object-contain shrink-0 bg-white"
       style={{ width: size, height: size }}
       onError={handleError}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
     />
   );
+};
+
+const TickerLogo: React.FC<Props> = ({ ticker, size = 28, assetType }) => {
+  const normalizedTicker = ticker.trim().toUpperCase();
+  const resolvedType = useTickerType(normalizedTicker, assetType);
+  return resolvedType.toUpperCase() === 'ETF'
+    ? <ETFIcon size={size} />
+    : <CompanyLogo key={normalizedTicker} ticker={normalizedTicker} size={size} />;
 };
 
 export default TickerLogo;

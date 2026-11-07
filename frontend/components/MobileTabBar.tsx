@@ -15,7 +15,7 @@ interface Props {
  */
 const MobileTabBar: React.FC<Props> = ({ activeTab, setActiveTab }) => (
   <nav
-    className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-[#D2D2D7] flex"
+    className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#f0f4fa]/95 backdrop-blur border-t border-[#e1e8f2] flex"
     style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     aria-label="Primary"
   >
@@ -27,7 +27,7 @@ const MobileTabBar: React.FC<Props> = ({ activeTab, setActiveTab }) => (
           onClick={() => setActiveTab(item.id)}
           aria-current={active ? 'page' : undefined}
           className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors ${
-            active ? 'text-[#0F52BA]' : 'text-slate-400 active:text-slate-600'
+            active ? 'text-[#2b57a1]' : 'text-[#6c809e] active:text-[#192b46]'
           }`}
         >
           <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
