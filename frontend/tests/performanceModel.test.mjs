@@ -62,3 +62,22 @@ test('chart downsampling retains exact opening and closing endpoints', () => {
   assert.equal(sampled.at(-1).index, 999);
   assert.ok(sampled.length <= 75);
 });
+
+test('available history starts after its actual positive opening close, not an invented January value', () => {
+  const range = performanceRange('available', '2024-05-03', '2024-05-01');
+  assert.equal(range.start, '2024-05-02');
+  assert.equal(range.openingBoundary, '2024-05-01');
+  const rows = [snapshot('2024-05-01', 1000, 1000, 0, 100), snapshot('2024-05-02', 1100, 0, 0, 102), snapshot('2024-05-03', 1200, 0, 0, 103)];
+  assert.ok(Math.abs(performanceSummary(rows, range).portfolioReturn - 20) < 1e-9);
+  assert.equal(performanceSummary(rows, performanceRange('ytd', '2024-05-03')), null);
+  assert.throws(() => performanceRange('available', '2024-05-03'), /two valuations/);
+});
+
+test('a full withdrawal or total loss keeps its ending zero and missing recent market dates cannot look like current YTD', () => {
+  const range = performanceRange('ytd', '2026-01-02');
+  const opening = snapshot('2025-12-31', 100, 0, 0, 100);
+  assert.equal(performanceSummary([opening, snapshot('2026-01-02', 0, 0, 100, 101)], range).portfolioReturn, 0);
+  assert.equal(performanceSummary([opening, snapshot('2026-01-02', 0, 0, 0, 101)], range).portfolioReturn, -100);
+  assert.equal(performanceSummary([opening], range, ['2025-12-31', '2026-01-02']), null);
+  assert.equal(performanceSummary([opening, snapshot('2026-01-01', 110)], range, ['2025-12-31', '2026-01-01', '2026-01-02']), null);
+});

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatCurrency } from '../utils/finance';
 import { chartSample, performanceRange, performanceSummary } from '../components/Dashboard/Performance/performanceModel';
-import type { PerformancePeriod } from '../components/Dashboard/Performance/performanceModel';
+import type { PerformancePeriod, PerformanceSnapshot } from '../components/Dashboard/Performance/performanceModel';
 import { PERFORMANCE_AS_OF, PERFORMANCE_FIRST_YEAR, performanceSnapshots } from './performanceData';
 import '../components/Dashboard/Performance/performance.css';
 
@@ -13,20 +13,25 @@ const signedMoney = (value: number) => `${value > 0 ? '+' : ''}${formatCurrency(
 const PORTFOLIO = '#315da6';
 const SPY = '#9380b6';
 
-export default function PreviewPerformance({ numbersVisible, scopeFiltered = false, initialView = 'growth', initialPeriod = 'ytd', presentation = 'design-preview' }: { numbersVisible: boolean; scopeFiltered?: boolean; initialView?: 'growth' | 'calendar'; initialPeriod?: PerformancePeriod; presentation?: 'design-preview' | 'staging-demo'; }) {
+function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView = 'growth', initialPeriod = 'ytd', presentation = 'design-preview', history }: { numbersVisible: boolean; scopeFiltered?: boolean; initialView?: 'growth' | 'calendar'; initialPeriod?: PerformancePeriod; presentation?: 'design-preview' | 'staging-demo' | 'transaction-history'; history?: { snapshots: PerformanceSnapshot[]; asOf: string; firstYear: number; coverageStart: string; coverageEnd?: string; marketDates?: string[] };  }) {
+  const actual = presentation === 'transaction-history';
+  // A live history must be supplied explicitly; never fall back to the fixture.
+  const asOf = actual ? history!.asOf : PERFORMANCE_AS_OF;
+  const firstYear = actual ? history!.firstYear : PERFORMANCE_FIRST_YEAR;
+  const snapshots = actual ? history!.snapshots : performanceSnapshots;
   const stagingDemo = presentation === 'staging-demo';
   const portfolioLabel = stagingDemo ? 'Demo portfolio' : 'Your portfolio';
-  const [period, setPeriod] = useState<PerformancePeriod>(initialPeriod);
+  const [period, setPeriod] = useState<PerformancePeriod>(actual ? 'available' : initialPeriod);
   const [view, setView] = useState<'growth' | 'calendar'>(initialView);
   const [unit, setUnit] = useState<'percent' | 'growth'>('percent');
-  const currentYear = Number(PERFORMANCE_AS_OF.slice(0, 4));
-  const years = Array.from({ length: currentYear - PERFORMANCE_FIRST_YEAR + 1 }, (_, index) => PERFORMANCE_FIRST_YEAR + index);
-  const range = performanceRange(period, PERFORMANCE_AS_OF);
-  const summary = useMemo(() => performanceSummary(performanceSnapshots, range), [range.start, range.end]);
+  const currentYear = Number(asOf.slice(0, 4));
+  const years = Array.from({ length: currentYear - firstYear + 1 }, (_, index) => firstYear + index);
+  const range = performanceRange(period, actual && period === 'available' ? history!.coverageEnd ?? snapshots.at(-1)!.date : asOf, history?.coverageStart);
+  const summary = useMemo(() => performanceSummary(snapshots, range, actual ? history?.marketDates : undefined), [snapshots, range.start, range.end, history?.marketDates]);
   const annual = useMemo(() => years.map(year => {
-    const result = performanceSummary(performanceSnapshots, performanceRange(`year-${year}`, PERFORMANCE_AS_OF));
+    const result = performanceSummary(snapshots, performanceRange(`year-${year}`, asOf), actual ? history?.marketDates : undefined);
     return result ? { ...result, year, label: year === currentYear ? `${year} YTD` : String(year) } : null;
-  }).filter(result => result !== null), []);
+  }).filter(result => result !== null), [snapshots, asOf, firstYear, history?.marketDates]);
   const series = summary ? chartSample(summary.series) : [];
   const multiYear = period === '3y' || period === '5y';
   const showYear = (year: number) => { setPeriod(year === currentYear ? 'ytd' : `year-${year}`); setView('growth'); };
@@ -42,16 +47,16 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
         <i />SPY always included</span>
     </header>
     <div className="perf-demo-note">
-      <strong>{stagingDemo ? 'STAGING · DEMO DATA' : 'Frontend design preview'}</strong>
-      <span>Portfolio and SPY results are simulated, not actual historical returns. Sample as of {dateLabel(PERFORMANCE_AS_OF)}.</span>
+      <strong>{actual ? 'TRANSACTION-BASED HISTORY' : stagingDemo ? 'STAGING · DEMO DATA' : 'Frontend design preview'}</strong>
+      <span>{actual ? `Historical prices checked through ${dateLabel(asOf)}. Portfolio coverage: ${dateLabel(history!.coverageStart)} – ${dateLabel(history!.coverageEnd ?? snapshots.at(-1)!.date)}. SPY uses dividend-adjusted prices.` : `Portfolio and SPY results are simulated, not actual historical returns. Sample as of ${dateLabel(asOf)}.`}</span>
     </div>
     {stagingDemo && <p className="perf-scope-note">This is a separate fictional portfolio, not a calculation of your holdings, transactions or account balance. No sample records are added to your account.</p>}
-    {scopeFiltered && <p className="perf-scope-note">This concept compares the entire fictional portfolio. The overview brokerage filter does not change this simulated history.</p>}
+    {scopeFiltered && <p className="perf-scope-note">{actual ? 'Performance includes all brokerages in your account. The overview brokerage filter does not change this history.' : 'This concept compares the entire fictional portfolio. The overview brokerage filter does not change this simulated history.'}</p>}
     <div className="perf-controls">
       <div className="perf-view-switch" aria-label="Performance view">
         <button aria-pressed={view === 'growth'} onClick={() => setView('growth')}>Growth vs SPY</button>
         <button aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>Calendar years</button>
-      </div>{view === 'growth' && <div className="perf-periods" aria-label="Performance period">{(['ytd', '1y', '3y', '5y'] as const).map(value => <button key={value} aria-pressed={period === value} onClick={() => setPeriod(value)}>{value === 'ytd' ? 'YTD' : value.toUpperCase()}</button>)}<label>
+      </div>{view === 'growth' && <div className="perf-periods" aria-label="Performance period">{actual && <button aria-pressed={period === 'available'} onClick={() => setPeriod('available')}>Available</button>}{(['ytd', '1y', '3y', '5y'] as const).map(value => <button key={value} aria-pressed={period === value} onClick={() => setPeriod(value)}>{value === 'ytd' ? 'YTD' : value.toUpperCase()}</button>)}<label>
         <span className="sr-only">Choose calendar year</span>
         <select value={period.startsWith('year-') ? period : ''} onChange={event => setPeriod(event.target.value as PerformancePeriod)}>
           <option value="" disabled>Calendar year</option>{[...years].reverse().map(year => <option key={year} value={`year-${year}`}>{year === currentYear ? `${year} YTD` : `${year} · Jan–Dec`}</option>)}</select>
@@ -59,12 +64,12 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
       </div>}</div>
     {!numbersVisible ? <div className="perf-hidden">
       <strong>Your performance figures are hidden</strong>
-      <p>Use your profile’s visibility setting to reveal the sample comparison.</p>
+      <p>Use your profile’s visibility setting to reveal the comparison.</p>
     </div> : view === 'growth' ? summary ? <>
       <div className="perf-range">
         <strong>{range.label}</strong>
         <span>{dateLabel(range.start)} – {dateLabel(range.end)}</span>
-        <small>Latest sample valuation: {dateLabel(summary.closing.date)}</small>
+        <small>Latest {actual ? '' : 'sample '}valuation: {dateLabel(summary.closing.date)}</small>
       </div>
       <div className="perf-scoreboard">
         <div>
@@ -75,7 +80,7 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
         </div>
         <div>
           <span>
-            <i style={{ background: SPY }} />SPY · sample total return</span>
+            <i style={{ background: SPY }} />SPY · {actual ? 'total return' : 'sample total return'}</span>
           <strong>{percent(summary.spyReturn)}</strong>
           <small>{multiYear && summary.spyAnnualized !== null ? `${percent(summary.spyAnnualized)} annualized · ` : ''}Distributions reinvested</small>
         </div>
@@ -92,7 +97,7 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
           <button aria-pressed={unit === 'growth'} onClick={() => setUnit('growth')}>$10k growth</button>
         </div>
       </div>
-      <div className="perf-line-chart" role="img" aria-label={`Simulated portfolio versus SPY for ${range.label}`}>
+      <div className="perf-line-chart" role="img" aria-label={`${actual ? 'Portfolio' : 'Simulated portfolio'} versus SPY for ${range.label}`}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={series} margin={{ top: 15, left: 0, right: 20, bottom: 0 }} accessibilityLayer>
             <defs>
@@ -110,14 +115,14 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
                 <strong>{dateLabel(row.date)}</strong>
                 <span>{portfolioLabel} <b>{unit === 'percent' ? percent(row.portfolio) : formatCurrency(row.portfolioGrowth)}</b>
                 </span>
-                <span>SPY · sample <b>{unit === 'percent' ? percent(row.spy) : formatCurrency(row.spyGrowth)}</b>
+                <span>SPY{actual ? '' : ' · sample'} <b>{unit === 'percent' ? percent(row.spy) : formatCurrency(row.spyGrowth)}</b>
                 </span>
-                <small>Simulated, cash-flow-adjusted comparison</small>
+                <small>{actual ? 'Daily close, cash-flow-adjusted estimate' : 'Simulated, cash-flow-adjusted comparison'}</small>
               </div>;
             }} />
             <Area dataKey={unit === 'percent' ? 'portfolio' : 'portfolioGrowth'} fill="url(#performance-area)" stroke="none" tooltipType="none" isAnimationActive={false} />
             <Line name={portfolioLabel} dataKey={unit === 'percent' ? 'portfolio' : 'portfolioGrowth'} stroke={PORTFOLIO} strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-            <Line name="SPY · simulated" dataKey={unit === 'percent' ? 'spy' : 'spyGrowth'} stroke={SPY} strokeDasharray="6 4" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+            <Line name={actual ? 'SPY' : 'SPY · simulated'} dataKey={unit === 'percent' ? 'spy' : 'spyGrowth'} stroke={SPY} strokeDasharray="6 4" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -125,14 +130,14 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
         <span>
           <i className="perf-legend-line" />{portfolioLabel}</span>
         <span>
-          <i className="perf-legend-line is-spy" />SPY · simulated total return</span>
+          <i className="perf-legend-line is-spy" />SPY · {actual ? 'total return' : 'simulated total return'}</span>
         <small>Both series start at {unit === 'percent' ? '0%' : '$10,000'} · opening valuation {dateLabel(summary.opening.date)}</small>
       </div>
       <section className="perf-balance" aria-label="Account balance reconciliation">
         <header>
           <div>
             <h3>How the account balance changed</h3>
-            <p>Fictional account dollars, separate from your actual account and the normalized investment chart above.</p>
+            <p>{actual ? 'Reconstructed account values, including sale proceeds retained in cash.' : 'Fictional account dollars, separate from your actual account and the normalized investment chart above.'}</p>
           </div>
           <span>{range.label}</span>
         </header>
@@ -167,15 +172,15 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
     </> : <div className="perf-hidden">
       <strong>Full-period history unavailable</strong>
       <p>Opening valuation and complete activity are needed before showing a return.</p>
-    </div> : <>
+    </div> : actual && !annual.length ? <div className="perf-hidden"><strong>Complete calendar periods unavailable</strong><p>Calendar years and current YTD need a complete opening valuation and every trading day. Use Available history in Growth vs SPY to see the supported interval.</p></div> : <>
       <div className="perf-calendar-intro">
         <div>
           <h3>Year by year, on the same scale</h3>
-          <p>Jan 1 – Dec 31 for completed years. {currentYear} is YTD through {dateLabel(PERFORMANCE_AS_OF)}, with sample valuations through {dateLabel(performanceSnapshots.at(-1)!.date)}.</p>
+          <p>Jan 1 – Dec 31 for completed years. {currentYear} is YTD through {dateLabel(asOf)}, with {actual ? '' : 'sample '}valuations through {dateLabel(snapshots.at(-1)!.date)}.</p>
         </div>
         <span>Cumulative return for each period</span>
       </div>
-      <div className="perf-year-chart" role="img" aria-label="Simulated calendar-year portfolio and SPY returns">
+      <div className="perf-year-chart" role="img" aria-label={actual ? 'Calendar-year portfolio and SPY returns' : 'Simulated calendar-year portfolio and SPY returns'}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={annual} margin={{ top: 12, right: 20, bottom: 0, left: 0 }} barGap={5} accessibilityLayer>
             <CartesianGrid vertical={false} stroke="#e8edf5" strokeDasharray="3 5" />
@@ -184,7 +189,7 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
             <ReferenceLine y={0} stroke="#bccce2" />
             <Tooltip content={({ active, payload }) => {
               if (!active || !payload?.length) return null; const row = payload[0].payload; return <div className="perf-tooltip">
-                <strong>{row.label} · simulated</strong>
+                <strong>{row.label}{actual ? '' : ' · simulated'}</strong>
                 <span>{portfolioLabel} <b>{percent(row.portfolioReturn)}</b>
                 </span>
                 <span>SPY <b>{percent(row.spyReturn)}</b>
@@ -194,7 +199,7 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
               </div>;
             }} />
             <Bar name={portfolioLabel} dataKey="portfolioReturn" fill={PORTFOLIO} radius={3} maxBarSize={27} onClick={(row: any) => { const year = row.payload?.year ?? row.year; if (typeof year === 'number') showYear(year); }} style={{ cursor: 'pointer' }} isAnimationActive={false} />
-            <Bar name="SPY · simulated" dataKey="spyReturn" fill={SPY} radius={3} maxBarSize={27} onClick={(row: any) => { const year = row.payload?.year ?? row.year; if (typeof year === 'number') showYear(year); }} style={{ cursor: 'pointer' }} isAnimationActive={false} />
+            <Bar name={actual ? 'SPY' : 'SPY · simulated'} dataKey="spyReturn" fill={SPY} radius={3} maxBarSize={27} onClick={(row: any) => { const year = row.payload?.year ?? row.year; if (typeof year === 'number') showYear(year); }} style={{ cursor: 'pointer' }} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -202,12 +207,12 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
         <span>
           <i style={{ background: PORTFOLIO }} />{portfolioLabel}</span>
         <span>
-          <i style={{ background: SPY }} />SPY · simulated total return</span>
+          <i style={{ background: SPY }} />SPY · {actual ? 'total return' : 'simulated total return'}</span>
         <small>Select a year below for its growth chart and balance bridge.</small>
       </div>
       <div className="perf-year-table-wrap">
         <table className="perf-year-table">
-          <caption>Simulated returns and balance reconciliation by year. Earnings are ending value minus opening value minus deposits plus withdrawals.</caption>
+          <caption>{actual ? 'Returns' : 'Simulated returns'} and balance reconciliation by year. Earnings are ending value minus opening value minus deposits plus withdrawals.</caption>
           <thead>
             <tr>{['Period', stagingDemo ? 'Demo portfolio' : 'Portfolio', 'SPY', 'Difference', 'Opening', 'Deposits', 'Withdrawals', 'Earnings', 'Ending'].map(label => <th key={label} scope="col">{label}</th>)}</tr>
           </thead>
@@ -233,19 +238,24 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
         <article>
           <h3>Your period definitions</h3>
           <p>Calendar years run Jan 1–Dec 31. YTD starts Jan 1 of the current year. Trailing 1, 3 and 5 years start the day after the same date that many years ago, ending on the selected as-of date. A Feb 29 anniversary is clamped to Feb 28 when needed, then one day is added.</p>
-          <p>Opening value comes from the last available valuation on or before the day preceding the period. The last available sample valuation is shown explicitly; weekends do not invent fresh prices.</p>
+          <p>Opening value comes from the last available valuation on or before the day preceding the period. Complete coverage is required. Available history starts after the first positive closing valuation, so the inception day is excluded. Weekends do not invent fresh prices.</p>
         </article>
         <article>
           <h3>Investment return, separate from funding</h3>
           <p>Earnings = ending balance − opening balance − deposits + withdrawals. Dividends, interest, realized and unrealized P&amp;L stay within investment results. A sale is not a withdrawal unless money leaves the portfolio. Transfers between included brokerages are internal.</p>
-          <p>The design uses time-weighted return (TWR) for the SPY comparison. Daily sample returns adjust for end-of-day flows and are compounded, rather than dividing earnings by opening balance. Live calculations need flow timing and historical valuations; personal money-weighted return (XIRR) can be added separately.</p>
+          <p>{actual ? 'Daily time-weighted returns adjust for recorded external flows assumed at the end of each day, then compound. This is an estimate when flows occur intraday. Opening cash must be supported by your records; missing prices are never replaced by purchase prices.' : 'The design uses time-weighted return (TWR) for the SPY comparison. Daily sample returns adjust for end-of-day flows and are compounded, rather than dividing earnings by opening balance. Live calculations need flow timing and historical valuations; personal money-weighted return (XIRR) can be added separately.'}</p>
         </article>
         <article>
           <h3>The benchmark stays visible</h3>
           <p>Compare the same dates with SPY total return, including reinvested distributions, in the same currency. The portfolio includes cash and fees, before personal taxes. The difference is percentage points, not risk-adjusted alpha. Multi-year views show both cumulative and annualized returns.</p>
-          <p>Both series here are fictional. Live results require a historical valuation and cash-flow service. References: <a href="https://www.gipsstandards.org/standards/gips-standards-for-firms/gips-standards-handbook-for-firms/" target="_blank" rel="noreferrer">GIPS return methodology</a> · <a href="https://www.ssga.com/us/en/individual/etfs/state-street-spdr-sp-500-etf-trust-spy" target="_blank" rel="noreferrer">SPY methodology</a>.</p>
+          <p>{actual ? 'SPY uses Yahoo Finance adjusted closes as a total-return proxy. Your recorded income and fees stay in portfolio results. Unrecorded distributions or corporate actions can affect accuracy. References:' : 'Both series here are fictional. Live results require a historical valuation and cash-flow service. References:'} <a href="https://www.gipsstandards.org/standards/gips-standards-for-firms/gips-standards-handbook-for-firms/" target="_blank" rel="noreferrer">GIPS return methodology</a> · <a href="https://www.ssga.com/us/en/individual/etfs/state-street-spdr-sp-500-etf-trust-spy" target="_blank" rel="noreferrer">SPY methodology</a>.</p>
         </article>
       </div>
     </details>
   </section>;
+}
+
+export default function PreviewPerformance(props: React.ComponentProps<typeof PerformanceChart>) {
+  if (props.presentation === 'transaction-history' && (!props.history || props.history.snapshots.length < 2)) return null;
+  return <PerformanceChart {...props} />;
 }

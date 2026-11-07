@@ -33,16 +33,12 @@ test('production-mode dashboard omits simulated performance unless the runtime f
   assert.doesNotMatch(render({ performanceDemo: false }), /portfolio-performance/);
 });
 
-test('enabled staging demo renders despite DEV=false and clearly separates fictional history from user data', () => {
+test('enabled staging loads transaction history without rendering the old simulated curve', () => {
   const html = render({ performanceDemo: true });
-  assert.match(html, /Demo performance vs SPY/);
-  assert.match(html, /STAGING · DEMO DATA/);
-  assert.match(html, /Demo portfolio/);
-  assert.match(html, /Portfolio and SPY results are simulated/);
-  assert.match(html, /No sample records are added to your account/);
-  for (const period of ['YTD', '1Y', '3Y', '5Y']) assert.ok(html.includes(`>${period}<`));
-  assert.match(html, /Calendar years/);
-  assert.deepEqual(props.holdings, []);
+  assert.match(html, /Performance vs SPY/);
+  assert.match(html, /Preparing your performance history/);
+  assert.match(html, /recorded transactions and historical market prices/);
+  assert.doesNotMatch(html, /STAGING · DEMO DATA|Demo performance|fictional|212,995|perf-scoreboard/);
   assert.deepEqual(props.transactions, []);
 });
 
