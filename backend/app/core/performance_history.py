@@ -109,6 +109,29 @@ def _progress(user_id, text):
     with _jobs_lock: _jobs[user_id] = {"running": True, "progress": text}
 
 
+def cache_market_prices(db, histories, now):
+    """Load each instrument's public cache once, rather than once per session."""
+    for symbol, history in histories.items():
+        if not history:
+            continue
+        cached_rows = db.query(HistoricalPrice).filter(
+            HistoricalPrice.symbol == symbol,
+            HistoricalPrice.date >= min(history),
+            HistoricalPrice.date <= max(history),
+        ).all()
+        cached_by_date = {row.date: row for row in cached_rows}
+        for day, point in history.items():
+            cached = cached_by_date.get(day)
+            if cached is None:
+                cached = HistoricalPrice(symbol=symbol, date=day)
+                db.add(cached)
+            cached.close = point["close"]
+            cached.adjusted_close = point.get("adjusted")
+            cached.split_ratio = point.get("split", 1.0)
+            cached.currency = point["currency"]
+            cached.fetched_at = now
+
+
 def build_history(user_id, dek, session_factory=SessionLocal):
     token = crypto.CURRENT_DEK.set(dek)
     db = session_factory()
@@ -166,13 +189,8 @@ def _build(scope):
                     issues.append(issue("price_provider", "Historical prices or corporate-action metadata could not be retrieved for this instrument.", symbol=symbol))
                 _progress(scope.user_id, f"Historical prices: {count} of {len(securities)} instruments checked…")
         # Fetched records are shared public market data, not user positions.
-        now = datetime.utcnow()
-        for symbol, history in {**market, "SPY:TOTAL_RETURN": spy}.items():
-            for day, point in history.items():
-                cached = scope.db.get(HistoricalPrice, (symbol, day))
-                if cached is None: cached = HistoricalPrice(symbol=symbol, date=day); scope.db.add(cached)
-                cached.close, cached.adjusted_close = point["close"], point.get("adjusted")
-                cached.split_ratio, cached.currency, cached.fetched_at = point.get("split", 1.0), point["currency"], now
+        _progress(scope.user_id, "Saving historical market prices…")
+        cache_market_prices(scope.db, {**market, "SPY:TOTAL_RETURN": spy}, datetime.utcnow())
         if spy:
             daily, valuation_issues = reconstruct(events, market, {day: point["adjusted"] for day, point in spy.items()}, state.opening_cash)
             issues.extend(valuation_issues)

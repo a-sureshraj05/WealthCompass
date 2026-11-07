@@ -308,7 +308,16 @@ def healthz():
             conn.execute(text("SELECT 1"))
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database unreachable: {exc}")
-    return {"status": "ok", "demo": DEMO_MODE}
+    result = {"status": "ok", "demo": DEMO_MODE}
+    # Deployment labels can refer to the Blueprint's source rather than the
+    # service's build branch. Report only these two public Git identifiers so
+    # a rollout can verify the running revision without exposing configuration.
+    if os.getenv("RENDER", "").strip().lower() == "true":
+        result["release"] = {
+            "branch": os.getenv("RENDER_GIT_BRANCH"),
+            "commit": os.getenv("RENDER_GIT_COMMIT"),
+        }
+    return result
 
 
 # ── Static SPA ────────────────────────────────────────────────────────────
