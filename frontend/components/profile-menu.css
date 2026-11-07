@@ -1,0 +1,52 @@
+.account-profile { position: relative; flex-shrink: 0; color: #3b5374; }
+.profile-trigger { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; padding: 4px 8px 4px 4px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #6e829f; cursor: pointer; }
+.profile-trigger:hover, .profile-trigger[aria-expanded=true] { background: #f5f8fd; border-color: #dfe7f2; }
+.profile-avatar { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 32px; height: 32px; width: 32px; background: #eaf0fa; border: 1px solid #dbe5f4; border-radius: 50%; color: #4c6e9f; font: 600 11px 'Inter', sans-serif; letter-spacing: .02em; }
+.profile-trigger-name { font: 500 11px 'Inter', sans-serif; color: #536c8f; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-popover { position: absolute; top: calc(100% + 10px); right: 0; z-index: 90; width: 300px; max-width: calc(100vw - 32px); border: 1px solid #d9e3f0; border-radius: 13px; background: white; box-shadow: 0 8px 35px #1b355824, 0 2px 6px #1b35580c; max-height: calc(100vh - 82px); max-height: calc(100dvh - 82px); overflow-y: auto; overscroll-behavior: contain; }
+.profile-identity { padding: 20px 18px 17px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e5ebf4; background: #f7faff; }
+.profile-identity > .profile-avatar { width: 40px; height: 40px; flex-basis: 40px; font-size: 13px; }
+.profile-identity > div { min-width: 0; }
+.profile-identity strong { display: block; font-size: 13px; font-weight: 600; color: #3d577a; overflow-wrap: anywhere; }
+.profile-identity div > span { display: block; font-size: 10px; color: #71839d; margin-top: 4px; overflow-wrap: anywhere; }
+.profile-identity small { display: inline-block; font-size: 9px; font-weight: 500; color: #5778a3; background: #eaf1fc; padding: 3px 6px; border-radius: 4px; margin-top: 8px; }
+.profile-menu-actions { padding: 7px; display: grid; gap: 2px; }
+.profile-menu-actions > button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; border: 0; border-radius: 7px; background: transparent; padding: 11px 12px; text-align: left; color: #536f95; font: 500 12px 'Inter', sans-serif; cursor: pointer; }
+.profile-menu-actions > button:hover:not(:disabled) { background: #f2f6fc; }
+.profile-menu-actions svg { height: 16px; width: 16px; flex-shrink: 0; }
+.profile-menu-actions > .profile-sign-out { color: #a05468; border-top: 1px solid #edf1f7; border-radius: 0 0 7px 7px; margin-top: 3px; }
+.profile-menu-actions > .profile-sign-out:hover:not(:disabled) { background: #fcf5f7; }
+.account-profile button:disabled { opacity: .45; cursor: not-allowed; }
+.account-profile :is(button, input):focus-visible { outline: 2px solid #7096c8; outline-offset: 3px; }
+.profile-editor { padding: 18px; }
+.profile-editor label { display: block; font-size: 11px; font-weight: 600; color: #546e91; margin-bottom: 8px; }
+.profile-editor input { width: 100%; min-height: 41px; padding: 10px 11px; border: 1px solid #d4e0f0; border-radius: 7px; background: #fff; color: #36557f; font-size: 13px; box-sizing: border-box; }
+.profile-editor input[aria-invalid=true] { border-color: #cc9aaa; }
+.profile-editor > p { font-size: 10px; line-height: 1.8; color: #71829a; margin: 10px 0 16px; }
+.profile-editor > div { display: flex; justify-content: end; gap: 8px; }
+.profile-editor button { min-height: 35px; border-radius: 7px; padding: 8px 13px; font: 500 11px 'Inter', sans-serif; cursor: pointer; }
+.profile-secondary { border: 1px solid #dce5f1; color: #607a9d; background: #fff; }
+.profile-primary { border: 1px solid #25446e; background: #25446e; color: #f2f6ff; }
+.profile-primary:hover:not(:disabled) { background: #172d50; }
+.profile-error, .profile-status, .profile-load-error { margin: 13px 14px 0; padding: 10px 12px; border-radius: 7px; font-size: 11px; line-height: 1.7; }
+.profile-error, .profile-load-error { background: #fcf3f5; border: 1px solid #eedce2; color: #a04e64; }
+.profile-status { background: #f0f8f5; border: 1px solid #d9eae3; color: #477c6c; }
+.profile-load-error p { margin: 0; }
+.profile-load-error button { font: 500 11px 'Inter', sans-serif; color: #486e9f; border: 0; background: none; padding: 7px 0 0; cursor: pointer; }
+.profile-privacy { padding: 16px 18px; border-bottom: 1px solid #e5ebf4; }
+.profile-privacy-control { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.profile-privacy-control > span { font-size: 11px; font-weight: 500; color: #546e91; }
+.profile-privacy-control button { display: inline-flex; align-items: center; flex-shrink: 0; width: 38px; min-height: 23px; padding: 3px; border: 1px solid #c9d6e8; border-radius: 20px; background: #e4ebf5; cursor: pointer; }
+.profile-privacy-control button > span { height: 15px; width: 15px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #29456830; transition: transform .15s; }
+.profile-privacy-control button[aria-checked=true] { background: #496b9b; border-color: #496b9b; }
+.profile-privacy-control button[aria-checked=true] > span { transform: translateX(15px); }
+.profile-privacy p { margin: 9px 0 0; font-size: 10px; line-height: 1.7; color: #71829a; }
+.financial-visibility-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 12px 15px; border: 1px solid #e6d9c5; border-radius: 9px; background: #fcf8f0; color: #866e47; font-size: 11px; line-height: 1.7; }
+.financial-visibility-notice button { flex-shrink: 0; padding: 7px 10px; border: 1px solid #dfd2bd; border-radius: 6px; background: white; color: #806943; font: inherit; cursor: pointer; }
+.profile-popover .financial-visibility-notice { margin: 12px 12px 0; }
+.preview-session-exit { height: 100%; display: grid; place-items: center; padding: 24px; background: var(--wc-canvas, #edf2f8); }
+.preview-session-exit > div { width: 390px; max-width: 100%; padding: 35px; background: white; border: 1px solid #d9e3ef; border-radius: 16px; box-shadow: var(--wc-card-shadow); }
+.preview-session-exit h1 { font-family: 'Hanken Grotesk', sans-serif; font-size: 26px; font-weight: 600; color: #294568; margin: 24px 0 10px; letter-spacing: -.5px; }
+.preview-session-exit p { font-size: 12px; color: #687e9c; line-height: 1.9; margin: 0 0 23px; }
+.preview-session-exit button { min-height: 40px; width: 100%; border: 1px solid #25446e; border-radius: 8px; padding: 11px 14px; background: #25446e; color: white; font: 500 12px 'Inter', sans-serif; cursor: pointer; }
+@media (max-width: 800px) { .profile-trigger-name { display: none; }.profile-trigger { gap: 6px; padding-right: 5px; } }

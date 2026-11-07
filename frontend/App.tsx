@@ -6,39 +6,44 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import MobileTabBar from './components/MobileTabBar';
 import LoginPage from './components/LoginPage';
-import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchBuyingPowerCached, fetchAnalystData, fetchAnalystDataCached, fetchAccounts, refreshPrices } from './services/apiService';
+import { fetchHoldings, fetchTransactions, fetchRealizedGains, fetchUnrealizedGains, removeTransaction, softDeleteTransaction, updateTransaction, revertTransaction, triggerRealizedGainsProcess, resetTransactions, clearProcessedData, fetchCashBalance, fetchBuyingPower, fetchBuyingPowerCached, fetchAnalystData, fetchAnalystDataCached, fetchAccounts, refreshPrices, logoutAccount } from './services/apiService';
 import { BrokerageAccount } from './types';
 import TickerTypeContext from './contexts/TickerTypeContext';
+import useFinancialVisibility from './hooks/useFinancialVisibility';
+import FinancialVisibilityNotice from './components/FinancialVisibilityNotice';
+import useRuntimeFeatures from './hooks/useRuntimeFeatures';
+import type { OverviewSection } from './preview/previewDesign';
+import './components/refined-workspace.css';
+import usePortfolioNews from './hooks/usePortfolioNews';
 
 const App: React.FC = () => {
-  const [token, setToken] = useState<string | null>(null);
+  // The session lives in an HttpOnly cookie — nothing for this component to
+  // read or store itself, just whether the server currently recognizes it.
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [validating, setValidating] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('wc_token');
-    if (!stored) { setValidating(false); return; }
-    fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${stored}` } })
-      .then(res => { if (res.ok) setToken(stored); else localStorage.removeItem('wc_token'); })
-      .catch(() => { localStorage.removeItem('wc_token'); })
+    fetch('/api/v1/auth/me')
+      .then(res => setIsAuthenticated(res.ok))
+      .catch(() => setIsAuthenticated(false))
       .finally(() => setValidating(false));
   }, []);
 
-  const handleLogin = (newToken: string) => {
-    localStorage.setItem('wc_token', newToken);
-    setToken(newToken);
+  const handleLogin = () => {
+    setIsAuthenticated(true);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('wc_token');
-    setToken(null);
+  const handleLogout = async () => {
+    await logoutAccount();
+    setIsAuthenticated(false);
   };
 
   if (validating) return null;
-  if (!token) return <LoginPage onLogin={handleLogin} />;
+  if (!isAuthenticated) return <LoginPage onLogin={handleLogin} />;
   return <AuthenticatedApp onLogout={handleLogout} />;
 };
 
-const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
+const AuthenticatedApp: React.FC<{ onLogout: () => void | Promise<void> }> = ({ onLogout }) => {
   const [accounts, setAccounts] = useState<BrokerageAccount[]>([]);
   const [holdings, setHoldings] = useState<StockHolding[]>([]);
   const [cashBalance, setCashBalance] = useState<number>(0);
@@ -47,7 +52,11 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [realizedGains, setRealizedGains] = useState<RealizedGain[]>([]);
   const [unrealizedGains, setUnrealizedGains] = useState<UnrealizedLot[]>([]);
   const [loading, setLoading] = useState(false);
-  const [numbersVisible, setNumbersVisible] = useState(true);
+  const privacy = useFinancialVisibility();
+  const numbersVisible = privacy.visible;
+  const runtimeFeatures = useRuntimeFeatures();
+  const [overviewSection,setOverviewSection] = useState<OverviewSection>('snapshot');
+  const news = usePortfolioNews();
   // Incremented by an explicit refresh so the insights panel knows to
   // regenerate. A deliberate user action, unlike a page load, so it is a safe
   // thing to spend on — and the backend cooldown still bounds repeat clicks.
@@ -92,8 +101,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       } else {
         setHoldings(h);
       }
+      return true;
     } catch (error) {
       console.error("Failed to fetch holdings:", error);
+      return false;
     }
   }, []);
 
@@ -101,8 +112,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const getBuyingPower = useCallback(async () => {
     try {
       setBuyingPower(await fetchBuyingPower());
+      return true;
     } catch (error) {
       console.error("Failed to fetch buying power:", error);
+      return false;
     }
   }, []);
 
@@ -147,16 +160,20 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const getRealizedGains = useCallback(async () => {
     try {
       setRealizedGains(await fetchRealizedGains());
+      return true;
     } catch (error) {
       console.error("Failed to fetch realized gains:", error);
+      return false;
     }
   }, []);
 
   const getUnrealizedGains = useCallback(async () => {
     try {
       setUnrealizedGains(await fetchUnrealizedGains());
+      return true;
     } catch (error) {
       console.error("Failed to fetch unrealized gains:", error);
+      return false;
     }
   }, []);
 
@@ -199,8 +216,10 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         finalEndDate
       );
       setTransactions(fetchedTransactions);
+      return true;
     } catch (error) {
       console.error("Failed to fetch transactions:", error);
+      return false;
     }
   }, [setTransactions, selectedBrokerages, selectedTickers, startDate, endDate, dateRangeType]); // Added dependencies
 
@@ -343,26 +362,34 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     setActiveTab(tab);
   };
 
+  if (!runtimeFeatures.ready) return <div className="h-full flex items-center justify-center text-slate-500" role="status">Loading workspace…</div>;
+
   return (
     <TickerTypeContext.Provider value={tickerTypeMap}>
     {/* h-full (of #root, now pinned to the viewport) rather than h-screen:
         100vh on mobile browsers means the *largest* viewport, ignoring the
         address bar, so the shell would overflow by the toolbar's height. */}
-    <div className="flex h-full overflow-hidden bg-slate-50">
+    <div className={`wealth-workspace flex h-full overflow-hidden${runtimeFeatures.refinedUi ? ' refined-workspace' : ''}`}>
       <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} numbersVisible={numbersVisible} onToggleNumbers={() => setNumbersVisible(v => !v)} />
+        <Navbar refined={runtimeFeatures.refinedUi} overviewSection={overviewSection} activeTab={activeTab} stats={stats} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} numbersVisible={numbersVisible} privacy={privacy} />
 
         {/* px/pt rather than the p- shorthand: `md:p-8` resets every side, which
             would override .pb-tabbar's clearance between md and lg — exactly the
             range where the bar is still visible. See .pb-tabbar in index.html. */}
-        <main className="flex-1 overflow-y-auto px-4 pt-4 md:px-8 md:pt-8 pb-tabbar">
+        <main className="workspace-main workspace-canvas flex-1 overflow-y-auto px-4 pt-4 md:px-8 md:pt-8 pb-tabbar">
+          <FinancialVisibilityNotice privacy={privacy} />
           <DashboardView
+            performanceDemo={runtimeFeatures.performanceDemo}
+            refinedPreview={runtimeFeatures.refinedUi}
+            holdingPerformanceSample={runtimeFeatures.holdingPerformancePreview}
+            overviewSection={runtimeFeatures.refinedUi ? overviewSection : undefined}
+            onOverviewSectionChange={setOverviewSection}
+            news={news}
             activeTab={activeTab}
             setActiveTab={handleSetActiveTab}
             numbersVisible={numbersVisible}
-            onToggleNumbers={() => setNumbersVisible(v => !v)}
             holdings={holdings}
             transactions={transactions}
             realizedGains={realizedGains}
@@ -370,7 +397,11 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             stats={stats}
             onAddTransactions={handleAddTransactions}
             refreshNonce={refreshNonce}
-            onRefresh={() => { Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower()]); refreshAnalystData(); refreshLivePrices(); setRefreshNonce(n => n + 1); }}
+            onRefresh={async () => {
+              const refreshed = await Promise.all([getTransactions(), getHoldings(), getRealizedGains(), getUnrealizedGains(), getBuyingPower(), refreshAnalystData(), refreshLivePrices()]);
+              setRefreshNonce(n => n + 1);
+              if (refreshed.some(result => result === false)) throw new Error('Some portfolio records could not refresh.');
+            }}
             onRemoveHolding={handleRemoveHolding}
             onRemoveTransaction={handleRemoveTransaction}
             onSoftDeleteTransaction={handleSoftDeleteTransaction}

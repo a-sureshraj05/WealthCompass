@@ -1,0 +1,114 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { performanceRange, performanceSummary, chartSample } from '../components/Dashboard/Performance/performanceModel.ts';
+
+const snapshot = (date, value, deposits = 0, withdrawals = 0, spyTotalReturnIndex = value) => ({ date, value, deposits, withdrawals, spyTotalReturnIndex });
+
+test('YTD and calendar years use calendar boundaries, with the current year capped at today', () => {
+  assert.deepEqual(performanceRange('ytd', '2026-11-01'), { start: '2026-01-01', end: '2026-11-01', openingBoundary: '2025-12-31', label: '2026 YTD' });
+  assert.deepEqual(performanceRange('year-2025', '2026-11-01'), { start: '2025-01-01', end: '2025-12-31', openingBoundary: '2024-12-31', label: '2025' });
+  assert.equal(performanceRange('year-2026', '2026-11-01').end, '2026-11-01');
+  assert.throws(() => performanceRange('year-2027', '2026-11-01'), /completed or current/);
+});
+
+test('trailing periods start the day after the prior anniversary, including leap-day handling', () => {
+  assert.equal(performanceRange('1y', '2026-11-01').start, '2025-11-02');
+  assert.equal(performanceRange('3y', '2026-11-01').start, '2023-11-02');
+  assert.equal(performanceRange('5y', '2026-11-01').start, '2021-11-02');
+  assert.equal(performanceRange('1y', '2024-02-29').start, '2023-03-01');
+  assert.equal(performanceRange('1y', '2025-02-28').start, '2024-02-29');
+  assert.throws(() => performanceRange('ytd', '2026-02-30'), /Invalid performance date/);
+});
+
+test('end-of-day deposits and withdrawals reconcile dollars without inflating investment return', () => {
+  const rows = [snapshot('2025-12-31', 100, 0, 0, 100), snapshot('2026-01-01', 210, 100, 0, 110), snapshot('2026-01-02', 220, 0, 11, 121)];
+  const before = JSON.stringify(rows);
+  const result = performanceSummary(rows, performanceRange('ytd', '2026-01-02'));
+  assert.ok(Math.abs(result.portfolioReturn - 21) < 1e-10);
+  assert.ok(Math.abs(result.spyReturn - 21) < 1e-10);
+  assert.ok(Math.abs(result.difference) < 1e-10);
+  assert.equal(result.earnings, 31);
+  assert.equal(result.opening.value + result.deposits - result.withdrawals + result.earnings, result.closing.value);
+  assert.notEqual(result.earnings / result.opening.value * 100, result.portfolioReturn);
+  assert.ok(Math.abs(result.series.at(-1).portfolioGrowth - 12100) < 1e-8);
+  assert.equal(result.annualized, null);
+  assert.equal(JSON.stringify(rows), before);
+});
+
+test('multi-year returns compound and annualize rather than averaging yearly percentages', () => {
+  const rows = [snapshot('2022-12-31', 100), snapshot('2023-12-31', 110), snapshot('2024-12-31', 121), snapshot('2025-12-31', 133.1)];
+  const result = performanceSummary(rows, performanceRange('3y', '2025-12-31'));
+  assert.ok(Math.abs(result.portfolioReturn - 33.1) < 1e-9);
+  assert.ok(Math.abs(result.annualized - 10) < .02);
+  assert.equal(result.series[0].portfolio, 0);
+  assert.equal(result.series[0].spy, 0);
+});
+
+test('opening and ending valuations align to available dates without shortening a missing-history period', () => {
+  const rows = [snapshot('2025-10-31', 100), snapshot('2025-11-03', 101), snapshot('2026-10-30', 110)];
+  const result = performanceSummary(rows, performanceRange('1y', '2026-11-01'));
+  assert.equal(result.range.start, '2025-11-02');
+  assert.equal(result.range.end, '2026-11-01');
+  assert.equal(result.opening.date, '2025-10-31');
+  assert.equal(result.closing.date, '2026-10-30');
+  assert.equal(performanceSummary(rows, performanceRange('5y', '2026-11-01')), null);
+  assert.equal(performanceSummary([snapshot('2025-12-31', 0), snapshot('2026-01-02', 100)], performanceRange('ytd', '2026-01-02')), null);
+});
+
+test('chart downsampling retains exact opening and closing endpoints', () => {
+  const rows = Array.from({ length: 1000 }, (_, index) => ({ index }));
+  const sampled = chartSample(rows);
+  assert.equal(sampled[0].index, 0);
+  assert.equal(sampled.at(-1).index, 999);
+  assert.ok(sampled.length <= 75);
+});
+
+test('available history starts after its actual positive opening close, not an invented January value', () => {
+  const range = performanceRange('available', '2024-05-03', '2024-05-01');
+  assert.equal(range.start, '2024-05-02');
+  assert.equal(range.openingBoundary, '2024-05-01');
+  const rows = [snapshot('2024-05-01', 1000, 1000, 0, 100), snapshot('2024-05-02', 1100, 0, 0, 102), snapshot('2024-05-03', 1200, 0, 0, 103)];
+  assert.ok(Math.abs(performanceSummary(rows, range).portfolioReturn - 20) < 1e-9);
+  assert.equal(performanceSummary(rows, performanceRange('ytd', '2024-05-03')), null);
+  assert.throws(() => performanceRange('available', '2024-05-03'), /two valuations/);
+});
+
+test('a full withdrawal or total loss keeps its ending zero and missing recent market dates cannot look like current YTD', () => {
+  const range = performanceRange('ytd', '2026-01-02');
+  const opening = snapshot('2025-12-31', 100, 0, 0, 100);
+  assert.equal(performanceSummary([opening, snapshot('2026-01-02', 0, 0, 100, 101)], range).portfolioReturn, 0);
+  assert.equal(performanceSummary([opening, snapshot('2026-01-02', 0, 0, 0, 101)], range).portfolioReturn, -100);
+  assert.equal(performanceSummary([opening], range, ['2025-12-31', '2026-01-02']), null);
+  assert.equal(performanceSummary([opening, snapshot('2026-01-01', 110)], range, ['2025-12-31', '2026-01-01', '2026-01-02']), null);
+});
+
+test('trade timing normalizes its funded account and exposes actual account dollars separately', () => {
+  const rows = [
+    { ...snapshot('2025-12-31', 1000, 0, 0, 100), spyTradeValue:1000, spyTradeCash:500 },
+    { ...snapshot('2026-01-02', 2100, 1000, 0, 110), spyTradeValue:2050, spyTradeCash:1500 },
+    { ...snapshot('2026-01-05', 2210, 0, 100, 121), spyTradeValue:2005, spyTradeCash:1400 },
+  ];
+  const result = performanceSummary(rows, performanceRange('ytd', '2026-01-05'));
+  assert.ok(Math.abs(result.spyReturn - 21) < 1e-9);
+  assert.ok(Math.abs(result.tradeComparison.return - ((1.05 * 2105 / 2050) - 1) * 100) < 1e-9);
+  assert.equal(result.tradeComparison.closingValue, 2005);
+  assert.equal(result.tradeComparison.accountDifference, 205);
+  assert.equal(result.tradeComparison.earnings, 105);
+  assert.equal(result.tradeComparison.cash, 1400);
+  assert.equal(result.series[0].spyTrade, 0);
+  assert.equal(result.series[0].spyTradeGrowth, 10000);
+  assert.notEqual(result.series.at(-1).spyTradeGrowth, result.tradeComparison.closingValue);
+});
+
+test('missing trade timing hides only that comparison and never bridges a gap', () => {
+  const rows = [
+    { ...snapshot('2025-12-31', 100, 0, 0, 100), spyTradeValue:100 },
+    { ...snapshot('2026-01-02', 110, 0, 0, 110), spyTradeValue:null },
+    { ...snapshot('2026-01-05', 120, 0, 0, 120), spyTradeValue:120 },
+  ];
+  const result = performanceSummary(rows, performanceRange('ytd', '2026-01-05'));
+  assert.ok(result);
+  assert.ok(Math.abs(result.portfolioReturn - 20) < 1e-9);
+  assert.equal(result.tradeComparison, null);
+  assert.ok(result.series.every(point => point.spyTrade === null && point.spyTradeGrowth === null));
+});

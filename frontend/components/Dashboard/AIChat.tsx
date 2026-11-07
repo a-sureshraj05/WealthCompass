@@ -1,9 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { ChatMessage, sendChatMessage } from '../../services/apiService';
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  preview?: boolean;
+  previewReply?: (question: string) => string;
 }
 
 /**
@@ -65,7 +67,10 @@ const renderContent = (content: string) =>
     </React.Fragment>
   ));
 
-const AIChat: React.FC<Props> = ({ open, onClose }) => {
+const AIChat: React.FC<Props> = ({ open, onClose, preview = false, previewReply }) => {
+  const sampleMode = import.meta.env.DEV && preview;
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -77,7 +82,24 @@ const AIChat: React.FC<Props> = ({ open, onClose }) => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
-  const mayContainAmount = CURRENCY_PATTERN.test(input);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    panelRef.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); onClose(); }
+      if (event.key !== 'Tab') return;
+      const controls = panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), textarea:not(:disabled), a[href]');
+      if (!controls?.length) return;
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); if (previous?.isConnected) previous.focus(); };
+  }, [open, onClose]);
+
+  const mayContainAmount = !sampleMode && CURRENCY_PATTERN.test(input);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -90,7 +112,9 @@ const AIChat: React.FC<Props> = ({ open, onClose }) => {
     setSending(true);
 
     try {
-      const data = await sendChatMessage(next);
+      const data = sampleMode
+        ? { available: true, reply: previewReply?.(text) || 'This is a local sample response. No AI service was contacted.', remaining: null, reason: null }
+        : await sendChatMessage(next);
       if (data.available === false) {
         setError(data.reason ?? 'AI chat is unavailable.');
         // Drop the optimistic user turn: leaving it would make the next send
@@ -108,26 +132,26 @@ const AIChat: React.FC<Props> = ({ open, onClose }) => {
     } finally {
       setSending(false);
     }
-  }, [input, messages, sending]);
+  }, [input, messages, sending, sampleMode, previewReply]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      <div className="relative flex h-full w-full max-w-md flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#D2D2D7] px-5 py-4">
+      <div ref={panelRef} className="relative flex h-full w-full max-w-md flex-col bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-[#d9e3ef] px-5 py-4">
           <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-[#0F52BA]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-[#315da6]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <h3 className="text-sm font-semibold text-[#1D1D1F]">Ask about your portfolio</h3>
+            <h3 id={titleId} className="text-sm font-semibold text-[#192b46]">{sampleMode ? 'Sample portfolio Q&A' : 'Ask about your portfolio'}</h3>
           </div>
           <button
             onClick={onClose}
@@ -140,17 +164,19 @@ const AIChat: React.FC<Props> = ({ open, onClose }) => {
           </button>
         </div>
 
+        {sampleMode && <div className="insight-chat-sample">Fictional portfolio · responses calculated locally · no AI service called</div>}
+
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           {messages.length === 0 && (
-            <div className="rounded border border-dashed border-[#D2D2D7] p-4">
+            <div className="rounded border border-dashed border-[#d9e3ef] p-4">
               <p className="text-xs text-slate-500 leading-relaxed">
                 Ask about concentration, sector exposure, how your positions compare,
                 or what the realized history looks like.
               </p>
               <p className="mt-2 text-[11px] text-slate-400 leading-relaxed">
-                Your holdings are shared as percentages only — never dollar amounts.
-                This conversation is not saved and disappears when you close the panel.
+                {sampleMode ? 'Try a sample question below. These illustrative answers are calculated from the fictional portfolio.' : 'Your holdings are shared as percentages only — never dollar amounts. This conversation is not saved and disappears when you close the panel.'}
               </p>
+              {sampleMode && <div className="insight-chat-suggestions">{['What is my largest holding?', 'How much is held in cash?', 'What is the mix of gains and losses?'].map(question => <button key={question} onClick={() => setInput(question)}>{question}</button>)}</div>}
             </div>
           )}
 
@@ -162,8 +188,8 @@ const AIChat: React.FC<Props> = ({ open, onClose }) => {
               <div
                 className={
                   m.role === 'user'
-                    ? 'max-w-[85%] rounded-lg bg-[#0F52BA] px-3 py-2 text-xs leading-relaxed text-white'
-                    : 'max-w-[85%] rounded-lg border border-[#D2D2D7] bg-[#F5F5F7] px-3 py-2 text-xs leading-relaxed text-slate-700'
+                    ? 'max-w-[85%] rounded-lg bg-[#315da6] px-3 py-2 text-xs leading-relaxed text-white'
+                    : 'max-w-[85%] rounded-lg border border-[#d9e3ef] bg-[#f7f9fd] px-3 py-2 text-xs leading-relaxed text-slate-700'
                 }
               >
                 {m.role === 'assistant' ? renderContent(m.content) : m.content}
@@ -173,7 +199,7 @@ const AIChat: React.FC<Props> = ({ open, onClose }) => {
 
           {sending && (
             <div className="flex justify-start">
-              <div className="rounded-lg border border-[#D2D2D7] bg-[#F5F5F7] px-3 py-2">
+              <div className="rounded-lg border border-[#d9e3ef] bg-[#f7f9fd] px-3 py-2">
                 <div className="flex gap-1">
                   {[0, 150, 300].map(delay => (
                     <span
@@ -194,7 +220,7 @@ const AIChat: React.FC<Props> = ({ open, onClose }) => {
           )}
         </div>
 
-        <div className="border-t border-[#D2D2D7] px-5 py-4">
+        <div className="border-t border-[#d9e3ef] px-5 py-4">
           {mayContainAmount && (
             <div className="mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2">
               <p className="text-[11px] leading-relaxed text-amber-900">
@@ -218,19 +244,19 @@ const AIChat: React.FC<Props> = ({ open, onClose }) => {
               maxLength={2000}
               placeholder="Ask a question…"
               disabled={sending}
-              className="flex-1 resize-none rounded-md border border-slate-200 px-3 py-2 text-xs text-slate-900 placeholder-slate-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0F52BA] disabled:bg-slate-50"
+              className="flex-1 resize-none rounded-md border border-slate-200 px-3 py-2 text-xs text-slate-900 placeholder-slate-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#315da6] disabled:bg-slate-50"
             />
             <button
               onClick={handleSend}
               disabled={sending || !input.trim()}
-              className="self-end rounded-md bg-[#0F52BA] px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-[#0A3E8F] disabled:opacity-40"
+              className="self-end rounded-md bg-[#315da6] px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-[#24436d] disabled:opacity-40"
             >
               Send
             </button>
           </div>
 
           <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
-            Describes your portfolio; does not give financial advice.
+            {sampleMode ? 'Sample responses only. Closing this panel clears the conversation.' : 'Describes your portfolio; does not give financial advice.'}
             {remaining !== null && ` ${remaining} message${remaining === 1 ? '' : 's'} left this hour.`}
           </p>
         </div>

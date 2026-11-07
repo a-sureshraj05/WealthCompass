@@ -1,4 +1,6 @@
 import os
+import math
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -67,6 +69,19 @@ def parse_statement_import_endpoint(
     # extra insert cannot quietly land in another account.
     scope = UserScope(db, current_user.id)
     try:
+        # Validate the complete statement before replacing any existing history.
+        # A parser error or header-only export must leave the old records intact.
+        parsed_transactions_data = csv_data_parse(
+            request.text, request.brokerageName
+        )
+        if not parsed_transactions_data:
+            raise ValueError("No transactions found. Existing imported records were kept.")
+        if any(not isinstance(row.get("date"), datetime) or
+               any(not math.isfinite(row[field]) for field in
+                   ("quantity", "costPerShare", "totalCost"))
+               for row in parsed_transactions_data):
+            raise ValueError("The statement contains an invalid date or amount. Existing imported records were kept.")
+
         # Delete this user's existing manual raw transactions for this brokerage
         scope.delete_all(DBManualRawTransaction, brokerage=request.brokerageName)
         # Delete their manual transactions — preserve is_backend_verified ones
@@ -77,10 +92,6 @@ def parse_statement_import_endpoint(
             DBTransaction.is_backend_verified == False,
         ).delete(synchronize_session=False)
         db.commit()
-
-        parsed_transactions_data = csv_data_parse(
-            request.text, request.brokerageName
-        )
 
         # Raw table keeps all tickers. Unified transactions table only gets manual
         # rows that predate SnapTrade's earliest transaction for that ticker —

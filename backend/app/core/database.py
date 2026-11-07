@@ -3,19 +3,27 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Assuming schema.py defines Base
-# from ..db.schema import Base
-
-# SQLite database URL. For production, you'd use PostgreSQL/MySQL.
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./db/wealthcompass.db")
+
+# Some hosts (Heroku-style, occasionally Supabase examples) still hand out the
+# deprecated `postgres://` scheme. SQLAlchemy 1.4+ rejects it outright.
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# check_same_thread is a SQLite-only DBAPI kwarg — psycopg2's connect() raises
+# TypeError if it receives it, so it must not be passed unconditionally.
+connect_args = (
+    {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
+)
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},  # Needed for SQLite
+    connect_args=connect_args,
+    # Cheap on SQLite; on Postgres it recycles a connection that went stale
+    # during an idle period instead of surfacing as a mid-request error.
+    pool_pre_ping=True,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# We will import Base from schema.py later in main.py to create tables
 
 
 def get_db():

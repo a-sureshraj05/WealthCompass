@@ -1,18 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { StockHolding, PortfolioStats, Transaction, RealizedGain, UnrealizedLot } from '../../types';
-import SummaryCards from './SummaryCards';
-import PortfolioVisuals from './PortfolioVisuals';
-import { SignedValue } from '../TrendIndicator';
+import PortfolioOverview from './PortfolioOverview';
 import HoldingsView from '../HoldingsView';
 import ImportDataView from '../ImportDataView';
 import AIInsights from './AIInsights';
+import PreviewPerformance from '../../preview/PreviewPerformance';
+import PreviewHoldingPerformance from '../../preview/PreviewHoldingPerformance';
+import SampleHoldingPerformance from './Performance/SampleHoldingPerformance';
+import TransactionPerformance from './Performance/TransactionPerformance';
 import TransactionsView from '../TransactionsView';
 import GainsLossesView from '../GainsLossesView';
 import OptionsView from '../OptionsView';
-import TickerLogo from '../TickerLogo';
+import WorkspacePage from '../WorkspacePage';
+import type { OverviewSection } from '../../preview/previewDesign';
+import type { HeatmapMode } from '../GainsLosses/GainsCharts';
+import PortfolioNews from './News/PortfolioNews';
+import type { PortfolioNewsState } from './News/PortfolioNews';
 
 interface Props {
   activeTab: string;
+  news?: PortfolioNewsState;
+  preview?: boolean;
+  refinedPreview?: boolean;
+  initialOverviewSection?: OverviewSection;
+  overviewSection?: OverviewSection;
+  onOverviewSectionChange?: (section: OverviewSection) => void;
+  performanceDemo?: boolean;
+  holdingPerformanceSample?: boolean;
   setActiveTab: (tab: 'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses') => void;
   holdings: StockHolding[];
   transactions: Transaction[];
@@ -34,7 +48,6 @@ interface Props {
   onProcessGains: () => void;
   setLoading: (l: boolean) => void;
   numbersVisible?: boolean;
-  onToggleNumbers?: () => void;
   selectedBrokerages: string[];
   setSelectedBrokerages: (v: string[]) => void;
   selectedAssetTypes: string[];
@@ -48,6 +61,14 @@ interface Props {
 
 const DashboardView: React.FC<Props> = ({
   activeTab,
+  news,
+  preview = false,
+  refinedPreview = false,
+  initialOverviewSection,
+  overviewSection,
+  onOverviewSectionChange,
+  performanceDemo = false,
+  holdingPerformanceSample = false,
   setActiveTab,
   holdings,
   transactions,
@@ -68,7 +89,6 @@ const DashboardView: React.FC<Props> = ({
   onProcessGains,
   setLoading,
   numbersVisible = true,
-  onToggleNumbers,
   selectedBrokerages,
   setSelectedBrokerages,
   selectedAssetTypes,
@@ -79,7 +99,19 @@ const DashboardView: React.FC<Props> = ({
   buyingPower,
   accounts,
 }) => {
+  const canShowHoldingPerformance = refinedPreview && (preview ? import.meta.env.DEV : holdingPerformanceSample);
   const [syncMessage, setSyncMessage] = useState('');
+  const [heatmapTarget, setHeatmapTarget] = useState<HeatmapMode | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [holdingsSection, setHoldingsSection] = useState<'equity' | 'options' | 'performance'>(() => canShowHoldingPerformance && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('holdingsView') === 'performance' ? 'performance' : 'equity');
+  const changeHoldingsSection = (next: 'equity' | 'options' | 'performance') => {
+    setHoldingsSection(next);
+    if (preview && typeof window !== 'undefined' && window.location.pathname === '/design-preview') {
+      const url = new URL(window.location.href);
+      if (next === 'performance') url.searchParams.set('holdingsView', next); else url.searchParams.delete('holdingsView');
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+  };
   const [focusTicker, setFocusTicker] = useState<string | null>(null);
   const [focusDate, setFocusDate] = useState<string | null>(null);
   const [autoExpand, setAutoExpand] = useState<{ ticker: string; brokerage: string } | null>(null);
@@ -92,26 +124,27 @@ const DashboardView: React.FC<Props> = ({
   const [selectedTerms, setSelectedTerms] = useState<('long' | 'short')[]>([]);
 
   useEffect(() => { setSyncMessage(''); }, [activeTab]);
+  useEffect(() => { if (activeTab !== 'gainsLosses') setHeatmapTarget(null); }, [activeTab]);
   useEffect(() => { if (activeTab !== 'transactions') { setFocusTicker(null); setFocusDate(null); } }, [activeTab]);
 
   if (activeTab === 'importData') {
-    return <ImportDataView onAddTransactions={onAddTransactions} onRefresh={onRefresh} setLoading={setLoading} initialTab="connect" />;
+    return <WorkspacePage tab="importData"><ImportDataView onAddTransactions={onAddTransactions} onRefresh={onRefresh} setLoading={setLoading} initialTab="connect" onViewTransactions={() => { setSelectedBrokerages([]); setSelectedTickers([]); setSelectedAssetTypes([]); setFocusTicker(null); setFocusDate(null); setActiveTab('transactions'); }} /></WorkspacePage>;
   }
 
   if (activeTab === 'holdings') {
-    return (
+    return <WorkspacePage tab="holdings" actions={holdingsSection === 'performance' ? undefined : <button onClick={onProcessGains} className="workspace-button">Recalculate positions</button>}>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-2xl font-bold text-[#1D1D1F]">Portfolio Holdings</h2>
-          <button
-            onClick={onProcessGains}
-            className="px-4 py-2 text-sm font-medium text-[#0F52BA] hover:bg-[#F5F5F7] rounded transition-colors border border-[#D2D2D7]"
-          >
-            Refresh Data
-          </button>
+        {holdingsSection !== 'performance' && <div className="workspace-section-note"><span><strong>From position to transaction.</strong> Expand position or brokerage rows to inspect individual tax lots. Select a lot to find its source transaction.</span><button onClick={() => setActiveTab('gainsLosses')}>Review gains &amp; losses →</button></div>}
+        <div className="holdings-tabs-row">
+          <div className="workspace-segments" role="group" aria-label="Holdings views">
+            <button aria-pressed={holdingsSection === 'equity'} className={holdingsSection === 'equity' ? 'active' : ''} onClick={() => changeHoldingsSection('equity')}>Stocks &amp; funds</button>
+            <button aria-pressed={holdingsSection === 'options'} className={holdingsSection === 'options' ? 'active' : ''} onClick={() => changeHoldingsSection('options')}>Options</button>
+            {canShowHoldingPerformance && <button aria-pressed={holdingsSection === 'performance'} className={holdingsSection === 'performance' ? 'active' : ''} onClick={() => changeHoldingsSection('performance')}>Performance</button>}
+          </div>
+          {holdingsSection !== 'performance' && <p className="holdings-tax-note">Gain to Sell uses ST {stTaxRate}% / LT {ltTaxRate}% assumptions from Gains &amp; Losses.</p>}
         </div>
-        <HoldingsView
-          title="Equity"
+        {holdingsSection === 'performance' && canShowHoldingPerformance ? preview ? <PreviewHoldingPerformance holdings={holdings} transactions={transactions} numbersVisible={numbersVisible} selectedBrokerages={selectedBrokerages} onBrokeragesChange={setSelectedBrokerages} /> : <SampleHoldingPerformance numbersVisible={numbersVisible} /> : holdingsSection === 'equity' ? <HoldingsView
+          title="Stocks & funds"
           numbersVisible={numbersVisible}
           holdings={holdings.filter(h => (h.assetType || '').toLowerCase() !== 'options')}
           unrealizedGains={unrealizedGains.filter(u => (u.assetType || '').toLowerCase() !== 'options')}
@@ -120,6 +153,8 @@ const DashboardView: React.FC<Props> = ({
           autoExpand={autoExpand}
           onNavigateToTransactions={(ticker, brokerage, buyDate) => {
             setAutoExpand({ ticker, brokerage });
+            setSelectedBrokerages([brokerage]);
+            setSelectedTickers([ticker]);
             setFocusTicker(ticker);
             setFocusDate(buyDate);
             setActiveTab('transactions');
@@ -131,149 +166,63 @@ const DashboardView: React.FC<Props> = ({
           accounts={accounts}
           viewMode={holdingsViewMode}
           onViewModeChange={setHoldingsViewMode}
-        />
-        <div className="space-y-2">
-          <div className="flex items-start justify-between">
-            <h3 className="font-display text-2xl font-bold text-[#1D1D1F]">Options</h3>
-            <p className="text-[10px] text-slate-400 mt-1 text-right">Gain to Sell uses ST {stTaxRate}% / LT {ltTaxRate}% rates<br />from the Gains &amp; Losses tab</p>
-          </div>
-          <OptionsView selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} selectedTerms={selectedTerms} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} stTaxRate={stTaxRate} ltTaxRate={ltTaxRate} accounts={accounts} viewMode={holdingsViewMode} numbersVisible={numbersVisible} />
-        </div>
+        /> : <OptionsView onBrokeragesChange={setSelectedBrokerages} onTickersChange={setSelectedTickers} onTermsChange={setSelectedTerms} onViewModeChange={setHoldingsViewMode} selectedBrokerages={selectedBrokerages} selectedTickers={selectedTickers} selectedTerms={selectedTerms} holdings={holdings} unrealizedGains={unrealizedGains} realizedGains={realizedGains} stTaxRate={stTaxRate} ltTaxRate={ltTaxRate} accounts={accounts} viewMode={holdingsViewMode} numbersVisible={numbersVisible} />}
       </div>
-    );
+    </WorkspacePage>;
   }
 
   if (activeTab === 'transactions') {
-    return (
+    return <WorkspacePage tab="transactions" actions={<button disabled={syncing} onClick={async () => {
+      setSyncing(true); setSyncMessage('');
+      try { setSyncMessage(await onSyncTransactions()); } catch { setSyncMessage('Failed to sync transactions. Please try again.'); }
+      finally { setSyncing(false); }
+    }} className="workspace-button primary">{syncing ? 'Syncing…' : 'Sync transactions'}</button>}>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-2xl font-bold text-[#1D1D1F]">Transaction History</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={async () => { setSyncMessage(''); const msg = await onSyncTransactions(); setSyncMessage(msg); }}
-              className="px-4 py-2 text-sm font-medium text-[#0F52BA] hover:bg-[#F5F5F7] rounded transition-colors border border-[#D2D2D7]"
-            >
-              Sync Transactions
-            </button>
-            <button
-              onClick={() => { if (window.confirm('Clear all processed data? Raw tables (uploaded statements, SnapTrade) will be preserved.')) onClearData(); }}
-              className="px-4 py-2 text-sm font-medium text-[#FF3B30] hover:bg-[#FFDAD6] rounded transition-colors border border-[#D2D2D7]"
-            >
-              Clear Processed Data
-            </button>
-            <button
-              onClick={() => onResetData()}
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-[#F5F5F7] rounded transition-colors border border-[#D2D2D7]"
-            >
-              Reset Data
-            </button>
-          </div>
-        </div>
-
-        {syncMessage && (
-          <p className={`text-sm font-medium px-4 py-2 rounded border ${syncMessage.startsWith('Failed') ? 'bg-[#FFDAD6] text-[#FF3B30] border-[#D2D2D7]' : 'bg-emerald-50 text-emerald-700 border-[#D2D2D7]'}`}>
-            {syncMessage}
-          </p>
-        )}
+        <div className="workspace-section-note"><span><strong>The source behind your numbers.</strong> Filter by brokerage, ticker or date. Review flagged entries and edit transactions when reconciliation is needed.</span><button onClick={() => setActiveTab('importData')}>Manage accounts →</button></div>
+        {syncMessage && <p role="status" className={`workspace-status ${syncMessage.startsWith('Failed') ? 'is-error' : ''}`}>{syncMessage}</p>}
         <TransactionsView transactions={transactions} onRemove={onRemoveTransaction} onSoftDelete={onSoftDeleteTransaction} onUpdate={onUpdateTransaction} onRevert={onRevertTransaction} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedAssetTypes={selectedAssetTypes} setSelectedAssetTypes={setSelectedAssetTypes} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} focusTicker={focusTicker} focusDate={focusDate} onClearFocus={() => { setFocusTicker(null); setFocusDate(null); }} allKnownBrokerages={allKnownBrokerages} accounts={accounts} numbersVisible={numbersVisible} />
+        <details className="workspace-maintenance"><summary>Data maintenance</summary><p>Use these tools when rebuilding or troubleshooting your portfolio. Clearing calculated data preserves original imported records.</p><div className="flex flex-wrap gap-3"><button className="workspace-button" onClick={() => { if (window.confirm('Clear calculated positions and gains? Your original imported records will be preserved.')) onClearData(); }}>Clear calculated data</button><button className="workspace-button" onClick={() => onResetData()}>Reset processed transactions</button></div></details>
       </div>
-    );
+    </WorkspacePage>;
   }
 
   if (activeTab === 'gainsLosses') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-2xl font-bold text-[#1D1D1F]">Realized Gains & Losses</h2>
-          <button
-            onClick={onProcessGains}
-            className="px-4 py-2 text-sm font-medium text-[#0F52BA] hover:bg-[#F5F5F7] rounded transition-colors border border-[#D2D2D7]"
-          >
-            Refresh Data
-          </button>
-        </div>
-        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} stTaxRate={stTaxRate} setStTaxRate={setStTaxRate} ltTaxRate={ltTaxRate} setLtTaxRate={setLtTaxRate} numbersVisible={numbersVisible} />
-      </div>
-    );
+    return <WorkspacePage tab="gainsLosses" actions={<button onClick={onProcessGains} className="workspace-button">Recalculate gains</button>}>
+        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} stTaxRate={stTaxRate} setStTaxRate={setStTaxRate} ltTaxRate={ltTaxRate} setLtTaxRate={setLtTaxRate} numbersVisible={numbersVisible} alternativeHeatmapViews={refinedPreview} heatmapTarget={heatmapTarget} onReturnOverview={() => setActiveTab('dashboardView')} />
+    </WorkspacePage>;
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-[#1D1D1F]">Dashboard</h1>
-        <div className="mt-1 w-8 h-0.5 bg-[#0F52BA]" />
-      </div>
-
-      <SummaryCards stats={stats} cashByBrokerage={buyingPower} numbersVisible={numbersVisible} onToggleNumbers={onToggleNumbers} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-full">
-          <PortfolioVisuals holdings={holdings} cashByBrokerage={buyingPower} numbersVisible={numbersVisible} onToggleNumbers={onToggleNumbers} />
-        </div>
-
-        <div>
-          <AIInsights holdings={holdings} refreshNonce={refreshNonce} />
-        </div>
-      </div>
-
-      {holdings.length > 0 && (() => {
-        // Aggregate by ticker across all brokerages, compute daily % change
-        const byTicker: Record<string, { ticker: string; currentPrice: number; previousClose: number; assetType: string }> = {};
-        for (const h of holdings) {
-          if ((h.assetType || '').toLowerCase() === 'options') continue;
-          if (h.previousClose <= 0) continue;
-          if (!byTicker[h.ticker]) {
-            byTicker[h.ticker] = { ticker: h.ticker, currentPrice: h.currentPrice, previousClose: h.previousClose, assetType: h.assetType || 'Equity' };
-          }
-        }
-        const withGain = Object.values(byTicker).map(t => ({
-          ...t,
-          gainPct: ((t.currentPrice - t.previousClose) / t.previousClose) * 100,
-        }));
-        const topMovers = [...withGain].sort((a, b) => b.gainPct - a.gainPct).slice(0, 5);
-        const worstMovers = [...withGain].sort((a, b) => a.gainPct - b.gainPct).slice(0, 5);
-
-        const MoverRow = ({ h }: { h: typeof withGain[0] }) => (
-          <div className="flex items-center justify-between py-3 border-b last:border-0 border-[#D2D2D7]">
-            <div className="flex items-center gap-3">
-              <TickerLogo ticker={h.ticker} size={32} assetType={h.assetType} />
-              <div>
-                <p className="text-sm font-semibold text-[#1D1D1F]">{h.ticker}</p>
-                <p className="text-xs text-slate-400">${h.currentPrice.toFixed(2)}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-sm font-bold">
-                <SignedValue
-                  value={h.gainPct}
-                  format={() => `${Math.abs(h.gainPct).toFixed(2)}%`}
-                  arrowClass="w-3 h-3"
-                />
-              </p>
-              <p className="text-xs text-slate-400">prev ${h.previousClose.toFixed(2)}</p>
-            </div>
-          </div>
-        );
-
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded border border-[#D2D2D7]" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <h3 className="text-sm font-semibold text-[#1D1D1F]">Top Movers</h3>
-              </div>
-              {topMovers.map(h => <MoverRow key={h.ticker} h={h} />)}
-            </div>
-            <div className="bg-white p-6 rounded border border-[#D2D2D7]" style={{ boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-[#FF3B30]"></span>
-                <h3 className="text-sm font-semibold text-[#1D1D1F]">Worst Movers</h3>
-              </div>
-              {worstMovers.map(h => <MoverRow key={h.ticker} h={h} />)}
-            </div>
-          </div>
-        );
-      })()}
+      <PortfolioOverview
+        preview={preview}
+        refined={refinedPreview}
+        initialSection={initialOverviewSection}
+        activeSection={overviewSection}
+        onSectionChange={onOverviewSectionChange}
+        onOpenHeatmap={period => { setSelectedTickers([]); setHeatmapTarget(period); setActiveTab('gainsLosses'); }}
+        performance={performanceDemo ? <TransactionPerformance compactBalance={refinedPreview} numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} refreshNonce={refreshNonce} onReviewTransactions={() => setActiveTab('transactions')} /> : import.meta.env.DEV && preview ? <PreviewPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} compactBalance={refinedPreview} /> : refinedPreview ? <section className="portfolio-performance"><header className="perf-header"><div><h2>Performance history</h2><p>Portfolio performance history is not enabled for this account yet. Holdings and gains still show your recorded positions.</p></div></header></section> : undefined}
+        news={news ? <PortfolioNews state={news} numbersVisible={numbersVisible} /> : undefined}
+        insights={<AIInsights holdings={holdings} cashByBrokerage={buyingPower} refreshNonce={refreshNonce}
+          preview={preview} numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0}
+          onOpenHoldings={ticker => { setSelectedBrokerages([]); setSelectedTickers(ticker ? [ticker] : []); setSelectedAssetTypes([]); setSelectedTerms([]); setActiveTab('holdings'); }}
+          onOpenGains={() => { setSelectedBrokerages([]); setSelectedTickers([]); setActiveTab('gainsLosses'); }} />}
+        holdings={holdings}
+        cashByBrokerage={buyingPower}
+        numbersVisible={numbersVisible}
+        selectedBrokerages={selectedBrokerages}
+        onBrokeragesChange={setSelectedBrokerages}
+        onRefresh={onRefresh}
+        onConnect={() => setActiveTab('importData')}
+        onOpenHoldings={ticker => {
+          setSelectedTickers(ticker ? [ticker] : []);
+          setSelectedAssetTypes([]);
+          setSelectedTerms([]);
+          setHoldingsSection('equity');
+          setAutoExpand(null);
+          setActiveTab('holdings');
+        }}
+      />
     </div>
   );
 };
