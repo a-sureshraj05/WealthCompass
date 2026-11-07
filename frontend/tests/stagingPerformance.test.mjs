@@ -52,13 +52,13 @@ test('the staging demo honors hidden figures without revealing chart, returns or
   assert.doesNotMatch(html, /perf-line-chart|perf-scoreboard|perf-balance-equation|212,995/);
 });
 
-test('runtime flag reader uses instance status and rejects missing, string or failed flags', async () => {
+test('runtime flag reader uses authenticated user metadata and rejects missing, string or failed flags', async () => {
   for (const [status, body, expected] of [
     [200, { performance_demo: true }, true], [200, { performance_demo: false }, false],
     [200, {}, false], [200, { performance_demo: 'true' }, false], [503, {}, false],
   ]) {
     globalThis.fetch = async url => {
-      assert.equal(url, '/api/v1/auth/status');
+      assert.equal(url, '/api/v1/auth/me');
       return new Response(JSON.stringify(body), { status });
     };
     assert.equal(await fetchPerformanceDemoEnabled(), expected);

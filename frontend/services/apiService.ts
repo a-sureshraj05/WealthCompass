@@ -28,7 +28,7 @@ const responseError = async (response: Response, fallback: string): Promise<Erro
 export interface AccountProfile { email: string; displayName: string }
 
 export const fetchPerformanceDemoEnabled = async (): Promise<boolean> => {
-  const response = await apiFetch('/api/v1/auth/status');
+  const response = await apiFetch('/api/v1/auth/me');
   if (!response.ok) return false;
   const status = await response.json();
   return status.performance_demo === true;
