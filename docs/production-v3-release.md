@@ -6,14 +6,20 @@ The fixed `ui-v1` and `ui-v2` tags preserve the older interfaces.
 
 ## Production source and configuration
 
-The existing `wealthcompass-app` service originally deployed from
-`design/cloud-launch`. Its Blueprint is still linked to that branch. First merge
-this release into `main`, then update that existing Blueprint's `render.yaml`
-to the production manifest here, with `branch: main`. A Blueprint sync changes
-the existing service's build source rather than replacing it. Future code
-releases to `main` then deploy normally. The Blueprint's own linked branch may
-be moved to `main` separately in Render; until then, keep deployment configuration
-changes synchronized with its legacy source.
+The existing `wealthcompass-app` service deploys from `design/cloud-launch`.
+PR #25 promoted the release to `main`; PR #26 added `branch: main` to the legacy
+production manifest. Live deployment records and assets confirmed that Render
+continued building the legacy branch after this edit. Do not assume a manifest
+commit alone changes an existing service's source: a dashboard source change or
+an active Blueprint sync is still required. No Render API credential is available
+in this workspace or GitHub repository secrets.
+
+Until Render's source is changed to `main`, publish each approved main release by
+merging it into `design/cloud-launch`. The code is kept on `main`, and the existing
+service receives that same code through its working deployment source. Both
+`main` and `staging` remain available for development. In Render's service Settings,
+set the source branch to `main` to remove this temporary publishing step; if a
+Blueprint manages the service, also synchronize its configuration/source.
 
 Keep the existing `DATABASE_URL`, `JWT_SECRET` and `WealthCompass` environment
 group. `WC_DEMO_MODE=false` is mandatory: the Docker image's portable-demo default
@@ -31,6 +37,12 @@ enabled only for the authenticated `demouser@gmail.com` account. The simulated
 individual-holding performance prototype remains staging-only, even if its flag
 is accidentally true in production. Other accounts' records and credentials are
 not migrated or reseeded. Signup/onboarding work remains excluded.
+
+As with staging, trusted Render metadata supplies defaults for the verified
+existing production service (`srv-dbj6lqm7bikc73eim1d0`) on `main` or its legacy
+source branch, without requiring a dashboard flag resync. Explicit false flags
+disable features; unknown services/branches and explicit development environments
+do not inherit these defaults. Hostnames and query strings never enable them.
 
 ## Demo preparation
 

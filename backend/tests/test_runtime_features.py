@@ -157,3 +157,39 @@ def test_current_user_v3_flags_cannot_be_enabled_by_query_string(monkeypatch):
     with TestClient(app) as client:
         result=client.get("/api/v1/auth/me?refined_ui=true&holding_performance_preview=true").json()
     assert result["refined_ui"] is False and result["holding_performance_preview"] is False
+
+
+@pytest.mark.parametrize('branch', ['main', 'design/cloud-launch'])
+def test_verified_production_defaults_enable_approved_ui_but_never_simulated_holdings(monkeypatch, branch):
+    from backend.app.core.runtime_features import PRODUCTION_RENDER_SERVICE_ID, refined_ui_enabled, holding_performance_preview_enabled
+    for key in ['WC_APP_ENV', 'WC_PERFORMANCE_DEMO']:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv('RENDER', 'true')
+    monkeypatch.setenv('RENDER_SERVICE_ID', PRODUCTION_RENDER_SERVICE_ID)
+    monkeypatch.setenv('RENDER_GIT_BRANCH', branch)
+    monkeypatch.setenv('WC_HOLDING_PERFORMANCE_PREVIEW', 'true')
+    assert refined_ui_enabled() is True
+    assert performance_demo_enabled() is True
+    assert holding_performance_preview_enabled() is False
+    monkeypatch.setenv('WC_REFINED_UI', 'false')
+    monkeypatch.setenv('WC_PERFORMANCE_DEMO', 'false')
+    assert refined_ui_enabled() is False
+    assert performance_demo_enabled() is False
+
+
+@pytest.mark.parametrize('service,branch,environment', [
+    ('different-service', 'main', None),
+    ('srv-dbj6lqm7bikc73eim1d0', 'feature/review', None),
+    ('srv-dbj6lqm7bikc73eim1d0', 'main', 'development'),
+])
+def test_other_instances_do_not_inherit_production_defaults(monkeypatch, service, branch, environment):
+    from backend.app.core.runtime_features import refined_ui_enabled, holding_performance_preview_enabled
+    for key in ['WC_APP_ENV', 'WC_PERFORMANCE_DEMO']:
+        monkeypatch.delenv(key, raising=False)
+    if environment: monkeypatch.setenv('WC_APP_ENV', environment)
+    monkeypatch.setenv('RENDER', 'true')
+    monkeypatch.setenv('RENDER_SERVICE_ID', service)
+    monkeypatch.setenv('RENDER_GIT_BRANCH', branch)
+    assert not refined_ui_enabled()
+    assert not performance_demo_enabled()
+    assert not holding_performance_preview_enabled()
