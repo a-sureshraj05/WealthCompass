@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LoginPresentation from './LoginPresentation';
 
 interface Props {
@@ -19,6 +19,7 @@ const LoginPage: React.FC<Props> = ({ onLogin, preview = false }) => {
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const submissionInFlight = useRef(false);
   const [instance, setInstance] = useState<InstanceStatus | null>(null);
   // Set only right after a successful registration — holds the UI on the
   // "save this now" panel below until the user explicitly continues.
@@ -44,9 +45,18 @@ const LoginPage: React.FC<Props> = ({ onLogin, preview = false }) => {
   // is still in flight on a normal instance.
   const registrationOpen = instance ? instance.registration_open : true;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (preview) return;
+    if (preview || submissionInFlight.current) return;
+    // Read the submitted form so password-manager/autofill values are included
+    // even when the browser has not dispatched React change events yet.
+    const fields = new FormData(e.currentTarget);
+    const submittedEmail = String(fields.get('email') || '');
+    const submittedPassword = String(fields.get('password') || '');
+    const submittedInviteCode = String(fields.get('invite-code') || '');
+    submissionInFlight.current = true;
+    setEmail(submittedEmail);
+    setPassword(submittedPassword);
     setError('');
     setLoading(true);
 
@@ -55,7 +65,7 @@ const LoginPage: React.FC<Props> = ({ onLogin, preview = false }) => {
         const res = await fetch('/api/v1/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, invite_code: inviteCode }),
+          body: JSON.stringify({ email: submittedEmail, password: submittedPassword, invite_code: submittedInviteCode }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -69,8 +79,8 @@ const LoginPage: React.FC<Props> = ({ onLogin, preview = false }) => {
         setRecoveryKey(data.recovery_key);
       } else {
         const form = new URLSearchParams();
-        form.append('username', email);
-        form.append('password', password);
+        form.append('username', submittedEmail);
+        form.append('password', submittedPassword);
         const res = await fetch('/api/v1/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -85,8 +95,18 @@ const LoginPage: React.FC<Props> = ({ onLogin, preview = false }) => {
     } catch (err: any) {
       setError(err.message);
     } finally {
+      submissionInFlight.current = false;
       setLoading(false);
     }
+  };
+
+  const handlePasswordKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+    event.preventDefault();
+    if (preview || event.repeat || submissionInFlight.current) return;
+    // requestSubmit preserves required/email validation and shares onSubmit
+    // with the Sign In button. Prevent the native Enter default from firing twice.
+    event.currentTarget.form?.requestSubmit();
   };
 
   const handleRecoveryKeyConfirmed = async () => {
@@ -150,6 +170,8 @@ const LoginPage: React.FC<Props> = ({ onLogin, preview = false }) => {
                 id="login-password" name="password" autoComplete={isRegistering ? 'new-password' : 'current-password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
+                onKeyDown={handlePasswordKeyDown}
+                enterKeyHint={isRegistering ? 'next' : 'go'}
                 required
                 placeholder="••••••••"
                 className="w-full px-4 py-2.5 rounded-md border border-slate-200 text-sm text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0F52BA] focus:border-transparent"

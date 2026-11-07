@@ -70,3 +70,24 @@ test('Gains & Losses follows filters, lots, tax assumptions, net result, then ch
   const hidden=renderGains({alternativeHeatmapViews:true,numbersVisible:false});
   assert.doesNotMatch(hidden,/role="tablist"|Holdings heatmap|ranked-holdings|gains-detail-section/);
 });
+
+
+test('Overview gain and loss values use shared up/down triangles instead of written signs',()=>{
+  const model=portfolioModel([{id:'one',ticker:'ABC',quantity:10,currentPrice:125,previousClose:130,marketValue:1250,totalCost:1000,averageCostPerShare:100,brokerage:'Example',assetType:'Equity'}],{Example:500});
+  const props={model,onHoldings:noop,onHeatmap:noop,onAccounts:noop};
+  const html=renderToStaticMarkup(React.createElement(Tiles,{...props,numbersVisible:true}));
+  assert.match(html,/M12 5l7 11H5z/);assert.match(html,/M12 19L5 8h14z/);
+  assert.match(html,/class="sr-only">down<\/span>\$50.00/);
+  assert.match(html,/class="sr-only">up<\/span>\$250.00/);
+  assert.doesNotMatch(html,/\+\$|−\$/);
+  const hidden=renderToStaticMarkup(React.createElement(Tiles,{...props,numbersVisible:false}));
+  assert.doesNotMatch(hidden,/overview-change-arrow|class="sr-only">up|class="sr-only">down/);
+});
+
+test('zero and missing Overview changes never show a direction triangle',async()=>{
+  const Change=(await load('../components/Dashboard/OverviewChange.tsx')).default;
+  for(const value of [0,null,NaN]) {
+    const html=renderToStaticMarkup(React.createElement(Change,{value,format:value=>String(value)}));
+    assert.doesNotMatch(html,/overview-change-arrow|class="sr-only">up|class="sr-only">down/);
+  }
+});

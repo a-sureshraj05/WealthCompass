@@ -2,6 +2,7 @@ import React from 'react';
 import { formatCurrency } from '../../utils/finance';
 import type { portfolioModel } from './portfolioModel';
 import type { HeatmapMode } from '../GainsLosses/GainsCharts';
+import OverviewChange from './OverviewChange';
 
 interface Props {
   model: ReturnType<typeof portfolioModel>;
@@ -19,8 +20,9 @@ const TileIcon = ({ kind }: { kind: 'portfolio' | 'daily' | 'unrealized' | 'cash
 
 export default function OverviewSummaryTiles({ model, numbersVisible, onHoldings, onHeatmap, onAccounts }: Props) {
   const mask = '••••••';
-  const money = (value: number, signed = false) => !numbersVisible ? mask : signed ? `${value > 0 ? '+' : value < 0 ? '−' : ''}${formatCurrency(Math.abs(value))}` : formatCurrency(value);
-  const percent = (value: number | null) => !numbersVisible ? mask : value === null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+  const money = (value: number) => !numbersVisible ? mask : formatCurrency(value);
+  const change = (value:number) => <OverviewChange value={value} format={formatCurrency} size="metric" numbersVisible={numbersVisible} />;
+  const percent = (value: number | null) => <OverviewChange value={value} format={absolute => `${absolute.toFixed(2)}%`} numbersVisible={numbersVisible} />;
   const positiveAssets = Math.max(0, model.investmentValue) + Math.max(0, model.cashValue);
   const investedShare = positiveAssets ? Math.max(0, model.investmentValue) / positiveAssets * 100 : 0;
   const dailyAvailable = model.contributors.length > 0;
@@ -35,13 +37,13 @@ export default function OverviewSummaryTiles({ model, numbersVisible, onHoldings
     </button>
     <button type="button" className="summary-tile summary-tile--daily" onClick={() => onHeatmap?.('daily')} disabled={!onHeatmap} aria-label="View daily change in the Gains and Losses Day heatmap">
       <span className="summary-tile-heading"><span>Daily equity change</span><TileIcon kind="daily" /></span>
-      <strong className={`summary-tile-value${numbersVisible && dailyAvailable ? model.dayChange >= 0 ? ' is-positive' : ' is-negative' : ''}`}>{dailyAvailable ? money(model.dayChange, true) : '—'}</strong>
+      <strong className={`summary-tile-value${numbersVisible && dailyAvailable ? model.dayChange >= 0 ? ' is-positive' : ' is-negative' : ''}`}>{dailyAvailable ? change(model.dayChange) : '—'}</strong>
       <span className="summary-tile-caption">{percent(model.dayPercent)} vs. previous close</span>
       <span className="summary-tile-link">Day heatmap<Chevron /></span>
     </button>
     <button type="button" className="summary-tile summary-tile--unrealized" onClick={() => onHeatmap?.('overall')} disabled={!onHeatmap} aria-label="View unrealized gains and losses in the Open P and L heatmap">
       <span className="summary-tile-heading"><span>Unrealized gain / loss</span><TileIcon kind="unrealized" /></span>
-      <strong className={`summary-tile-value${numbersVisible ? model.gain >= 0 ? ' is-positive' : ' is-negative' : ''}`}>{money(model.gain, true)}</strong>
+      <strong className={`summary-tile-value${numbersVisible ? model.gain >= 0 ? ' is-positive' : ' is-negative' : ''}`}>{change(model.gain)}</strong>
       <span className="summary-tile-caption">{percent(model.gainPercent)} on open-position cost</span>
       <span className="summary-tile-link">Open P&amp;L heatmap<Chevron /></span>
     </button>

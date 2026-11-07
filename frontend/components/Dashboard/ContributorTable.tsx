@@ -5,6 +5,7 @@ import { formatCurrency } from '../../utils/finance';
 import { toggleSort } from '../../utils/sort';
 import type { SortDirection } from '../../utils/sort';
 import SortIndicator from '../SortIndicator';
+import OverviewChange from './OverviewChange';
 
 export default function ContributorTable({ contributors, unit, onOpenHolding }: {
   contributors: readonly DailyContributor[];
@@ -36,8 +37,8 @@ export default function ContributorTable({ contributors, unit, onOpenHolding }: 
       <tbody>{rows.map((contributor, index) => <tr key={contributor.ticker}>
         <td>{index + 1}</td>
         <th scope="row" className={activeColumn === 'ticker' ? 'is-active' : undefined}><button type="button" onClick={() => onOpenHolding(contributor.ticker)} aria-label={`View ${contributor.ticker} holding`}>{contributor.ticker}<span aria-hidden="true">→</span></button></th>
-        <td className={`${activeColumn === 'change' ? 'is-active ' : ''}${contributor.change >= 0 ? 'positive' : 'negative'}`}>{contributor.change > 0 ? '+' : contributor.change < 0 ? '−' : ''}{formatCurrency(Math.abs(contributor.change))}</td>
-        <td className={`${activeColumn === 'percent' ? 'is-active ' : ''}${contributor.percent >= 0 ? 'positive' : 'negative'}`}>{contributor.percent > 0 ? '+' : ''}{contributor.percent.toFixed(2)}%</td>
+        <td className={`${activeColumn === 'change' ? 'is-active ' : ''}${contributor.change >= 0 ? 'positive' : 'negative'}`}><OverviewChange value={contributor.change} format={formatCurrency} /></td>
+        <td className={`${activeColumn === 'percent' ? 'is-active ' : ''}${contributor.percent >= 0 ? 'positive' : 'negative'}`}><OverviewChange value={contributor.percent} format={absolute => `${absolute.toFixed(2)}%`} /></td>
       </tr>)}</tbody>
     </table>
   </div>;

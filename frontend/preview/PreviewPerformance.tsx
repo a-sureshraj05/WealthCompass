@@ -5,11 +5,12 @@ import { chartSample, performanceRange, performanceSummary } from '../components
 import type { PerformancePeriod, PerformanceSnapshot } from '../components/Dashboard/Performance/performanceModel';
 import { PERFORMANCE_AS_OF, PERFORMANCE_FIRST_YEAR, performanceSnapshots } from './performanceData';
 import '../components/Dashboard/Performance/performance.css';
+import OverviewChange from '../components/Dashboard/OverviewChange';
 
 const dateLabel = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-const percent = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
-const points = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(2)} PP`;
-const signedMoney = (value: number) => `${value > 0 ? '+' : ''}${formatCurrency(value)}`;
+const percent = (value:number) => <OverviewChange value={value} format={absolute => `${absolute.toFixed(2)}%`} />;
+const points = (value:number) => <OverviewChange value={value} format={absolute => `${absolute.toFixed(2)} PP`} />;
+const signedMoney = (value:number) => <OverviewChange value={value} format={formatCurrency} />;
 const PORTFOLIO = '#315da6';
 const SPY = '#9380b6';
 const TRADE_SPY = '#218b83';
@@ -81,18 +82,18 @@ function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView =
           <span>
             <i style={{ background: PORTFOLIO }} />{portfolioLabel}</span>
           <strong>{percent(summary.portfolioReturn)}</strong>
-          <small>{multiYear && summary.annualized !== null ? `${percent(summary.annualized)} annualized · ` : ''}Time-weighted return</small>
+          <small>{multiYear && summary.annualized !== null ? <>{percent(summary.annualized)} annualized · </> : ''}Time-weighted return</small>
         </div>
         {actual && <div className="perf-trade-score">
           <span><i style={{ background: TRADE_SPY }} />SPY · your trade timing</span>
           <strong>{summary.tradeComparison ? percent(summary.tradeComparison.return) : '—'}</strong>
-          <small>{multiYear && summary.tradeComparison?.annualized != null ? `${percent(summary.tradeComparison.annualized)} annualized · ` : ''}{summary.tradeComparison ? 'Same buy/sell dollars · cash retained' : 'Complete trade-timing history unavailable'}</small>
+          <small>{multiYear && summary.tradeComparison?.annualized != null ? <>{percent(summary.tradeComparison.annualized)} annualized · </> : ''}{summary.tradeComparison ? 'Same buy/sell dollars · cash retained' : 'Complete trade-timing history unavailable'}</small>
         </div>}
         <div>
           <span>
             <i style={{ background: SPY }} />{actual ? 'SPY · buy and hold' : 'SPY · sample total return'}</span>
           <strong>{percent(summary.spyReturn)}</strong>
-          <small>{multiYear && summary.spyAnnualized !== null ? `${percent(summary.spyAnnualized)} annualized · ` : ''}Distributions reinvested</small>
+          <small>{multiYear && summary.spyAnnualized !== null ? <>{percent(summary.spyAnnualized)} annualized · </> : ''}Distributions reinvested</small>
         </div>
         {!actual && <div className="perf-difference">
           <span>Return gap vs SPY</span>
