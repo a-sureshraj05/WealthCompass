@@ -52,3 +52,30 @@ def test_history_rebuild_uses_authenticated_dek_and_private_database_scope(clien
     assert client.get('/api/v1/performance/history').json()['openingCash'] == 100
     monkeypatch.setenv('WC_APP_ENV', 'production')
     assert client.get('/api/v1/performance/history').status_code == 403
+
+
+def test_demo_sample_requires_authentication_and_shared_fixture_account(client, monkeypatch):
+    assert client.post('/api/v1/performance/demo-sample').status_code == 401
+    register(client, monkeypatch, 'demouser@gmail.com')
+    assert client.post('/api/v1/performance/demo-sample').status_code == 403
+
+
+def test_demo_sample_adds_fixed_rows_for_cookie_principal_only(client, monkeypatch):
+    from backend.app.api import auth
+    from backend.app.core import database
+    from backend.tests.test_demo_performance_fixture import seed_original
+    register(client, monkeypatch, 'demouser@gmail.com')
+    payload = jwt.decode(client.cookies.get('wc_session'), auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+    token = crypto.CURRENT_DEK.set(session_store.get_dek(payload['sid']))
+    db = database.SessionLocal()
+    user = db.query(User).filter_by(email='demouser@gmail.com').one()
+    user.is_test_user = True
+    seed_original(UserScope(db, user.id))
+    db.close()
+    crypto.CURRENT_DEK.reset(token)
+    response = client.post('/api/v1/performance/demo-sample', json={'user_id': 999, 'opening_cash': 999999999})
+    assert response.status_code == 200
+    assert response.json()['createdTransactions'] == 7
+    assert response.json()['totalTransactions'] == 23
+    assert client.post('/api/v1/performance/demo-sample').json()['createdTransactions'] == 0
+    assert client.get('/api/v1/performance/history').json()['status'] == 'needs_rebuild'
