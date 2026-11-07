@@ -228,3 +228,20 @@ def test_additive_migration_works_before_or_after_startup_create_all(tmp_path):
         migration.op = Operations(MigrationContext.configure(connection))
         migration.upgrade()
     engine.dispose()
+
+
+def test_provider_outage_reuses_genuine_cached_prices_without_erasing_valid_history(scoped, monkeypatch):
+    scope, factory, dek = scoped
+    seed(scope)
+    history.build_history(1, dek, factory)
+    scope.db.expire_all()
+    before = history.read_history(scope)['snapshots']
+    def unavailable(*args): raise ConnectionError('provider unavailable')
+    monkeypatch.setattr(history, 'fetch_spy', unavailable)
+    monkeypatch.setattr(history, 'fetch_instrument', unavailable)
+    history.build_history(1, dek, factory)
+    scope.db.expire_all()
+    result = history.read_history(scope)
+    assert result['status'] == 'ready'
+    assert result['snapshots'] == before
+    assert {issue['code'] for issue in result['issues']} == {'benchmark', 'price_provider'}

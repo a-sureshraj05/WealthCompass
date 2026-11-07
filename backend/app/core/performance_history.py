@@ -146,7 +146,10 @@ def _build(scope):
         try:
             spy = fetch_spy(start, cutoff)
             if not spy: raise ValueError("No benchmark history")
-        except Exception: issues.append(issue("benchmark", "SPY adjusted-close history could not be retrieved. Retry when the price provider is available."))
+        except Exception:
+            cached = scope.db.query(HistoricalPrice).filter(HistoricalPrice.symbol == "SPY:TOTAL_RETURN", HistoricalPrice.date >= start - timedelta(days=10), HistoricalPrice.date <= cutoff, HistoricalPrice.currency == "USD", HistoricalPrice.adjusted_close > 0).all()
+            spy = {row.date: {"close": row.close, "adjusted": row.adjusted_close, "split": row.split_ratio, "currency": row.currency} for row in cached}
+            issues.append(issue("benchmark", "Fresh SPY history could not be retrieved. Only previously cached benchmark sessions, if available, are used. Retry when the price provider is available."))
         with ThreadPoolExecutor(max_workers=4) as pool:
             futures = {pool.submit(fetch_instrument, symbol, rows, cutoff): symbol for symbol, rows in securities.items()}
             for count, future in enumerate(as_completed(futures), 1):
