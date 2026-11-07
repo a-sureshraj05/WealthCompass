@@ -19,7 +19,7 @@ from backend.app.db.schema import Base
 
 DEMO_MODE = os.getenv("WC_DEMO_MODE", "").lower() == "true"
 
-from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, prices, preferences, insights
+from .api import manual_import, transactions, brokerage, analyst, auth, lot_assignments, options, splits, prices, preferences, insights, performance
 from .api.auth import get_current_user, limiter
 
 app = FastAPI()
@@ -289,6 +289,7 @@ app.include_router(splits.router, prefix="/api/v1", dependencies=[Depends(get_cu
 app.include_router(prices.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(preferences.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(insights.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(performance.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
 @app.get("/healthz")

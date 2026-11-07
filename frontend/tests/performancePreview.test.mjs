@@ -61,3 +61,26 @@ test('staging calendar mode labels the comparison as demo data rather than the s
   assert.match(html, /Simulated returns and balance reconciliation by year/);
   assert.doesNotMatch(html, /Your portfolio/);
 });
+
+const history = {
+  asOf: '2024-05-03', firstYear: 2024, coverageStart: '2024-05-01',
+  snapshots: [
+    { date: '2024-05-01', value: 1000, deposits: 1000, withdrawals: 0, spyTotalReturnIndex: 100 },
+    { date: '2024-05-02', value: 1100, deposits: 0, withdrawals: 0, spyTotalReturnIndex: 102 },
+    { date: '2024-05-03', value: 1200, deposits: 0, withdrawals: 0, spyTotalReturnIndex: 103 },
+  ],
+};
+test('transaction presentation uses supplied dates and balances without any simulated labels or fixture fallback', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: true, presentation: 'transaction-history', history })).replaceAll('<!-- -->', '');
+  assert.match(html, /TRANSACTION-BASED HISTORY/);
+  assert.match(html, /Available history/);
+  assert.match(html, /May 2, 2024 – May 3, 2024/);
+  assert.match(html, /\+20.00%/);
+  assert.match(html, /\$1,200.00/);
+  assert.doesNotMatch(html, /fictional|simulated|sample|212,995|2026/);
+  assert.equal(renderToStaticMarkup(React.createElement(Preview, { numbersVisible: true, presentation: 'transaction-history' })), '');
+});
+test('transaction history respects private figures', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: false, presentation: 'transaction-history', history }));
+  assert.doesNotMatch(html, /perf-scoreboard|perf-balance-equation|1,200|20.00%/);
+});

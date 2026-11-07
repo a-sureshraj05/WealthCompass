@@ -40,8 +40,8 @@ services:
       - key: WC_DEMO_MODE
         value: "false"
 
-      # Show the clearly labelled, simulated portfolio/SPY comparison after
-      # sign-in to demouser@gmail.com only. This does not seed or change user data.
+      # Enable transaction-derived daily performance after sign-in for
+      # demouser@gmail.com only. Other accounts and production stay unchanged.
       - key: WC_APP_ENV
         value: "staging"
       - key: WC_PERFORMANCE_DEMO

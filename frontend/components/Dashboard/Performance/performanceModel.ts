@@ -1,4 +1,4 @@
-export type PerformancePeriod = 'ytd' | '1y' | '3y' | '5y' | `year-${number}`;
+export type PerformancePeriod = 'available' | 'ytd' | '1y' | '3y' | '5y' | `year-${number}`;
 export interface PerformanceSnapshot { date: string; value: number; deposits: number; withdrawals: number; spyTotalReturnIndex: number }
 export interface PerformanceRange { start: string; end: string; openingBoundary: string; label: string }
 const DAY = 86400000;
@@ -9,13 +9,18 @@ function dateValue(value: string) {
   return new Date(`${value}T00:00:00Z`);
 }
 
-export function performanceRange(period: PerformancePeriod, asOf: string): PerformanceRange {
+export function performanceRange(period: PerformancePeriod, asOf: string, coverageStart?: string): PerformanceRange {
   const end = dateValue(asOf);
   const year = end.getUTCFullYear();
   let start: string;
   let last = asOf;
   let label: string;
-  if (period === 'ytd') { start = `${year}-01-01`; label = `${year} YTD`; }
+  if (period === 'available') {
+    if (!coverageStart || coverageStart >= asOf) throw new Error('At least two valuations are required.');
+    dateValue(coverageStart);
+    start = dayAfter(coverageStart, 1); label = 'Available history';
+  }
+  else if (period === 'ytd') { start = `${year}-01-01`; label = `${year} YTD`; }
   else if (period.startsWith('year-')) {
     const chosen = Number(period.slice(5));
     if (!Number.isInteger(chosen) || chosen < 1900 || chosen > year) throw new Error('Choose a completed or current calendar year.');
@@ -40,20 +45,27 @@ export function performanceRange(period: PerformancePeriod, asOf: string): Perfo
  * flows. Live intraday/large flows require valuations at the flow or an explicitly
  * disclosed approximation. No return is fabricated for missing opening history.
  */
-export function performanceSummary(snapshots: PerformanceSnapshot[], range: PerformanceRange) {
+export function performanceSummary(snapshots: PerformanceSnapshot[], range: PerformanceRange, marketDates?: string[]) {
   const ordered = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
   const opening = ordered.filter(point => point.date <= range.openingBoundary).at(-1);
   const selected = ordered.filter(point => point.date >= range.start && point.date <= range.end);
   if (!opening || !selected.length) return null;
-  if (![opening, ...selected].every(point => Number.isFinite(point.value) && point.value > 0 && Number.isFinite(point.spyTotalReturnIndex) && point.spyTotalReturnIndex > 0 && Number.isFinite(point.deposits) && point.deposits >= 0 && Number.isFinite(point.withdrawals) && point.withdrawals >= 0)) return null;
+  if (marketDates) {
+    const expectedOpening = marketDates.filter(date => date <= range.openingBoundary).at(-1);
+    const expected = marketDates.filter(date => date >= range.start && date <= range.end);
+    if (opening.date !== expectedOpening || expected.length !== selected.length || expected.some((date, index) => selected[index]?.date !== date)) return null;
+  }
+  if (![opening, ...selected].every(point => Number.isFinite(point.value) && point.value >= 0 && Number.isFinite(point.spyTotalReturnIndex) && point.spyTotalReturnIndex > 0 && Number.isFinite(point.deposits) && point.deposits >= 0 && Number.isFinite(point.withdrawals) && point.withdrawals >= 0)) return null;
+  if (opening.value <= 0) return null;
   let factor = 1;
   let previous = opening.value;
   let deposits = 0;
   let withdrawals = 0;
   const series = [{ date: opening.date, portfolio: 0, spy: 0, portfolioGrowth: 10000, spyGrowth: 10000 }];
   for (const point of selected) {
+    if (previous <= 0) return null;
     const dailyFactor = (point.value - point.deposits + point.withdrawals) / previous;
-    if (!Number.isFinite(dailyFactor) || dailyFactor <= 0) return null;
+    if (!Number.isFinite(dailyFactor) || dailyFactor < 0) return null;
     factor *= dailyFactor;
     deposits += point.deposits;
     withdrawals += point.withdrawals;

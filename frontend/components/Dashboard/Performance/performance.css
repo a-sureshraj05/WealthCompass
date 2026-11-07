@@ -86,3 +86,13 @@
 @media (max-width: 1300px) { .perf-balance-equation { gap: 6px; }.perf-balance-equation strong { font-size: 13px; }.perf-ending-balance { padding: 9px; } }
 @media (max-width: 900px) { .perf-balance-equation { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }.perf-balance-equation > i { display: none; }.perf-ending-balance { grid-column: 1 / -1; }.perf-scoreboard { gap: 15px; }.perf-scoreboard > div + div { padding-left: 15px; }.perf-scoreboard strong { font-size: 27px; }.perf-method > div { grid-template-columns: 1fr; gap: 15px; }.perf-chart-caption small, .perf-range small { width: 100%; margin-left: 0; } }
 @media (max-width: 600px) { .perf-header { padding: 20px 18px 17px; }.perf-header h2 { font-size: 21px; }.perf-demo-note { margin: 16px 18px 0; }.perf-controls { padding: 20px 18px 0; }.perf-view-switch { width: 100%; }.perf-periods { width: 100%; flex-wrap: wrap; }.perf-periods select { max-width: 145px; }.perf-range { padding: 20px 18px 0; }.perf-scoreboard { grid-template-columns: 1fr 1fr; padding: 22px 18px; gap: 18px; }.perf-scoreboard .perf-difference { grid-column: 1 / -1; padding: 14px 0 0; border-left: 0; border-top: 1px solid #e4ebf5; }.perf-scoreboard .perf-difference strong { font-size: 23px; }.perf-chart-toolbar { padding: 0 18px 8px; }.perf-line-chart { height: 245px; margin-right: 8px; margin-left: 0; }.perf-year-chart { height: 225px; margin-left: 0; margin-right: 6px; }.perf-chart-caption { padding: 13px 18px 18px; }.perf-balance { padding: 19px 18px; }.perf-balance > header { flex-direction: column; gap: 9px; }.perf-balance-equation strong { font-size: 16px; }.perf-calendar-intro { padding: 20px 18px 0; }.perf-method { padding: 15px 18px; } }
+
+.perf-history-status { margin: -8px 0 24px; padding: 18px 24px; background: #f4f7fc; border: 1px solid #dfe7f2; border-radius: 0 0 16px 16px; color: #536780; font-size: 12px; }
+.perf-history-status p { margin: 0 0 8px; }
+.perf-history-issues { padding: 12px 16px; margin: 14px 0; background: #fffaf0; border: 1px solid #ece0c6; border-radius: 10px; color: #756142; }
+.perf-history-issues ul { margin: 8px 0 0; padding-left: 18px; }
+.perf-history-issues li + li { margin-top: 7px; }
+.perf-history-actions, .perf-history-status form > div { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.perf-history-status button { border: 1px solid #ccd8e9; border-radius: 8px; padding: 8px 12px; background: #fff; color: #315da6; font-weight: 600; }
+.perf-history-status label, .perf-history-status small { display: block; margin-top: 8px; }
+.perf-history-status input { background: #fff; border: 1px solid #ccd8e9; padding: 8px 12px; border-radius: 8px; color: #243c5b; }

@@ -1,6 +1,7 @@
 import { BrokerageAccount, StockHolding, Transaction, RealizedGain, UnrealizedLot } from "../types";
 import { PROFILE_DISPLAY_NAME_KEY, validateDisplayName } from '../utils/profile';
 import { FINANCIAL_VISIBILITY_KEY } from '../utils/financialVisibility';
+import type { PerformanceSnapshot } from '../components/Dashboard/Performance/performanceModel';
 
 // The session lives in an HttpOnly cookie now, not localStorage — the browser
 // attaches it automatically on every same-origin request, so there's no
@@ -32,6 +33,37 @@ export const fetchPerformanceDemoEnabled = async (): Promise<boolean> => {
   if (!response.ok) return false;
   const status = await response.json();
   return status.performance_demo === true;
+};
+
+export interface PerformanceHistory {
+  status: 'needs_rebuild' | 'building' | 'ready' | 'empty' | 'incomplete' | 'error';
+  snapshots?: PerformanceSnapshot[];
+  progress?: string;
+  issues?: { code: string; message: string; date?: string; symbol?: string; transactionId?: number }[];
+  asOf?: string;
+  firstYear?: number;
+  coverageStart?: string;
+  coverageEnd?: string;
+  marketDates?: string[];
+  requestedStart?: string;
+  generatedAt?: string;
+  method?: string;
+  requiresOpeningCash?: boolean;
+  openingCash?: number | null;
+}
+
+export const fetchPerformanceHistory = async (signal?: AbortSignal): Promise<PerformanceHistory> => {
+  const response = await apiFetch('/api/v1/performance/history', { signal });
+  if (!response.ok) throw await responseError(response, 'Could not load performance history.');
+  return response.json();
+};
+
+export const rebuildPerformanceHistory = async (signal?: AbortSignal, openingCash?: number | null): Promise<void> => {
+  const response = await apiFetch('/api/v1/performance/rebuild', {
+    method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(openingCash === undefined ? {} : { opening_cash: openingCash, set_opening_cash: true }),
+  });
+  if (!response.ok) throw await responseError(response, 'Could not rebuild performance history.');
 };
 
 export const fetchAccountProfile = async (): Promise<AccountProfile> => {
