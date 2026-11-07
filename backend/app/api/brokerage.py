@@ -97,6 +97,18 @@ def get_accounts(db: Session = Depends(get_db),
             .all())
 
 
+@router.get("/provider-accounts")
+def get_provider_accounts(db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_user)):
+    """Provider IDs and authorization links for explicit synchronization scope.
+
+    Keep /accounts local: portfolio views use its database IDs, whereas SnapTrade
+    requires its own account IDs for synchronization and hiding accounts.
+    """
+    require_provider_access(current_user)
+    return snaptrade.get_accounts(UserScope(db, current_user.id))
+
+
 @router.patch("/accounts/{account_id}")
 def rename_account(account_id: int, req: AccountRenameRequest,
                    db: Session = Depends(get_db),

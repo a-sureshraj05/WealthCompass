@@ -1,0 +1,110 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { build } from 'esbuild';
+import Module from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const path = fileURLToPath(new URL('../preview/PreviewPerformance.tsx', import.meta.url));
+const result = await build({ entryPoints: [path], bundle: true, write: false, format: 'cjs', platform: 'node', packages: 'external', loader: { '.css': 'empty' } });
+const loaded = new Module(path);
+loaded.paths = Module._nodeModulePaths(fileURLToPath(new URL('../', import.meta.url)));
+loaded._compile(result.outputFiles[0].text, path);
+const Preview = loaded.exports.default;
+
+test('performance design clearly labels both simulated series and shows the requested date controls and balance bridge', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: true, scopeFiltered: true })).replaceAll('<!-- -->', '');
+  assert.match(html, /Performance vs SPY/);
+  assert.match(html, /SPY always included/);
+  assert.match(html, /Portfolio and SPY results are simulated, not actual historical returns/);
+  assert.match(html, /Calendar years/);
+  for (const period of ['YTD', '1Y', '3Y', '5Y']) assert.ok(html.includes(`>${period}<`));
+  assert.match(html, /Jan 1, 2026 – Nov 1, 2026/);
+  assert.match(html, /Oct 30, 2026/);
+  assert.match(html, /How the account balance changed/);
+  assert.match(html, /\$212,995.75/);
+  assert.match(html, /Withdrawals/);
+  assert.match(html, /Investment earnings/);
+  assert.match(html, /brokerage filter does not change/);
+});
+
+test('Hide figures removes chart, reconciliation and return numbers from the performance design', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: false }));
+  assert.match(html, /Your performance figures are hidden/);
+  assert.doesNotMatch(html, /perf-line-chart|perf-scoreboard|perf-balance-equation|212,995/);
+});
+
+
+test('calendar design distinguishes completed years from current YTD and reconciles each row', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: true, initialView: 'calendar' })).replaceAll('<!-- -->', '');
+  assert.match(html, /Year by year, on the same scale/);
+  assert.match(html, /class="perf-year-table"/);
+  assert.match(html, />2026 YTD ↗</);
+  assert.match(html, />2025 ↗</);
+  for (const column of ['Opening', 'Deposits', 'Withdrawals', 'Earnings', 'Ending']) assert.ok(html.includes(`>${column}<`));
+  assert.match(html, /Jan 1 – Dec 31 for completed years/);
+  assert.doesNotMatch(html, /perf-balance-equation/);
+});
+
+test('the trailing-year UI displays the requested anniversary-plus-one-day range and actual valuation dates', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: true, initialPeriod: '1y' })).replaceAll('<!-- -->', '');
+  assert.match(html, /Nov 2, 2025 – Nov 1, 2026/);
+  assert.match(html, /opening valuation Oct 31, 2025/);
+  assert.match(html, /Latest sample valuation: Oct 30, 2026/);
+});
+
+test('staging calendar mode labels the comparison as demo data rather than the signed-in portfolio', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: true, initialView: 'calendar', presentation: 'staging-demo' })).replaceAll('<!-- -->', '');
+  assert.match(html, /STAGING · DEMO DATA/);
+  assert.match(html, /Demo portfolio/);
+  assert.match(html, /Simulated returns and balance reconciliation by year/);
+  assert.doesNotMatch(html, /Your portfolio/);
+});
+
+const history = {
+  asOf: '2024-05-03', firstYear: 2024, coverageStart: '2024-05-01',
+  snapshots: [
+    { date: '2024-05-01', value: 1000, deposits: 1000, withdrawals: 0, spyTotalReturnIndex: 100 },
+    { date: '2024-05-02', value: 1100, deposits: 0, withdrawals: 0, spyTotalReturnIndex: 102 },
+    { date: '2024-05-03', value: 1200, deposits: 0, withdrawals: 0, spyTotalReturnIndex: 103 },
+  ],
+};
+test('transaction presentation uses supplied dates and balances without any simulated labels or fixture fallback', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: true, presentation: 'transaction-history', history })).replaceAll('<!-- -->', '');
+  assert.match(html, /TRANSACTION-BASED HISTORY/);
+  assert.match(html, /Available history/);
+  assert.match(html, /May 2, 2024 – May 3, 2024/);
+  assert.match(html, /class="sr-only">up<\/span>20.00%/);
+  assert.match(html, /\$1,200.00/);
+  assert.doesNotMatch(html, /fictional|simulated|sample|212,995|2026/);
+  assert.equal(renderToStaticMarkup(React.createElement(Preview, { numbersVisible: true, presentation: 'transaction-history' })), '');
+});
+test('transaction history respects private figures', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: false, presentation: 'transaction-history', history }));
+  assert.doesNotMatch(html, /perf-scoreboard|perf-balance-equation|1,200|20.00%/);
+});
+
+test('transaction mode shows three comparisons and separates account dollars from normalized returns', () => {
+  const supplied = { ...history, snapshots: history.snapshots.map((row,index) => ({...row, spyTradeValue:1000 + index * 50, spyTradeCash:500})) };
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible:true, presentation:'transaction-history', history:supplied })).replaceAll('<!-- -->','');
+  assert.match(html, /SPY · your trade timing/);
+  assert.match(html, /SPY · buy and hold/);
+  assert.match(html, /What if your trades had been SPY/);
+  assert.match(html, /class="sr-only">up<\/span>10.00%/);
+  assert.match(html, /\$1,100.00/);
+  assert.match(html, /changing periods does not restart it/);
+  assert.match(html, /sell SPY for each recorded sale amount/);
+  assert.match(html, /not these account balances/);
+  assert.doesNotMatch(html, /Complete trade-timing history unavailable/);
+  const hidden = renderToStaticMarkup(React.createElement(Preview, { numbersVisible:false, presentation:'transaction-history', history:supplied }));
+  assert.doesNotMatch(hidden, /perf-trade-account|1,100|10.00%/);
+});
+
+test('a missing third benchmark leaves portfolio and ordinary SPY comparison visible', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible:true, presentation:'transaction-history', history })).replaceAll('<!-- -->','');
+  assert.match(html, /Complete trade-timing history unavailable/);
+  assert.match(html, /class="sr-only">up<\/span>20.00%/);
+  assert.match(html, /SPY · buy and hold/);
+  assert.doesNotMatch(html, /perf-trade-account-values/);
+});

@@ -63,7 +63,7 @@ const SummaryCards: React.FC<Props> = ({ stats, cashByBrokerage = {}, numbersVis
       subColor: stats.dayChange >= 0 ? POSITIVE : NEGATIVE,
     },
     {
-      label: 'Overall Return',
+      label: 'Unrealized Gain/Loss',
       direction: (stats.totalGain >= 0 ? 'up' : 'down') as Direction,
       value: money(stats.totalGain),
       valueColor: stats.totalGain >= 0 ? POSITIVE : NEGATIVE,
