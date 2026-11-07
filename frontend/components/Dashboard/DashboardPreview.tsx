@@ -12,12 +12,18 @@ import TickerTypeContext from '../../contexts/TickerTypeContext';
 import { portfolioModel } from './portfolioModel';
 import { PREVIEW_SCENARIOS, previewDataset, previewScenario } from '../../preview/portfolioScenarios';
 import './portfolio-overview.css';
+import { previewDesign, previewDesignHref, previewOverviewSection } from '../../preview/previewDesign';
+import type { PreviewDesign } from '../../preview/previewDesign';
+import '../../preview/refined-preview.css';
 
-export default function DashboardPreview({ initialTab }: { initialTab?: TabId } = {}) {
+export default function DashboardPreview({ initialTab, initialDesign }: { initialTab?: TabId; initialDesign?: PreviewDesign } = {}) {
   const [activeTab, setActiveTab] = useState<TabId>(() => initialTab || NAV_ITEMS.find(item => typeof window !== 'undefined' && `#${item.id}` === window.location.hash)?.id || 'dashboardView');
   const [search] = useState(() => typeof window === 'undefined' ? '' : window.location.search || '');
   const sample = previewDataset(search);
   const scenario = previewScenario(search);
+  const design = initialDesign || previewDesign(search);
+  const refined = design === 'refined';
+  const section = previewOverviewSection(search);
   const { accounts: previewAccounts, cash: previewCash, holdings: previewHoldings, realized: previewRealized, transactions: previewTransactions, unrealized: previewUnrealized } = sample;
   const privacy = useFinancialVisibility();
   const visible = privacy.visible;
@@ -54,23 +60,31 @@ export default function DashboardPreview({ initialTab }: { initialTab?: TabId } 
   };
   const reset = () => { setHoldings([...previewHoldings]); setTransactions(previewTransactions.map(t => ({ ...t }))); notify('Fictional sample data restored. No live records were changed.'); };
   if (signedOut) return <div className="preview-session-exit"><div><BrandLogo size={38} /><h1>Preview session closed</h1><p>You signed out of the fictional preview. Your real WealthCompass session was not changed.</p><button onClick={() => setSignedOut(false)}>Return to design preview</button></div></div>;
-  return <TickerTypeContext.Provider value={tickerTypes}><div className="wealth-workspace preview-shell">
+  return <TickerTypeContext.Provider value={tickerTypes}><div className={`wealth-workspace preview-shell${refined ? ' refined-preview' : ''}`}>
     <Sidebar activeTab={activeTab} setActiveTab={navigate} collapsed={collapsed} setCollapsed={setCollapsed} />
     <div className="preview-content">
       <header className="preview-topbar"><div className="preview-breadcrumb"><span className="preview-mobile-brand"><BrandLogo size={30} className="brand-mobile" /></span><span className="preview-workspace-label">Workspace</span><span>/</span><strong>{NAV_ITEMS.find(item => item.id === activeTab)?.label}</strong></div><div className="preview-topbar-right"><ProfileMenu preview privacy={privacy} onLogout={() => setSignedOut(true)} /></div></header>
       <main ref={main} className="workspace-canvas preview-main">
         <FinancialVisibilityNotice privacy={privacy} />
-        <section className="preview-scenario" aria-label="Sample portfolios">
+        <section className="preview-design-compare" aria-label="Compare frontend designs">
+          <div><strong>{refined ? 'A familiar layout, refined' : 'Current staging layout'}</strong><span>Local design preview · fictional data</span></div>
+          <nav aria-label="Choose frontend design">{(['current', 'refined'] as const).map(value => <a key={value} href={previewDesignHref(value, scenario, activeTab, section)} aria-current={design === value ? 'page' : undefined}>{value === 'current' ? 'Current staging' : 'Refined concept'}</a>)}</nav>
+        </section>
+        {refined ? <section className="refined-sample-selector" aria-label="Sample portfolios">
+          <label>Sample portfolio<select value={scenario} onChange={event => { window.location.href = previewDesignHref(design, event.target.value, activeTab, section); }}>{PREVIEW_SCENARIOS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+          <span>{equityCount} stocks &amp; ETFs · {optionCount} options<span>Fictional positions and prices</span></span>
+          <button onClick={() => { setBrokerages([]); setAssetTypes([]); setTickers([]); navigate('holdings'); }}>View holdings →</button>
+        </section> : <section className="preview-scenario" aria-label="Sample portfolios">
           <div><strong>Choose a sample portfolio</strong><span>Fictional data · switching samples resets preview edits</span></div>
           <nav className="preview-scenario-choices" aria-label="Choose sample portfolio">
-            {PREVIEW_SCENARIOS.map(sample => <a key={sample.id} href={`/design-preview${sample.id === 'standard' ? '' : `?portfolio=${sample.id}`}#${activeTab}`} aria-current={sample.id === scenario ? 'page' : undefined}>
+            {PREVIEW_SCENARIOS.map(sample => <a key={sample.id} href={previewDesignHref(design, sample.id, activeTab, section)} aria-current={sample.id === scenario ? 'page' : undefined}>
               <strong>{sample.label}</strong><span>{sample.description}</span>
             </a>)}
           </nav>
           <div className="preview-scenario-loaded"><span><strong>Loaded: {equityCount} stocks &amp; ETFs + {optionCount} option positions</strong><small>Overview shows the largest five. Open Holdings for the full list.</small></span><button type="button" onClick={() => { setBrokerages([]); setAssetTypes([]); setTickers([]); navigate('holdings'); }}>Open Holdings →</button></div>
-        </section>
+        </section>}
         {activeTab !== 'dashboardView' && <div className="preview-page-notice"><span /><strong>Design preview</strong><span>Fictional portfolio · changes stay in this preview</span></div>}
-        <DashboardView activeTab={activeTab} setActiveTab={navigate} preview
+        <DashboardView activeTab={activeTab} setActiveTab={navigate} preview refinedPreview={refined} initialOverviewSection={section}
           holdings={holdings} transactions={transactions} realizedGains={previewRealized} unrealizedGains={previewUnrealized.filter(l => holdings.some(h => h.ticker === l.ticker && h.brokerage === l.brokerage && h.assetType === l.assetType))}
           stats={{ totalValue: model.totalValue, investmentValue: model.investmentValue, totalGain: model.gain, gainPercentage: model.gainPercent || 0, dayChange: model.dayChange, dayChangePercentage: model.dayPercent || 0, buyingPower: model.cashValue }}
           numbersVisible={visible}

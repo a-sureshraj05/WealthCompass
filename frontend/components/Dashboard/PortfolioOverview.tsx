@@ -7,6 +7,7 @@ import ContributorTable from './ContributorTable';
 import './portfolio-overview.css';
 import TickerLogo from '../TickerLogo';
 import BrokerageMark from '../BrokerageMark';
+import type { OverviewSection } from '../../preview/previewDesign';
 
 interface Props {
   holdings: StockHolding[];
@@ -20,6 +21,8 @@ interface Props {
   preview?: boolean;
   insights?: React.ReactNode;
   performance?: React.ReactNode;
+  refined?: boolean;
+  initialSection?: OverviewSection;
 }
 
 const money = formatCurrency;
@@ -40,7 +43,17 @@ export function Icon({ name, size = 18 }: { name: 'arrow' | 'refresh' | 'plus' |
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>;
 }
 
-const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbersVisible = true, selectedBrokerages = [], onBrokeragesChange, onOpenHoldings, onRefresh, onConnect, preview = false, insights, performance }) => {
+const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbersVisible = true, selectedBrokerages = [], onBrokeragesChange, onOpenHoldings, onRefresh, onConnect, preview = false, insights, performance, refined = false, initialSection = 'snapshot' }) => {
+  const [section, setSection] = useState<OverviewSection>(initialSection);
+  const sectionKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const sections: OverviewSection[] = ['snapshot', 'performance', 'insights'];
+    const index = sections.indexOf(section);
+    const next = event.key === 'ArrowRight' ? (index + 1) % sections.length : event.key === 'ArrowLeft' ? (index + sections.length - 1) % sections.length : event.key === 'Home' ? 0 : event.key === 'End' ? sections.length - 1 : null;
+    if (next === null) return;
+    event.preventDefault();
+    setSection(sections[next]);
+    event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`#refined-tab-${sections[next]}`)?.focus();
+  };
   const [unit, setUnit] = useState<'dollars' | 'percent'>('dollars');
   const [showAllContributors, setShowAllContributors] = useState(false);
   const contributorsId = useId();
@@ -63,7 +76,7 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
     finally { setRefreshing(false); }
   };
 
-  return <div className="portfolio-overview">
+  return <div className={`portfolio-overview${refined ? ' refined-overview' : ''}`}>
     {preview && <div className="preview-notice"><span className="preview-dot" /><strong>Design preview</strong><span>Fictional portfolio · no brokerage connection</span><span className="preview-local">LOCAL ONLY</span></div>}
     <header className="overview-heading">
       <div><p className="overview-eyebrow">YOUR WEALTH, AT A GLANCE</p><h1>Portfolio Overview</h1><p className="overview-description">The big picture. The details that matter.</p></div>
@@ -90,9 +103,11 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
       </div>
     </section>
 
-    {insights}
-    {performance}
+    {refined && <nav className="refined-overview-tabs" role="tablist" aria-label="Overview sections">{(['snapshot', 'performance', 'insights'] as const).map(value => <button key={value} role="tab" id={`refined-tab-${value}`} aria-controls={`refined-panel-${value}`} aria-selected={section === value} tabIndex={section === value ? 0 : -1} onKeyDown={sectionKeyDown} onClick={() => setSection(value)}>{value === 'snapshot' ? 'Snapshot' : value === 'performance' ? 'Performance' : 'AI Insights'}</button>)}<span>One portfolio. Three perspectives.</span></nav>}
+    {!refined && <>{insights}{performance}</>}
+    {refined && section !== 'snapshot' && <div role="tabpanel" tabIndex={0} id={`refined-panel-${section}`} aria-labelledby={`refined-tab-${section}`}>{section === 'performance' ? performance : insights}</div>}
 
+    {(!refined || section === 'snapshot') && <div {...(refined ? { role: 'tabpanel', tabIndex: 0, id: 'refined-panel-snapshot', 'aria-labelledby': 'refined-tab-snapshot' } : {})}>
     <div className="overview-chart-grid">
       <section className="overview-panel daily-panel">
         <div className="panel-heading"><div><p className="overview-eyebrow">WHAT MOVED YOUR PORTFOLIO</p><h2>Today's contributors</h2></div><div className="chart-unit" aria-label="Chart units"><button aria-pressed={unit === 'dollars'} className={unit === 'dollars' ? 'active' : ''} onClick={() => setUnit('dollars')}>$</button><button aria-pressed={unit === 'percent'} className={unit === 'percent' ? 'active' : ''} onClick={() => setUnit('percent')}>%</button></div></div>
@@ -153,6 +168,7 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
       </section>
     </div>
     <div className="portfolio-observation"><span className="observation-icon"><Icon name="trend" size={20} /></span><div><strong>Portfolio perspective</strong><p>{!numbersVisible ? 'Your portfolio figures are hidden across this overview.' : model.allocationTotal > 0 ? `Your five largest holdings represent ${model.topFivePercent.toFixed(1)}% of positive invested assets. Explore individual holdings to see their cost basis and tax lots.` : 'Add investments to see allocation and position-level insights.'}</p></div><button className="overview-text-button" onClick={() => onOpenHoldings()}>Explore holdings<Icon name="arrow" size={15} /></button></div>
+    </div>}
     <p className="overview-disclosure">Daily change estimates price movement on current equity positions, not account performance adjusted for trading or cash flows. Unrealized P&amp;L covers open positions only.</p>
   </div>;
 };

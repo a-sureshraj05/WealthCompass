@@ -10,10 +10,13 @@ import TransactionsView from '../TransactionsView';
 import GainsLossesView from '../GainsLossesView';
 import OptionsView from '../OptionsView';
 import WorkspacePage from '../WorkspacePage';
+import type { OverviewSection } from '../../preview/previewDesign';
 
 interface Props {
   activeTab: string;
   preview?: boolean;
+  refinedPreview?: boolean;
+  initialOverviewSection?: OverviewSection;
   performanceDemo?: boolean;
   setActiveTab: (tab: 'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses') => void;
   holdings: StockHolding[];
@@ -50,6 +53,8 @@ interface Props {
 const DashboardView: React.FC<Props> = ({
   activeTab,
   preview = false,
+  refinedPreview = false,
+  initialOverviewSection,
   performanceDemo = false,
   setActiveTab,
   holdings,
@@ -166,6 +171,8 @@ const DashboardView: React.FC<Props> = ({
     <div className="space-y-6">
       <PortfolioOverview
         preview={preview}
+        refined={preview && refinedPreview}
+        initialSection={initialOverviewSection}
         performance={performanceDemo ? <TransactionPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} refreshNonce={refreshNonce} onReviewTransactions={() => setActiveTab('transactions')} /> : import.meta.env.DEV && preview ? <PreviewPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} /> : undefined}
         insights={<AIInsights holdings={holdings} cashByBrokerage={buyingPower} refreshNonce={refreshNonce}
           preview={preview} numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0}
