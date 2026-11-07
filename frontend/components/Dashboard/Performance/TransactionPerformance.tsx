@@ -4,8 +4,8 @@ import { fetchPerformanceHistory, rebuildPerformanceHistory } from '../../../ser
 import type { PerformanceHistory } from '../../../services/apiService';
 import './performance.css';
 
-export default function TransactionPerformance({ numbersVisible, scopeFiltered, refreshNonce, onReviewTransactions }: {
-  numbersVisible: boolean; scopeFiltered: boolean; refreshNonce: number; onReviewTransactions: () => void;
+export default function TransactionPerformance({ numbersVisible, scopeFiltered, refreshNonce, onReviewTransactions, compactBalance = false }: {
+  numbersVisible: boolean; scopeFiltered: boolean; refreshNonce: number; onReviewTransactions: () => void; compactBalance?:boolean;
 }) {
   const [history, setHistory] = useState<PerformanceHistory>({ status: 'building', progress: 'Checking recorded history…' });
   const [attempt, setAttempt] = useState(0);
@@ -41,7 +41,7 @@ export default function TransactionPerformance({ numbersVisible, scopeFiltered, 
   const ready = history.status === 'ready' && history.snapshots && history.asOf && history.firstYear && history.coverageStart;
   return <div className="transaction-performance">
     {numbersVisible && ready && history.coverageEnd && history.coverageEnd < history.asOf! && <div className="perf-history-issues" role="status"><strong>Partial history · through {history.coverageEnd}</strong><p>Later valuations need additional funding or price records. The chart shows only the complete interval; current YTD and longer periods remain unavailable when coverage is missing.</p></div>}
-    {ready ? <PreviewPerformance numbersVisible={numbersVisible} scopeFiltered={scopeFiltered} presentation="transaction-history"
+    {ready ? <PreviewPerformance numbersVisible={numbersVisible} scopeFiltered={scopeFiltered} compactBalance={compactBalance} presentation="transaction-history"
       history={{ snapshots: history.snapshots!, asOf: history.asOf!, firstYear: history.firstYear!, coverageStart: history.coverageStart!, coverageEnd: history.coverageEnd, marketDates: history.marketDates }} /> :
       <section className="portfolio-performance" aria-labelledby="performance-title">
         <header className="perf-header"><div><p className="perf-eyebrow">THE LONGER VIEW</p><h2 id="performance-title">Performance vs SPY</h2><p>Daily values from your recorded transactions and historical market prices.</p></div></header>

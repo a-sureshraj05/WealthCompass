@@ -437,6 +437,17 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(auth_module, "_demo", True)
     monkeypatch.setattr(auth_module, "ALLOW_REGISTRATION", False)
 
+    # These tests count AI spends, not external quote availability. Seed the real
+    # processing pipeline with deterministic public-price stubs so provider DNS
+    # failures cannot erase every holding before the cost-control assertions.
+    from backend.scripts import seed_demo
+    from backend.app.core.table_loader import unrealized_gain_loader
+    quotes = {"AAPL":235.0,"NVDA":140.0,"MSFT":430.0,"KO":70.0,
+              "TSLA":300.0,"AMD":160.0,"VTI":290.0,"JNJ":170.0}
+    monkeypatch.setattr(seed_demo,"_pick_option_symbol",lambda underlying,fallback:fallback)
+    monkeypatch.setattr(unrealized_gain_loader,"get_stock_quote",
+                        lambda symbol:(quotes.get(symbol,7.5),quotes.get(symbol,7.5)))
+
     calls = {"n": 0}
 
     def fake_generate(digest):

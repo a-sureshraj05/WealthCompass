@@ -60,3 +60,41 @@ test('runtime flag reader uses authenticated user metadata and rejects missing, 
     assert.equal(await fetchPerformanceDemoEnabled(), expected);
   }
 });
+
+test('release build renders authenticated V3 navigation and chart tabs without the DEV preview flag',()=>{
+  const overview=render({refinedPreview:true});
+  assert.match(overview,/Views within Portfolio Overview/);assert.match(overview,/summary-tile--portfolio/);
+  assert.doesNotMatch(overview,/Fictional portfolio · no brokerage connection|LOCAL ONLY/);
+  const gains=render({refinedPreview:true,activeTab:'gainsLosses'});
+  assert.match(gains,/role="tablist" aria-label="Holdings visualization"/);
+  assert.match(gains,/Ranked holdings/);
+  const holdings=render({refinedPreview:true,holdingPerformanceSample:true,activeTab:'holdings'});
+  assert.match(holdings,/>Performance<\/button>/);
+  assert.doesNotMatch(render({refinedPreview:false,holdingPerformanceSample:true,activeTab:'holdings'}),/>Performance<\/button>/);
+});
+
+test('staging holding performance uses isolated fictional fixtures rather than supplied account data',()=>{
+  const originalWindow=globalThis.window;
+  try {
+    globalThis.window={location:{search:'?holdingsView=performance'}};
+    const html=render({refinedPreview:true,holdingPerformanceSample:true,activeTab:'holdings',
+      holdings:[{id:'personal',ticker:'PRIVATE',brokerage:'Personal broker',marketValue:987654321,currentPrice:987654321,quantity:1,totalCost:1,averageCostPerShare:1,previousClose:1}],
+      transactions:[{id:'secret',ticker:'PRIVATE',brokerage:'Personal broker',date:'2020-01-01',action:'BUY',quantity:1,totalCost:1,price:1,assetType:'Equity'}],selectedBrokerages:['Personal broker']});
+    assert.match(html,/SAMPLE PORTFOLIO · STAGING/);assert.match(html,/AAPL · your investment/);
+    assert.doesNotMatch(html,/PRIVATE|Personal broker|987,654,321|987654321|Recalculate positions|From position to transaction/);
+    const hidden=render({refinedPreview:true,holdingPerformanceSample:true,activeTab:'holdings',numbersVisible:false});
+    assert.match(hidden,/Your performance figures are hidden/);assert.doesNotMatch(hidden,/holding-scorecards|holding-performance-canvas|holding-data-scroll/);
+  } finally { if(originalWindow===undefined) delete globalThis.window;else globalThis.window=originalWindow; }
+});
+
+test('production and legacy metadata disable V3 samples unless explicitly supplied as real booleans',async()=>{
+  const {parseRuntimeFeatures}=await load('../services/apiService.ts');
+  assert.deepEqual(parseRuntimeFeatures({}),{performanceDemo:false,refinedUi:false,holdingPerformancePreview:false});
+  assert.deepEqual(parseRuntimeFeatures({refined_ui:'true',holding_performance_preview:true}),{performanceDemo:false,refinedUi:false,holdingPerformancePreview:false});
+  assert.deepEqual(parseRuntimeFeatures({refined_ui:true,holding_performance_preview:true}),{performanceDemo:false,refinedUi:true,holdingPerformancePreview:true});
+});
+
+test('V3 Overview preserves transaction-based SPY history and never substitutes the holding sample',()=>{
+  const html=render({refinedPreview:true,performanceDemo:true,overviewSection:'performance'});
+  assert.match(html,/Preparing your performance history/);assert.doesNotMatch(html,/SAMPLE PORTFOLIO|simulated daily prices/);
+});

@@ -16,7 +16,7 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 // An explicit development-only route: never bypass authentication in production.
 const localPreview = import.meta.env.DEV && window.location.pathname === '/design-preview';
-const DashboardPreview = localPreview ? React.lazy(() => import('./components/Dashboard/DashboardPreview')) : null;
+const DashboardPreview = localPreview ? React.lazy(() => new URLSearchParams(window.location.search).get('screen') === 'login' ? import('./preview/PreviewLogin') : import('./components/Dashboard/DashboardPreview')) : null;
 root.render(
   <React.StrictMode>
     {DashboardPreview ? <React.Suspense fallback={<p className="p-8 text-slate-500">Loading design preview…</p>}><DashboardPreview /></React.Suspense> : <App />}

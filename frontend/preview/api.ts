@@ -1,4 +1,5 @@
 import { previewDataset } from './portfolioScenarios';
+import { previewNewsFeed } from './newsData';
 import { FINANCIAL_VISIBILITY_KEY } from '../utils/financialVisibility';
 import type { OptionsCalculator, OptionsPosition } from '../services/apiService';
 import type { RealizedGain } from '../types';
@@ -36,6 +37,7 @@ export async function previewApiFetch(rawUrl: string, options: RequestInit = {})
   const method = options.method || 'GET';
   const body = typeof options.body === 'string' ? JSON.parse(options.body) : {};
   const route = url.pathname.replace('/api/v1', '');
+  if (route === '/news/refresh' && method === 'POST') return json(previewNewsFeed(previewHoldings));
   if (route === '/auth/me' && method === 'GET') return json({ email: 'jordan.doe@example.test' });
   if (route === '/preferences') {
     try {

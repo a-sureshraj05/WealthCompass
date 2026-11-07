@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import BrandLogo from './BrandLogo';
+import LoginPresentation from './LoginPresentation';
 
 interface Props {
   onLogin: () => void;
+  preview?: boolean;
 }
 
 interface InstanceStatus {
@@ -11,7 +12,7 @@ interface InstanceStatus {
   demo: boolean;
 }
 
-const LoginPage: React.FC<Props> = ({ onLogin }) => {
+const LoginPage: React.FC<Props> = ({ onLogin, preview = false }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,11 +33,12 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
   // deliberately, so the login page carries no demo labelling at all.
   // Failure is non-fatal: the form still works.
   useEffect(() => {
+    if (preview) return;
     fetch('/api/v1/auth/status')
       .then(res => (res.ok ? res.json() : null))
       .then(setInstance)
       .catch(() => setInstance(null));
-  }, []);
+  }, [preview]);
 
   // Default true so the toggle doesn't flicker out and back while /auth/status
   // is still in flight on a normal instance.
@@ -44,6 +46,7 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (preview) return;
     setError('');
     setLoading(true);
 
@@ -99,16 +102,7 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
   // h-full + its own scroll: the body no longer scrolls, so a viewport too
   // short for the card (phone in landscape) would otherwise clip it.
   return (
-    <div className="h-full overflow-y-auto bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo / App name */}
-        <div className="text-center mb-8">
-          <h1><BrandLogo size={48} className="login-brand" /></h1>
-          <p className="text-sm text-slate-500 mt-4">Your personal portfolio tracker</p>
-        </div>
-
-        {/* Card */}
-        <div className="bg-white rounded border shadow-sm p-8">
+    <LoginPresentation preview={preview}>
           {recoveryKey ? (
             <>
               <h2 className="text-lg font-bold text-slate-900 mb-2">Save your recovery key</h2>
@@ -134,11 +128,13 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
             {isRegistering ? 'Create your account' : 'Sign in to your account'}
           </h2>
 
+          <p className="login-form-intro">{isRegistering ? 'Create your personal space for a clearer portfolio view.' : 'Welcome back. Your portfolio is ready when you are.'}</p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5">Email</label>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5" htmlFor="login-email">Email</label>
               <input
                 type="email"
+                id="login-email" name="email" autoComplete="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
@@ -148,9 +144,10 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5">Password</label>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5" htmlFor="login-password">Password</label>
               <input
                 type="password"
+                id="login-password" name="password" autoComplete={isRegistering ? 'new-password' : 'current-password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
@@ -161,9 +158,10 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
 
             {isRegistering && (
               <div>
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5">Invite code</label>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5" htmlFor="login-invite">Invite code</label>
                 <input
                   type="text"
+                  id="login-invite" name="invite-code"
                   value={inviteCode}
                   onChange={e => setInviteCode(e.target.value)}
                   required
@@ -174,12 +172,12 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
             )}
 
             {error && (
-              <p className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-2 rounded">{error}</p>
+              <p role="alert" className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-2 rounded">{error}</p>
             )}
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || preview}
               className="w-full py-2.5 bg-[#0F52BA] text-white text-sm font-bold rounded-md hover:bg-[#0A3E8F] transition-colors disabled:opacity-60"
             >
               {loading ? 'Please wait…' : isRegistering ? 'Create Account' : 'Sign In'}
@@ -205,9 +203,7 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
           )}
           </>
           )}
-        </div>
-      </div>
-    </div>
+    </LoginPresentation>
   );
 };
 

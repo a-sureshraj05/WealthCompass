@@ -5,16 +5,28 @@ import HoldingsView from '../HoldingsView';
 import ImportDataView from '../ImportDataView';
 import AIInsights from './AIInsights';
 import PreviewPerformance from '../../preview/PreviewPerformance';
+import PreviewHoldingPerformance from '../../preview/PreviewHoldingPerformance';
+import SampleHoldingPerformance from './Performance/SampleHoldingPerformance';
 import TransactionPerformance from './Performance/TransactionPerformance';
 import TransactionsView from '../TransactionsView';
 import GainsLossesView from '../GainsLossesView';
 import OptionsView from '../OptionsView';
 import WorkspacePage from '../WorkspacePage';
+import type { OverviewSection } from '../../preview/previewDesign';
+import type { HeatmapMode } from '../GainsLosses/GainsCharts';
+import PortfolioNews from './News/PortfolioNews';
+import type { PortfolioNewsState } from './News/PortfolioNews';
 
 interface Props {
   activeTab: string;
+  news?: PortfolioNewsState;
   preview?: boolean;
+  refinedPreview?: boolean;
+  initialOverviewSection?: OverviewSection;
+  overviewSection?: OverviewSection;
+  onOverviewSectionChange?: (section: OverviewSection) => void;
   performanceDemo?: boolean;
+  holdingPerformanceSample?: boolean;
   setActiveTab: (tab: 'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses') => void;
   holdings: StockHolding[];
   transactions: Transaction[];
@@ -49,8 +61,14 @@ interface Props {
 
 const DashboardView: React.FC<Props> = ({
   activeTab,
+  news,
   preview = false,
+  refinedPreview = false,
+  initialOverviewSection,
+  overviewSection,
+  onOverviewSectionChange,
   performanceDemo = false,
+  holdingPerformanceSample = false,
   setActiveTab,
   holdings,
   transactions,
@@ -81,9 +99,19 @@ const DashboardView: React.FC<Props> = ({
   buyingPower,
   accounts,
 }) => {
+  const canShowHoldingPerformance = refinedPreview && (preview ? import.meta.env.DEV : holdingPerformanceSample);
   const [syncMessage, setSyncMessage] = useState('');
+  const [heatmapTarget, setHeatmapTarget] = useState<HeatmapMode | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [holdingsSection, setHoldingsSection] = useState<'equity' | 'options'>('equity');
+  const [holdingsSection, setHoldingsSection] = useState<'equity' | 'options' | 'performance'>(() => canShowHoldingPerformance && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('holdingsView') === 'performance' ? 'performance' : 'equity');
+  const changeHoldingsSection = (next: 'equity' | 'options' | 'performance') => {
+    setHoldingsSection(next);
+    if (preview && typeof window !== 'undefined' && window.location.pathname === '/design-preview') {
+      const url = new URL(window.location.href);
+      if (next === 'performance') url.searchParams.set('holdingsView', next); else url.searchParams.delete('holdingsView');
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+  };
   const [focusTicker, setFocusTicker] = useState<string | null>(null);
   const [focusDate, setFocusDate] = useState<string | null>(null);
   const [autoExpand, setAutoExpand] = useState<{ ticker: string; brokerage: string } | null>(null);
@@ -96,6 +124,7 @@ const DashboardView: React.FC<Props> = ({
   const [selectedTerms, setSelectedTerms] = useState<('long' | 'short')[]>([]);
 
   useEffect(() => { setSyncMessage(''); }, [activeTab]);
+  useEffect(() => { if (activeTab !== 'gainsLosses') setHeatmapTarget(null); }, [activeTab]);
   useEffect(() => { if (activeTab !== 'transactions') { setFocusTicker(null); setFocusDate(null); } }, [activeTab]);
 
   if (activeTab === 'importData') {
@@ -103,17 +132,18 @@ const DashboardView: React.FC<Props> = ({
   }
 
   if (activeTab === 'holdings') {
-    return <WorkspacePage tab="holdings" actions={<button onClick={onProcessGains} className="workspace-button">Recalculate positions</button>}>
+    return <WorkspacePage tab="holdings" actions={holdingsSection === 'performance' ? undefined : <button onClick={onProcessGains} className="workspace-button">Recalculate positions</button>}>
       <div className="space-y-6">
-        <div className="workspace-section-note"><span><strong>From position to transaction.</strong> Expand position or brokerage rows to inspect individual tax lots. Select a lot to find its source transaction.</span><button onClick={() => setActiveTab('gainsLosses')}>Review gains &amp; losses →</button></div>
+        {holdingsSection !== 'performance' && <div className="workspace-section-note"><span><strong>From position to transaction.</strong> Expand position or brokerage rows to inspect individual tax lots. Select a lot to find its source transaction.</span><button onClick={() => setActiveTab('gainsLosses')}>Review gains &amp; losses →</button></div>}
         <div className="holdings-tabs-row">
-          <div className="workspace-segments" aria-label="Holding type">
-            <button aria-pressed={holdingsSection === 'equity'} className={holdingsSection === 'equity' ? 'active' : ''} onClick={() => setHoldingsSection('equity')}>Stocks &amp; funds</button>
-            <button aria-pressed={holdingsSection === 'options'} className={holdingsSection === 'options' ? 'active' : ''} onClick={() => setHoldingsSection('options')}>Options</button>
+          <div className="workspace-segments" role="group" aria-label="Holdings views">
+            <button aria-pressed={holdingsSection === 'equity'} className={holdingsSection === 'equity' ? 'active' : ''} onClick={() => changeHoldingsSection('equity')}>Stocks &amp; funds</button>
+            <button aria-pressed={holdingsSection === 'options'} className={holdingsSection === 'options' ? 'active' : ''} onClick={() => changeHoldingsSection('options')}>Options</button>
+            {canShowHoldingPerformance && <button aria-pressed={holdingsSection === 'performance'} className={holdingsSection === 'performance' ? 'active' : ''} onClick={() => changeHoldingsSection('performance')}>Performance</button>}
           </div>
-          <p className="holdings-tax-note">Gain to Sell uses ST {stTaxRate}% / LT {ltTaxRate}% assumptions from Gains &amp; Losses.</p>
+          {holdingsSection !== 'performance' && <p className="holdings-tax-note">Gain to Sell uses ST {stTaxRate}% / LT {ltTaxRate}% assumptions from Gains &amp; Losses.</p>}
         </div>
-        {holdingsSection === 'equity' ? <HoldingsView
+        {holdingsSection === 'performance' && canShowHoldingPerformance ? preview ? <PreviewHoldingPerformance holdings={holdings} transactions={transactions} numbersVisible={numbersVisible} selectedBrokerages={selectedBrokerages} onBrokeragesChange={setSelectedBrokerages} /> : <SampleHoldingPerformance numbersVisible={numbersVisible} /> : holdingsSection === 'equity' ? <HoldingsView
           title="Stocks & funds"
           numbersVisible={numbersVisible}
           holdings={holdings.filter(h => (h.assetType || '').toLowerCase() !== 'options')}
@@ -158,7 +188,7 @@ const DashboardView: React.FC<Props> = ({
 
   if (activeTab === 'gainsLosses') {
     return <WorkspacePage tab="gainsLosses" actions={<button onClick={onProcessGains} className="workspace-button">Recalculate gains</button>}>
-        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} stTaxRate={stTaxRate} setStTaxRate={setStTaxRate} ltTaxRate={ltTaxRate} setLtTaxRate={setLtTaxRate} numbersVisible={numbersVisible} />
+        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} stTaxRate={stTaxRate} setStTaxRate={setStTaxRate} ltTaxRate={ltTaxRate} setLtTaxRate={setLtTaxRate} numbersVisible={numbersVisible} alternativeHeatmapViews={refinedPreview} heatmapTarget={heatmapTarget} onReturnOverview={() => setActiveTab('dashboardView')} />
     </WorkspacePage>;
   }
 
@@ -166,7 +196,13 @@ const DashboardView: React.FC<Props> = ({
     <div className="space-y-6">
       <PortfolioOverview
         preview={preview}
-        performance={performanceDemo ? <TransactionPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} refreshNonce={refreshNonce} onReviewTransactions={() => setActiveTab('transactions')} /> : import.meta.env.DEV && preview ? <PreviewPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} /> : undefined}
+        refined={refinedPreview}
+        initialSection={initialOverviewSection}
+        activeSection={overviewSection}
+        onSectionChange={onOverviewSectionChange}
+        onOpenHeatmap={period => { setSelectedTickers([]); setHeatmapTarget(period); setActiveTab('gainsLosses'); }}
+        performance={performanceDemo ? <TransactionPerformance compactBalance={refinedPreview} numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} refreshNonce={refreshNonce} onReviewTransactions={() => setActiveTab('transactions')} /> : import.meta.env.DEV && preview ? <PreviewPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} compactBalance={refinedPreview} /> : refinedPreview ? <section className="portfolio-performance"><header className="perf-header"><div><h2>Performance history</h2><p>Portfolio performance history is not enabled for this account yet. Holdings and gains still show your recorded positions.</p></div></header></section> : undefined}
+        news={news ? <PortfolioNews state={news} numbersVisible={numbersVisible} /> : undefined}
         insights={<AIInsights holdings={holdings} cashByBrokerage={buyingPower} refreshNonce={refreshNonce}
           preview={preview} numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0}
           onOpenHoldings={ticker => { setSelectedBrokerages([]); setSelectedTickers(ticker ? [ticker] : []); setSelectedAssetTypes([]); setSelectedTerms([]); setActiveTab('holdings'); }}
