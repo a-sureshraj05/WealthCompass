@@ -77,3 +77,29 @@ check ciphertext and another user's unchanged rows. Cookie API tests exercise
 real authenticated background builds, opening-cash persistence and account/environment
 gates. Frontend tests verify supplied history, missing-period coverage and hidden
 figures. Migration tests exercise both creation orders.
+
+## Completing the staging sample ledger
+
+`POST /api/v1/performance/demo-sample` adds a fixed set of seven labelled sample
+transactions, only when the signed-in account is the staging shared demo user
+and its original transactions still exactly match the repository's public seed.
+An account with custom, modified, duplicate or deleted records is refused. The
+operation locks the demo user row, is atomic and idempotent, and never resets the
+account or modifies another user's rows. It accepts no transaction data or user
+selector from the caller.
+
+The additions are explicitly fictional executions: $10,000 Schwab funding on
+January 2, 2020; $5,000 Robinhood funding on March 1, 2024; a 10-share VTI opening
+lot, a 3-share partial sale and a 4-share recent purchase; a 2-share AAPL purchase;
+and an offsetting option sale at its sample purchase cost on its purchase day.
+Stocks and 11 VTI shares remain open. The completed same-day option trade requires
+no overnight option closing quotes. Market closes and SPY still come from the
+historical-price provider, rather than a fabricated curve.
+
+Additions are stored as backend-verified manual transactions with matching raw
+records so ordinary resets preserve them. Any previous opening-cash estimate is
+cleared when explicit sample funding is inserted, avoiding double counting. Run
+normal holdings processing and rebuild history after the additions. A repeat call
+adds nothing. Local real-price validation produced 1,723 daily rows with full
+coverage January 2, 2020–November 6, 2026 and supported YTD, 1Y, 3Y, 5Y and complete
+calendar-year calculations, with no missing-funding or price diagnostics.
