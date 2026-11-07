@@ -81,3 +81,34 @@ test('a full withdrawal or total loss keeps its ending zero and missing recent m
   assert.equal(performanceSummary([opening], range, ['2025-12-31', '2026-01-02']), null);
   assert.equal(performanceSummary([opening, snapshot('2026-01-01', 110)], range, ['2025-12-31', '2026-01-01', '2026-01-02']), null);
 });
+
+test('trade timing normalizes its funded account and exposes actual account dollars separately', () => {
+  const rows = [
+    { ...snapshot('2025-12-31', 1000, 0, 0, 100), spyTradeValue:1000, spyTradeCash:500 },
+    { ...snapshot('2026-01-02', 2100, 1000, 0, 110), spyTradeValue:2050, spyTradeCash:1500 },
+    { ...snapshot('2026-01-05', 2210, 0, 100, 121), spyTradeValue:2005, spyTradeCash:1400 },
+  ];
+  const result = performanceSummary(rows, performanceRange('ytd', '2026-01-05'));
+  assert.ok(Math.abs(result.spyReturn - 21) < 1e-9);
+  assert.ok(Math.abs(result.tradeComparison.return - ((1.05 * 2105 / 2050) - 1) * 100) < 1e-9);
+  assert.equal(result.tradeComparison.closingValue, 2005);
+  assert.equal(result.tradeComparison.accountDifference, 205);
+  assert.equal(result.tradeComparison.earnings, 105);
+  assert.equal(result.tradeComparison.cash, 1400);
+  assert.equal(result.series[0].spyTrade, 0);
+  assert.equal(result.series[0].spyTradeGrowth, 10000);
+  assert.notEqual(result.series.at(-1).spyTradeGrowth, result.tradeComparison.closingValue);
+});
+
+test('missing trade timing hides only that comparison and never bridges a gap', () => {
+  const rows = [
+    { ...snapshot('2025-12-31', 100, 0, 0, 100), spyTradeValue:100 },
+    { ...snapshot('2026-01-02', 110, 0, 0, 110), spyTradeValue:null },
+    { ...snapshot('2026-01-05', 120, 0, 0, 120), spyTradeValue:120 },
+  ];
+  const result = performanceSummary(rows, performanceRange('ytd', '2026-01-05'));
+  assert.ok(result);
+  assert.ok(Math.abs(result.portfolioReturn - 20) < 1e-9);
+  assert.equal(result.tradeComparison, null);
+  assert.ok(result.series.every(point => point.spyTrade === null && point.spyTradeGrowth === null));
+});

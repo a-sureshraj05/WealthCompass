@@ -12,6 +12,7 @@ const points = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(2)} PP
 const signedMoney = (value: number) => `${value > 0 ? '+' : ''}${formatCurrency(value)}`;
 const PORTFOLIO = '#315da6';
 const SPY = '#9380b6';
+const TRADE_SPY = '#218b83';
 
 function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView = 'growth', initialPeriod = 'ytd', presentation = 'design-preview', history }: { numbersVisible: boolean; scopeFiltered?: boolean; initialView?: 'growth' | 'calendar'; initialPeriod?: PerformancePeriod; presentation?: 'design-preview' | 'staging-demo' | 'transaction-history'; history?: { snapshots: PerformanceSnapshot[]; asOf: string; firstYear: number; coverageStart: string; coverageEnd?: string; marketDates?: string[] };  }) {
   const actual = presentation === 'transaction-history';
@@ -41,7 +42,7 @@ function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView =
       <div>
         <p className="perf-eyebrow">THE LONGER VIEW</p>
         <h2 id="performance-title">{stagingDemo ? 'Demo performance vs SPY' : 'Performance vs SPY'}</h2>
-        <p>See investment growth separately from the money you add or take out.</p>
+        <p>{actual ? 'Compare your portfolio with SPY following your trades and SPY held throughout.' : 'See investment growth separately from the money you add or take out.'}</p>
       </div>
       <span className="perf-benchmark-badge">
         <i />SPY always included</span>
@@ -71,27 +72,36 @@ function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView =
         <span>{dateLabel(range.start)} – {dateLabel(range.end)}</span>
         <small>Latest {actual ? '' : 'sample '}valuation: {dateLabel(summary.closing.date)}</small>
       </div>
-      <div className="perf-scoreboard">
+      <div className={`perf-scoreboard${actual ? ' has-three-series' : ''}`}>
         <div>
           <span>
             <i style={{ background: PORTFOLIO }} />{portfolioLabel}</span>
           <strong>{percent(summary.portfolioReturn)}</strong>
           <small>{multiYear && summary.annualized !== null ? `${percent(summary.annualized)} annualized · ` : ''}Time-weighted return</small>
         </div>
+        {actual && <div className="perf-trade-score">
+          <span><i style={{ background: TRADE_SPY }} />SPY · your trade timing</span>
+          <strong>{summary.tradeComparison ? percent(summary.tradeComparison.return) : '—'}</strong>
+          <small>{multiYear && summary.tradeComparison?.annualized != null ? `${percent(summary.tradeComparison.annualized)} annualized · ` : ''}{summary.tradeComparison ? 'Same buy/sell dollars · cash retained' : 'Complete trade-timing history unavailable'}</small>
+        </div>}
         <div>
           <span>
-            <i style={{ background: SPY }} />SPY · {actual ? 'total return' : 'sample total return'}</span>
+            <i style={{ background: SPY }} />{actual ? 'SPY · buy and hold' : 'SPY · sample total return'}</span>
           <strong>{percent(summary.spyReturn)}</strong>
           <small>{multiYear && summary.spyAnnualized !== null ? `${percent(summary.spyAnnualized)} annualized · ` : ''}Distributions reinvested</small>
         </div>
-        <div className="perf-difference">
+        {!actual && <div className="perf-difference">
           <span>Return gap vs SPY</span>
           <strong title="Percentage points">{points(summary.difference)}</strong>
           <small>{summary.difference >= 0 ? 'Ahead' : 'Behind'} over the same period · cumulative</small>
-        </div>
+        </div>}
       </div>
+      {actual && <div className="perf-comparison-gaps">
+        <span>Gap vs SPY · your trade timing <b>{summary.tradeComparison ? points(summary.tradeComparison.difference) : 'Unavailable'}</b></span>
+        <span>Gap vs SPY · buy and hold <b>{points(summary.difference)}</b></span>
+      </div>}
       <div className="perf-chart-toolbar">
-        <p>{unit === 'percent' ? 'Cumulative investment return · deposits and withdrawals adjusted' : 'Hypothetical growth of $10,000 · same starting amount for both'}</p>
+        <p>{unit === 'percent' ? 'Cumulative investment return · deposits and withdrawals adjusted' : `Hypothetical growth of $10,000 · same starting amount for ${actual ? 'all three' : 'both'}`}</p>
         <div className="perf-unit-switch" aria-label="Chart display">
           <button aria-pressed={unit === 'percent'} onClick={() => setUnit('percent')}>% return</button>
           <button aria-pressed={unit === 'growth'} onClick={() => setUnit('growth')}>$10k growth</button>
@@ -115,24 +125,37 @@ function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView =
                 <strong>{dateLabel(row.date)}</strong>
                 <span>{portfolioLabel} <b>{unit === 'percent' ? percent(row.portfolio) : formatCurrency(row.portfolioGrowth)}</b>
                 </span>
-                <span>SPY{actual ? '' : ' · sample'} <b>{unit === 'percent' ? percent(row.spy) : formatCurrency(row.spyGrowth)}</b>
+                {actual && summary.tradeComparison && <span>SPY · your trade timing <b>{unit === 'percent' ? percent(row.spyTrade) : formatCurrency(row.spyTradeGrowth)}</b></span>}
+                <span>{actual ? 'SPY · buy and hold' : 'SPY · sample'} <b>{unit === 'percent' ? percent(row.spy) : formatCurrency(row.spyGrowth)}</b>
                 </span>
                 <small>{actual ? 'Daily close, cash-flow-adjusted estimate' : 'Simulated, cash-flow-adjusted comparison'}</small>
               </div>;
             }} />
             <Area dataKey={unit === 'percent' ? 'portfolio' : 'portfolioGrowth'} fill="url(#performance-area)" stroke="none" tooltipType="none" isAnimationActive={false} />
             <Line name={portfolioLabel} dataKey={unit === 'percent' ? 'portfolio' : 'portfolioGrowth'} stroke={PORTFOLIO} strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-            <Line name={actual ? 'SPY' : 'SPY · simulated'} dataKey={unit === 'percent' ? 'spy' : 'spyGrowth'} stroke={SPY} strokeDasharray="6 4" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+            {actual && summary.tradeComparison && <Line name="SPY · your trade timing" dataKey={unit === 'percent' ? 'spyTrade' : 'spyTradeGrowth'} stroke={TRADE_SPY} strokeDasharray="2 3" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />}
+            <Line name={actual ? 'SPY · buy and hold' : 'SPY · simulated'} dataKey={unit === 'percent' ? 'spy' : 'spyGrowth'} stroke={SPY} strokeDasharray="6 4" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
       <div className="perf-chart-caption">
         <span>
           <i className="perf-legend-line" />{portfolioLabel}</span>
+        {actual && <span><i className="perf-legend-line is-trade-spy" />SPY · your trade timing{!summary.tradeComparison && ' · unavailable'}</span>}
         <span>
-          <i className="perf-legend-line is-spy" />SPY · {actual ? 'total return' : 'simulated total return'}</span>
-        <small>Both series start at {unit === 'percent' ? '0%' : '$10,000'} · opening valuation {dateLabel(summary.opening.date)}</small>
+          <i className="perf-legend-line is-spy" />{actual ? 'SPY · buy and hold' : 'SPY · simulated total return'}</span>
+        <small>{actual ? 'All available series' : 'Both series'} start at {unit === 'percent' ? '0%' : '$10,000'} · opening valuation {dateLabel(summary.opening.date)}</small>
       </div>
+      {actual && summary.tradeComparison && <section className="perf-trade-account" aria-label="SPY account following your trades">
+        <header><h3>What if your trades had been SPY?</h3><p>Account values through {dateLabel(summary.closing.date)}. This simulation starts with your earliest recorded activity; changing periods does not restart it.</p></header>
+        <div className="perf-trade-account-values">
+          <div><span>Your portfolio</span><strong>{formatCurrency(summary.closing.value)}</strong></div>
+          <div><span>SPY · your trade timing</span><strong>{formatCurrency(summary.tradeComparison.closingValue)}</strong></div>
+          <div><span>Your portfolio minus SPY</span><strong>{signedMoney(summary.tradeComparison.accountDifference)}</strong></div>
+        </div>
+        <p>Buy SPY with each recorded purchase amount; sell SPY for each recorded sale amount. Keep sale proceeds in cash until the next purchase or withdrawal.{typeof summary.tradeComparison.cash === 'number' ? ` SPY account cash: ${formatCurrency(summary.tradeComparison.cash)}.` : ''}</p>
+        <small>Hypothetical daily-close execution, fractional exposure and reinvested SPY dividends. Original-stock income and reinvestments are not copied; idle cash earns no interest. Recorded separate fees apply to both accounts. The chart above shows normalized returns, not these account balances.</small>
+      </section>}
       <section className="perf-balance" aria-label="Account balance reconciliation">
         <header>
           <div>
@@ -194,34 +217,39 @@ function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView =
                 </span>
                 <span>SPY <b>{percent(row.spyReturn)}</b>
                 </span>
-                <span>Difference <b>{points(row.difference)}</b>
+                {actual && <span>SPY · your trade timing <b>{row.tradeComparison ? percent(row.tradeComparison.return) : 'Unavailable'}</b></span>}
+                <span>Gap vs SPY · buy and hold <b>{points(row.difference)}</b>
                 </span>
               </div>;
             }} />
             <Bar name={portfolioLabel} dataKey="portfolioReturn" fill={PORTFOLIO} radius={3} maxBarSize={27} onClick={(row: any) => { const year = row.payload?.year ?? row.year; if (typeof year === 'number') showYear(year); }} style={{ cursor: 'pointer' }} isAnimationActive={false} />
-            <Bar name={actual ? 'SPY' : 'SPY · simulated'} dataKey="spyReturn" fill={SPY} radius={3} maxBarSize={27} onClick={(row: any) => { const year = row.payload?.year ?? row.year; if (typeof year === 'number') showYear(year); }} style={{ cursor: 'pointer' }} isAnimationActive={false} />
+            {actual && <Bar name="SPY · your trade timing" dataKey="tradeComparison.return" fill={TRADE_SPY} radius={3} maxBarSize={27} onClick={(row: any) => { const year = row.payload?.year ?? row.year; if (typeof year === 'number') showYear(year); }} style={{ cursor: 'pointer' }} isAnimationActive={false} />}
+            <Bar name={actual ? 'SPY · buy and hold' : 'SPY · simulated'} dataKey="spyReturn" fill={SPY} radius={3} maxBarSize={27} onClick={(row: any) => { const year = row.payload?.year ?? row.year; if (typeof year === 'number') showYear(year); }} style={{ cursor: 'pointer' }} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>
       <div className="perf-chart-caption">
         <span>
           <i style={{ background: PORTFOLIO }} />{portfolioLabel}</span>
+        {actual && <span><i style={{ background: TRADE_SPY }} />SPY · your trade timing</span>}
         <span>
-          <i style={{ background: SPY }} />SPY · {actual ? 'total return' : 'simulated total return'}</span>
+          <i style={{ background: SPY }} />{actual ? 'SPY · buy and hold' : 'SPY · simulated total return'}</span>
         <small>Select a year below for its growth chart and balance bridge.</small>
       </div>
       <div className="perf-year-table-wrap">
         <table className="perf-year-table">
           <caption>{actual ? 'Returns' : 'Simulated returns'} and balance reconciliation by year. Earnings are ending value minus opening value minus deposits plus withdrawals.</caption>
           <thead>
-            <tr>{['Period', stagingDemo ? 'Demo portfolio' : 'Portfolio', 'SPY', 'Difference', 'Opening', 'Deposits', 'Withdrawals', 'Earnings', 'Ending'].map(label => <th key={label} scope="col">{label}</th>)}</tr>
+            <tr>{['Period', stagingDemo ? 'Demo portfolio' : 'Portfolio', ...(actual ? ['SPY · trade timing', 'SPY · buy and hold', 'Gap vs trade timing', 'Gap vs buy and hold'] : ['SPY', 'Difference']), 'Opening', 'Deposits', 'Withdrawals', 'Earnings', 'Ending'].map(label => <th key={label} scope="col">{label}</th>)}</tr>
           </thead>
           <tbody>{[...annual].reverse().map(row => <tr key={row.year}>
             <th scope="row">
               <button onClick={() => showYear(row.year)}>{row.label} ↗</button>
             </th>
             <td>{percent(row.portfolioReturn)}</td>
+            {actual && <td>{row.tradeComparison ? percent(row.tradeComparison.return) : '—'}</td>}
             <td>{percent(row.spyReturn)}</td>
+            {actual && <td>{row.tradeComparison ? points(row.tradeComparison.difference) : '—'}</td>}
             <td>{points(row.difference)}</td>
             <td>{formatCurrency(row.opening.value)}</td>
             <td>{formatCurrency(row.deposits)}</td>
@@ -246,7 +274,8 @@ function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView =
           <p>{actual ? 'Daily time-weighted returns adjust for recorded external flows assumed at the end of each day, then compound. This is an estimate when flows occur intraday. Opening cash must be supported by your records; missing prices are never replaced by purchase prices.' : 'The design uses time-weighted return (TWR) for the SPY comparison. Daily sample returns adjust for end-of-day flows and are compounded, rather than dividing earnings by opening balance. Live calculations need flow timing and historical valuations; personal money-weighted return (XIRR) can be added separately.'}</p>
         </article>
         <article>
-          <h3>The benchmark stays visible</h3>
+          <h3>{actual ? 'Two SPY comparisons' : 'The benchmark stays visible'}</h3>
+          {actual && <><p>SPY · your trade timing replaces recorded buy and sell cash amounts with SPY at the same session’s adjusted close, using the same external deposits, withdrawals and separate fees. Idle cash stays cash and earns no interest in this illustration. A sale is not an external withdrawal. Non-trading-day activity executes at the next available session.</p><p>SPY’s own dividends are reinvested via its adjusted-close total-return index. Original-stock dividends and REI entries are excluded from this SPY account to avoid copying income from investments it does not own. Options mirror their premium dollars; this does not match their leverage or risk. If a sale exceeds SPY exposure or cash is insufficient, the trade-timing comparison becomes unavailable rather than inventing borrowing.</p><p>SPY · buy and hold measures uninterrupted total return over the selected period. When the trade-timing account stays fully invested, its time-weighted percentage can match buy and hold even though contribution dates change its ending dollars. Percentage and $10k charts normalize each account’s time-weighted return; account-dollar values come from the simulation carried forward from the earliest recorded activity.</p></>}
           <p>Compare the same dates with SPY total return, including reinvested distributions, in the same currency. The portfolio includes cash and fees, before personal taxes. The difference is percentage points, not risk-adjusted alpha. Multi-year views show both cumulative and annualized returns.</p>
           <p>{actual ? 'SPY uses Yahoo Finance adjusted closes as a total-return proxy. Your recorded income and fees stay in portfolio results. Unrecorded distributions or corporate actions can affect accuracy. References:' : 'Both series here are fictional. Live results require a historical valuation and cash-flow service. References:'} <a href="https://www.gipsstandards.org/standards/gips-standards-for-firms/gips-standards-handbook-for-firms/" target="_blank" rel="noreferrer">GIPS return methodology</a> · <a href="https://www.ssga.com/us/en/individual/etfs/state-street-spdr-sp-500-etf-trust-spy" target="_blank" rel="noreferrer">SPY methodology</a>.</p>
         </article>

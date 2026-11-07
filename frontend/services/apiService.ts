@@ -40,6 +40,7 @@ export interface PerformanceHistory {
   snapshots?: PerformanceSnapshot[];
   progress?: string;
   issues?: { code: string; message: string; date?: string; symbol?: string; transactionId?: number }[];
+  tradeBenchmarkIssues?: { code: string; message: string; date?: string }[];
   asOf?: string;
   firstYear?: number;
   coverageStart?: string;

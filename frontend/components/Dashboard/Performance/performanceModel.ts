@@ -1,5 +1,5 @@
 export type PerformancePeriod = 'available' | 'ytd' | '1y' | '3y' | '5y' | `year-${number}`;
-export interface PerformanceSnapshot { date: string; value: number; deposits: number; withdrawals: number; spyTotalReturnIndex: number }
+export interface PerformanceSnapshot { date: string; value: number; deposits: number; withdrawals: number; spyTotalReturnIndex: number; spyTradeValue?: number | null; spyTradeCash?: number | null }
 export interface PerformanceRange { start: string; end: string; openingBoundary: string; label: string }
 const DAY = 86400000;
 const iso = (date: Date) => date.toISOString().slice(0, 10);
@@ -61,7 +61,10 @@ export function performanceSummary(snapshots: PerformanceSnapshot[], range: Perf
   let previous = opening.value;
   let deposits = 0;
   let withdrawals = 0;
-  const series = [{ date: opening.date, portfolio: 0, spy: 0, portfolioGrowth: 10000, spyGrowth: 10000 }];
+  let tradeValid = [opening, ...selected].every(point => typeof point.spyTradeValue === 'number' && Number.isFinite(point.spyTradeValue) && point.spyTradeValue >= 0) && opening.spyTradeValue! > 0;
+  let tradeFactor = 1;
+  let previousTrade = opening.spyTradeValue ?? 0;
+  const series = [{ date: opening.date, portfolio: 0, spy: 0, portfolioGrowth: 10000, spyGrowth: 10000, spyTrade: tradeValid ? 0 : null, spyTradeGrowth: tradeValid ? 10000 : null }];
   for (const point of selected) {
     if (previous <= 0) return null;
     const dailyFactor = (point.value - point.deposits + point.withdrawals) / previous;
@@ -70,7 +73,14 @@ export function performanceSummary(snapshots: PerformanceSnapshot[], range: Perf
     deposits += point.deposits;
     withdrawals += point.withdrawals;
     const spyFactor = point.spyTotalReturnIndex / opening.spyTotalReturnIndex;
-    series.push({ date: point.date, portfolio: (factor - 1) * 100, spy: (spyFactor - 1) * 100, portfolioGrowth: factor * 10000, spyGrowth: spyFactor * 10000 });
+    if (tradeValid) {
+      const dailyTradeFactor = (point.spyTradeValue! - point.deposits + point.withdrawals) / previousTrade;
+      if (previousTrade <= 0 || !Number.isFinite(dailyTradeFactor) || dailyTradeFactor < 0) tradeValid = false;
+      else tradeFactor *= dailyTradeFactor;
+      previousTrade = point.spyTradeValue!;
+    }
+    series.push({ date: point.date, portfolio: (factor - 1) * 100, spy: (spyFactor - 1) * 100, portfolioGrowth: factor * 10000, spyGrowth: spyFactor * 10000,
+      spyTrade: tradeValid ? (tradeFactor - 1) * 100 : null, spyTradeGrowth: tradeValid ? tradeFactor * 10000 : null });
     previous = point.value;
   }
   const closing = selected.at(-1)!;
@@ -79,7 +89,15 @@ export function performanceSummary(snapshots: PerformanceSnapshot[], range: Perf
   const annualized = days >= 365 ? (Math.pow(factor, 365.2425 / days) - 1) * 100 : null;
   const spyAnnualized = days >= 365 ? (Math.pow(1 + result.spy / 100, 365.2425 / days) - 1) * 100 : null;
   const earnings = closing.value - opening.value - deposits + withdrawals;
-  return { range, opening, closing, deposits, withdrawals, netContributions: deposits - withdrawals, earnings, portfolioReturn: result.portfolio, spyReturn: result.spy, difference: result.portfolio - result.spy, annualized, spyAnnualized, days, series };
+  if (!tradeValid) series.forEach(point => { point.spyTrade = null; point.spyTradeGrowth = null; });
+  const tradeComparison = tradeValid ? {
+    return: (tradeFactor - 1) * 100, difference: result.portfolio - (tradeFactor - 1) * 100,
+    annualized: days >= 365 ? (Math.pow(tradeFactor, 365.2425 / days) - 1) * 100 : null,
+    openingValue: opening.spyTradeValue!, closingValue: closing.spyTradeValue!, cash: closing.spyTradeCash,
+    earnings: closing.spyTradeValue! - opening.spyTradeValue! - deposits + withdrawals,
+    accountDifference: closing.value - closing.spyTradeValue!,
+  } : null;
+  return { range, opening, closing, deposits, withdrawals, netContributions: deposits - withdrawals, earnings, portfolioReturn: result.portfolio, spyReturn: result.spy, difference: result.portfolio - result.spy, annualized, spyAnnualized, days, series, tradeComparison };
 }
 
 export function chartSample<T>(points: T[], limit = 75): T[] {

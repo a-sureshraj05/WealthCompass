@@ -96,3 +96,22 @@
 .perf-history-status button { border: 1px solid #ccd8e9; border-radius: 8px; padding: 8px 12px; background: #fff; color: #315da6; font-weight: 600; }
 .perf-history-status label, .perf-history-status small { display: block; margin-top: 8px; }
 .perf-history-status input { background: #fff; border: 1px solid #ccd8e9; padding: 8px 12px; border-radius: 8px; color: #243c5b; }
+
+.perf-scoreboard.has-three-series .perf-trade-score strong { color: #218b83; }
+.perf-scoreboard.has-three-series > div:last-child strong { color: #8871a6; }
+.perf-comparison-gaps { display: flex; flex-wrap: wrap; gap: 9px 24px; padding: 0 25px 20px; font-size: 10px; color: #6c7e96; }
+.perf-comparison-gaps b { color: #496487; font-weight: 600; margin-left: 7px; font-variant-numeric: tabular-nums; }
+.perf-chart-caption .perf-legend-line.is-trade-spy { border-top: 2px dotted #218b83; }
+.perf-trade-account { padding: 21px 25px; border-top: 1px solid #dfece9; background: #f5faf9; }
+.perf-trade-account h3 { font-size: 13px; font-weight: 600; color: #3e6863; margin: 0; }
+.perf-trade-account p, .perf-trade-account small { color: #64817d; font-size: 10px; line-height: 1.8; }
+.perf-trade-account header p { margin: 6px 0 18px; }
+.perf-trade-account-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.perf-trade-account-values span { display: block; color: #64817d; font-size: 10px; margin-bottom: 7px; }
+.perf-trade-account-values strong { font-size: 21px; font-weight: 600; color: #376f67; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) {
+  .perf-scoreboard.has-three-series, .perf-trade-account-values { grid-template-columns: 1fr; }
+  .perf-scoreboard.has-three-series > div + div { border-left: 0; border-top: 1px solid #e4ebf5; padding: 16px 0 0; }
+  .perf-comparison-gaps { padding: 0 18px 18px; }
+  .perf-trade-account { padding: 19px 18px; }
+}

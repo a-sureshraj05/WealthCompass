@@ -13,9 +13,10 @@ from backend.app.core.database import SessionLocal
 from backend.app.core.scoping import UserScope
 from backend.app.core.performance_ledger import ledger_events, reconstruct, issue
 from backend.app.core.performance_prices import fetch_instrument, fetch_spy
-from backend.app.db.schema import HistoricalPrice, PortfolioDailyValue, PortfolioPerformanceState, SnaptradeTransaction, Transaction
+from backend.app.core.spy_trade_benchmark import trade_matched_spy
+from backend.app.db.schema import HistoricalPrice, PortfolioDailyValue, PortfolioPerformanceState, PortfolioTradeBenchmark, SnaptradeTransaction, Transaction
 
-VERSION = "ledger-close-v1"
+VERSION = "ledger-close-v2-spy-trades"
 _jobs = {}
 _jobs_lock = threading.Lock()
 
@@ -74,7 +75,10 @@ def read_history(scope):
     if blocked: usable = []
     if usable and usable[-1].date < cutoff:
         result.setdefault("issues", []).insert(0, issue("coverage_end", "The chart ends at the last complete interval; later valuations are unavailable. No gap is bridged.", usable[-1].date))
-    result["snapshots"] = [{"date": row.date.isoformat(), "value": row.total_value, "deposits": row.deposits, "withdrawals": row.withdrawals, "spyTotalReturnIndex": row.spy_index} for row in usable]
+    matched = {row.date: row for row in scope.query(PortfolioTradeBenchmark).all()}
+    result["snapshots"] = [{"date": row.date.isoformat(), "value": row.total_value, "deposits": row.deposits, "withdrawals": row.withdrawals, "spyTotalReturnIndex": row.spy_index,
+                            "spyTradeValue": matched[row.date].total_value if row.date in matched else None,
+                            "spyTradeCash": matched[row.date].cash if row.date in matched else None} for row in usable]
     result["status"] = "ready" if len(usable) > 1 else "incomplete"
     result["asOf"] = daily[-1].date.isoformat() if daily else str(cutoff)
     result["coverageEnd"] = usable[-1].date.isoformat() if usable else None
@@ -136,6 +140,7 @@ def _build(scope):
     currencies = {row.id: row.currency or "USD" for row in scope.query(SnaptradeTransaction).filter(SnaptradeTransaction.id.in_(raw_ids)).all()} if raw_ids else {}
     events, issues = ledger_events(transactions, currencies)
     daily, market, spy = [], {}, {}
+    matched, matched_issues = {}, []
     securities = defaultdict(list)
     for event in events:
         if event.kind in {"buy", "sell", "reinvest", "expiry"}: securities[event.symbol].append(event)
@@ -171,14 +176,18 @@ def _build(scope):
         if spy:
             daily, valuation_issues = reconstruct(events, market, {day: point["adjusted"] for day, point in spy.items()}, state.opening_cash)
             issues.extend(valuation_issues)
+            matched, matched_issues = trade_matched_spy(events, {day: point["adjusted"] for day, point in spy.items()}, state.opening_cash)
     _progress(scope.user_id, "Saving encrypted daily valuations…")
     scope.delete_all(PortfolioDailyValue)
+    scope.delete_all(PortfolioTradeBenchmark)
     for row in daily:
         scope.add(PortfolioDailyValue(date=row["date"], holdings_value=row["holdings"], cash=row["cash"], total_value=row["value"], deposits=row["deposits"], withdrawals=row["withdrawals"], spy_index=row["spyTotalReturnIndex"], complete=row["complete"]))
+    for day, row in matched.items():
+        scope.add(PortfolioTradeBenchmark(date=day, total_value=row["value"], cash=row["cash"]))
     state.fingerprint = fingerprint
     blocking = any(row["code"] == "opening_positions" for row in issues)
     issues.sort(key=lambda row: 0 if row["code"] in {"cash_history", "opening_positions"} else 1)
-    state.result = {"status": "calculated", "issues": issues[:30], "blocking": blocking, "requiresOpeningCash": any(row["code"] == "cash_history" for row in issues), "transactionCount": len(transactions), "dailyValueCount": len(daily),
+    state.result = {"status": "calculated", "issues": issues[:30], "tradeBenchmarkIssues": matched_issues, "blocking": blocking, "requiresOpeningCash": any(row["code"] == "cash_history" for row in issues), "transactionCount": len(transactions), "dailyValueCount": len(daily),
                     "method": "Daily close reconstruction; external cash flows assumed at end of day. TWR is an estimate when flows occur intraday.", "source": "Recorded transactions and Yahoo Finance historical prices", "requestedStart": min((event.day.isoformat() for event in events), default=None)}
     state.generated_at = datetime.utcnow()
     scope.db.commit()
