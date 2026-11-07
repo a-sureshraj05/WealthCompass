@@ -6,20 +6,21 @@ The fixed `ui-v1` and `ui-v2` tags preserve the older interfaces.
 
 ## Production source and configuration
 
-The existing `wealthcompass-app` service deploys from `design/cloud-launch`.
 PR #25 promoted the release to `main`; PR #26 added `branch: main` to the legacy
-production manifest. Live deployment records and assets confirmed that Render
-continued building the legacy branch after this edit. Do not assume a manifest
-commit alone changes an existing service's source: a dashboard source change or
-an active Blueprint sync is still required. No Render API credential is available
-in this workspace or GitHub repository secrets.
+production manifest on `design/cloud-launch`. Render's GitHub deployment labels
+continued reporting that legacy branch and its old manifest commit even when
+the live service began serving the V3 main build. A later app deployment started
+two seconds after PR #27 merged to main, before the legacy-code mirror PR #28.
+Do not infer the running source from those GitHub labels alone.
 
-Until Render's source is changed to `main`, publish each approved main release by
-merging it into `design/cloud-launch`. The code is kept on `main`, and the existing
-service receives that same code through its working deployment source. Both
-`main` and `staging` remain available for development. In Render's service Settings,
-set the source branch to `main` to remove this temporary publishing step; if a
-Blueprint manages the service, also synchronize its configuration/source.
+`GET /healthz` reports the running Render Git branch and commit in `release`,
+alongside database liveness. Verify those identifiers, the served frontend
+assets and authenticated runtime flags after a release. Both `main` and `staging`
+remain available for development. The production service's configured build
+source is `main`; its Blueprint configuration still lives on the legacy branch.
+Keep production manifest changes synchronized there until its Blueprint source
+is also moved to main in Render. No Render API credential is stored in this
+workspace or GitHub repository secrets.
 
 Keep the existing `DATABASE_URL`, `JWT_SECRET` and `WealthCompass` environment
 group. `WC_DEMO_MODE=false` is mandatory: the Docker image's portable-demo default
@@ -81,8 +82,12 @@ Never target the local owner's default database. No destructive upgrade is used.
 A temporary PostgreSQL 16 rehearsal upgraded the previous production revision to
 head twice, preserved an existing sentinel user byte for byte, and matched all
 model columns. The production Docker image was built with its data-leak guard.
-Validation passed: 181 frontend tests, TypeScript and Vite build; 183 backend
-tests passed and 3 skipped. Disposable-container checks use only fictional data.
+Validation passed: 181 frontend tests, TypeScript and Vite build; 192 backend
+tests passed and 3 skipped after the final rollout checks. Disposable-container
+checks use only fictional data. The first production backfill exposed one cache
+SELECT per daily price; lookups now load each instrument's interval once. A
+2,000-day regression verifies bounded queries, correct price updates, preservation
+of unrelated public prices and idempotency. Valuation formulas are unchanged.
 
 ## Rollback
 
