@@ -103,3 +103,47 @@ normal holdings processing and rebuild history after the additions. A repeat cal
 adds nothing. Local real-price validation produced 1,723 daily rows with full
 coverage January 2, 2020–November 6, 2026 and supported YTD, 1Y, 3Y, 5Y and complete
 calendar-year calculations, with no missing-funding or price diagnostics.
+
+## SPY following your trade timing
+
+The three comparisons are the actual portfolio, a hypothetical SPY account that
+replaces recorded buys/sells at the same dollar amounts, and uninterrupted SPY
+total return for the selected period. A funding deposit alone does not buy SPY in
+the trade-timing account. Sale proceeds remain cash until another purchase or an
+external withdrawal. This mirrors trade timing rather than assuming every deposit
+is immediately invested.
+
+`spy_trade_benchmark.py` holds fractional exposure in units of the SPY adjusted-close
+total-return index. Thus $100 bought in January and $1,000 in May buy different
+amounts at their respective session closes; later sales remove the recorded sale
+dollars from the combined SPY exposure. A non-trading-day event executes at the
+next available session close. Same-session events are netted at that close;
+this is an illustration, not a reconstruction of intraday executions or spreads.
+
+External deposits, withdrawals, any explicit opening cash and separate recorded
+fees apply. SPY dividends are already reinvested in the adjusted-close index.
+Original-security income and REI entries are not copied; benchmark cash earns no
+interest. Option trades mirror premium dollars, without equivalent option risk or
+leverage. An option expiration with no cash proceeds does not sell the hypothetical
+SPY exposure. If the requested sale exceeds SPY exposure or cash is insufficient,
+the new series stops and is reported unavailable for affected periods. The
+actual portfolio and ordinary SPY benchmark remain available. No borrowing,
+invented contributions, clipped sales or gap bridging is allowed.
+
+`portfolio_trade_benchmark` stores encrypted total value/cash per signed-in user
+and date, rebuilt atomically with the portfolio history. Additive migration
+`c0926f46b738` creates it, tolerating startup `create_all`; existing tables need
+no new columns. The ledger fingerprint version invalidates old histories once.
+The API supplies `spyTradeValue`, `spyTradeCash` and separate benchmark diagnostics.
+No source transactions, sample records or user preferences are changed.
+
+The percentage and normalized $10k charts compare all three time-weighted return
+series on the same selected dates. Fully invested SPY strategies can have the
+same TWR despite different contribution amounts/timing. A separate account-dollar
+panel shows the counterfactual carried forward from the earliest recorded activity;
+selecting YTD or another period does not restart it with the portfolio's opening
+balance. Calendar bars and tables include the new benchmark and both return gaps.
+Financial visibility hides the new numbers with the existing profile preference.
+
+References: [GIPS return methodology](https://www.gipsstandards.org/standards/gips-standards-for-firms/gips-standards-handbook-for-firms/)
+and [State Street SPY total-return methodology](https://www.ssga.com/us/en/individual/etfs/state-street-spdr-sp-500-etf-trust-spy).

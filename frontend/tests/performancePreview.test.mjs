@@ -84,3 +84,27 @@ test('transaction history respects private figures', () => {
   const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: false, presentation: 'transaction-history', history }));
   assert.doesNotMatch(html, /perf-scoreboard|perf-balance-equation|1,200|20.00%/);
 });
+
+test('transaction mode shows three comparisons and separates account dollars from normalized returns', () => {
+  const supplied = { ...history, snapshots: history.snapshots.map((row,index) => ({...row, spyTradeValue:1000 + index * 50, spyTradeCash:500})) };
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible:true, presentation:'transaction-history', history:supplied })).replaceAll('<!-- -->','');
+  assert.match(html, /SPY · your trade timing/);
+  assert.match(html, /SPY · buy and hold/);
+  assert.match(html, /What if your trades had been SPY/);
+  assert.match(html, /\+10.00%/);
+  assert.match(html, /\$1,100.00/);
+  assert.match(html, /changing periods does not restart it/);
+  assert.match(html, /sell SPY for each recorded sale amount/);
+  assert.match(html, /not these account balances/);
+  assert.doesNotMatch(html, /Complete trade-timing history unavailable/);
+  const hidden = renderToStaticMarkup(React.createElement(Preview, { numbersVisible:false, presentation:'transaction-history', history:supplied }));
+  assert.doesNotMatch(hidden, /perf-trade-account|1,100|10.00%/);
+});
+
+test('a missing third benchmark leaves portfolio and ordinary SPY comparison visible', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible:true, presentation:'transaction-history', history })).replaceAll('<!-- -->','');
+  assert.match(html, /Complete trade-timing history unavailable/);
+  assert.match(html, /\+20.00%/);
+  assert.match(html, /SPY · buy and hold/);
+  assert.doesNotMatch(html, /perf-trade-account-values/);
+});

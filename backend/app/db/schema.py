@@ -384,6 +384,17 @@ class PortfolioDailyValue(Base):
     __table_args__ = (UniqueConstraint("user_id", "date", name="uq_portfolio_daily_user_date"),)
 
 
+class PortfolioTradeBenchmark(Base):
+    """Private SPY account replacing recorded trades at the same dollar amounts."""
+    __tablename__ = "portfolio_trade_benchmark"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    date = Column(Date, nullable=False)
+    total_value = Column(EncryptedFloat, nullable=True)
+    cash = Column(EncryptedFloat, nullable=True)
+    __table_args__ = (UniqueConstraint("user_id", "date", name="uq_trade_benchmark_user_date"),)
+
+
 class PortfolioPerformanceState(Base):
     __tablename__ = "portfolio_performance_state"
     user_id = Column(Integer, primary_key=True)
@@ -411,5 +422,6 @@ USER_SCOPED_MODELS = (
     SnaptradeIgnoredAccount,
     PortfolioSummary,
     PortfolioDailyValue,
+    PortfolioTradeBenchmark,
     PortfolioPerformanceState,
 )
