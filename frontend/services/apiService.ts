@@ -27,6 +27,13 @@ const responseError = async (response: Response, fallback: string): Promise<Erro
 
 export interface AccountProfile { email: string; displayName: string }
 
+export const fetchPerformanceDemoEnabled = async (): Promise<boolean> => {
+  const response = await apiFetch('/api/v1/auth/status');
+  if (!response.ok) return false;
+  const status = await response.json();
+  return status.performance_demo === true;
+};
+
 export const fetchAccountProfile = async (): Promise<AccountProfile> => {
   // A failed preference read must stay an error, rather than making an existing
   // name look like it was cleared. Generic table preference reads are best-effort.

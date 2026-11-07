@@ -11,6 +11,7 @@ import { BrokerageAccount } from './types';
 import TickerTypeContext from './contexts/TickerTypeContext';
 import useFinancialVisibility from './hooks/useFinancialVisibility';
 import FinancialVisibilityNotice from './components/FinancialVisibilityNotice';
+import usePerformanceDemo from './hooks/usePerformanceDemo';
 
 const App: React.FC = () => {
   // The session lives in an HttpOnly cookie — nothing for this component to
@@ -50,6 +51,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void | Promise<void> }> = ({ 
   const [loading, setLoading] = useState(false);
   const privacy = useFinancialVisibility();
   const numbersVisible = privacy.visible;
+  const performanceDemo = usePerformanceDemo();
   // Incremented by an explicit refresh so the insights panel knows to
   // regenerate. A deliberate user action, unlike a page load, so it is a safe
   // thing to spend on — and the backend cooldown still bounds repeat clicks.
@@ -372,6 +374,7 @@ const AuthenticatedApp: React.FC<{ onLogout: () => void | Promise<void> }> = ({ 
         <main className="workspace-canvas flex-1 overflow-y-auto px-4 pt-4 md:px-8 md:pt-8 pb-tabbar">
           <FinancialVisibilityNotice privacy={privacy} />
           <DashboardView
+            performanceDemo={performanceDemo}
             activeTab={activeTab}
             setActiveTab={handleSetActiveTab}
             numbersVisible={numbersVisible}

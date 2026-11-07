@@ -1,9 +1,40 @@
 # Portfolio performance and SPY comparison
 
 Proposed placement: a full-width module in Overview after AI Insights, before
-Today's contributors and allocation. It is currently visible only in the
-DEV-only `/design-preview`. Both portfolio and SPY series are simulated; this
-is not a historical backtest or live market data.
+Today's contributors and allocation. It is visible in DEV-only `/design-preview`
+and, with an explicit runtime setting, in the authenticated staging Overview.
+Both portfolio and SPY series are simulated; this is not a historical backtest
+or live market data.
+
+## Staging demo
+
+`render.staging.yaml` enables `WC_APP_ENV=staging` and
+`WC_PERFORMANCE_DEMO=true`. Both are required; production and unset/false values
+disable the module. `/api/v1/auth/status` exposes the resulting non-secret
+`performance_demo` boolean. The signed-in app reads it on mount and passes the
+flag into Overview. A failed or older status response leaves the feature off.
+This works with the deployed Vite production build, independent of `DEV`.
+
+The staging presentation is headed **Demo performance vs SPY**, carries
+**STAGING · DEMO DATA**, and labels the comparison series **Demo portfolio**.
+It states that this history is separate from the signed-in user's account.
+Calendar years, YTD, trailing 1/3/5 years, percentage-point gaps and balance
+reconciliation use the existing reproducible fixture. Its fixed as-of date is
+shown explicitly. No historical SPY prices are fetched or represented as real.
+
+No demo records are inserted into the database, and no existing holdings,
+transactions, balances, credentials or user ownership are changed. Existing login
+and figure-visibility preferences remain in effect. The runtime feature only
+controls presentation; the shipped frontend includes fictional fixture code.
+It does not enable the full development preview, sample-account switching or any
+authentication bypass.
+
+After merging this change to staging, the Render Blueprint must sync the two
+settings and deploy the new commit. Confirm `/api/v1/auth/status` reports
+`performance_demo: true`, then sign in and open Overview. Disable the demo by
+setting `WC_PERFORMANCE_DEMO=false` and redeploying the service configuration.
+On an existing deployment of older code, an environment change alone cannot
+expose a chart that was removed from its frontend build.
 
 ## Periods and presentation
 

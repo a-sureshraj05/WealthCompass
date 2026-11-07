@@ -13,7 +13,9 @@ const signedMoney = (value: number) => `${value > 0 ? '+' : ''}${formatCurrency(
 const PORTFOLIO = '#315da6';
 const SPY = '#9380b6';
 
-export default function PreviewPerformance({ numbersVisible, scopeFiltered = false, initialView = 'growth', initialPeriod = 'ytd' }: { numbersVisible: boolean; scopeFiltered?: boolean; initialView?: 'growth' | 'calendar'; initialPeriod?: PerformancePeriod; }) {
+export default function PreviewPerformance({ numbersVisible, scopeFiltered = false, initialView = 'growth', initialPeriod = 'ytd', presentation = 'design-preview' }: { numbersVisible: boolean; scopeFiltered?: boolean; initialView?: 'growth' | 'calendar'; initialPeriod?: PerformancePeriod; presentation?: 'design-preview' | 'staging-demo'; }) {
+  const stagingDemo = presentation === 'staging-demo';
+  const portfolioLabel = stagingDemo ? 'Demo portfolio' : 'Your portfolio';
   const [period, setPeriod] = useState<PerformancePeriod>(initialPeriod);
   const [view, setView] = useState<'growth' | 'calendar'>(initialView);
   const [unit, setUnit] = useState<'percent' | 'growth'>('percent');
@@ -33,16 +35,17 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
     <header className="perf-header">
       <div>
         <p className="perf-eyebrow">THE LONGER VIEW</p>
-        <h2 id="performance-title">Performance vs SPY</h2>
+        <h2 id="performance-title">{stagingDemo ? 'Demo performance vs SPY' : 'Performance vs SPY'}</h2>
         <p>See investment growth separately from the money you add or take out.</p>
       </div>
       <span className="perf-benchmark-badge">
         <i />SPY always included</span>
     </header>
     <div className="perf-demo-note">
-      <strong>Frontend design preview</strong>
+      <strong>{stagingDemo ? 'STAGING · DEMO DATA' : 'Frontend design preview'}</strong>
       <span>Portfolio and SPY results are simulated, not actual historical returns. Sample as of {dateLabel(PERFORMANCE_AS_OF)}.</span>
     </div>
+    {stagingDemo && <p className="perf-scope-note">This is a separate fictional portfolio, not a calculation of your holdings, transactions or account balance. No sample records are added to your account.</p>}
     {scopeFiltered && <p className="perf-scope-note">This concept compares the entire fictional portfolio. The overview brokerage filter does not change this simulated history.</p>}
     <div className="perf-controls">
       <div className="perf-view-switch" aria-label="Performance view">
@@ -56,7 +59,7 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
       </div>}</div>
     {!numbersVisible ? <div className="perf-hidden">
       <strong>Your performance figures are hidden</strong>
-      <p>Use Show figures to reveal the sample comparison.</p>
+      <p>Use your profile’s visibility setting to reveal the sample comparison.</p>
     </div> : view === 'growth' ? summary ? <>
       <div className="perf-range">
         <strong>{range.label}</strong>
@@ -66,7 +69,7 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
       <div className="perf-scoreboard">
         <div>
           <span>
-            <i style={{ background: PORTFOLIO }} />Your portfolio</span>
+            <i style={{ background: PORTFOLIO }} />{portfolioLabel}</span>
           <strong>{percent(summary.portfolioReturn)}</strong>
           <small>{multiYear && summary.annualized !== null ? `${percent(summary.annualized)} annualized · ` : ''}Time-weighted return</small>
         </div>
@@ -105,7 +108,7 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
             <Tooltip content={({ active, payload }) => {
               if (!active || !payload?.length) return null; const row = payload[0].payload; return <div className="perf-tooltip">
                 <strong>{dateLabel(row.date)}</strong>
-                <span>Your portfolio <b>{unit === 'percent' ? percent(row.portfolio) : formatCurrency(row.portfolioGrowth)}</b>
+                <span>{portfolioLabel} <b>{unit === 'percent' ? percent(row.portfolio) : formatCurrency(row.portfolioGrowth)}</b>
                 </span>
                 <span>SPY · sample <b>{unit === 'percent' ? percent(row.spy) : formatCurrency(row.spyGrowth)}</b>
                 </span>
@@ -113,14 +116,14 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
               </div>;
             }} />
             <Area dataKey={unit === 'percent' ? 'portfolio' : 'portfolioGrowth'} fill="url(#performance-area)" stroke="none" tooltipType="none" isAnimationActive={false} />
-            <Line name="Your portfolio" dataKey={unit === 'percent' ? 'portfolio' : 'portfolioGrowth'} stroke={PORTFOLIO} strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+            <Line name={portfolioLabel} dataKey={unit === 'percent' ? 'portfolio' : 'portfolioGrowth'} stroke={PORTFOLIO} strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
             <Line name="SPY · simulated" dataKey={unit === 'percent' ? 'spy' : 'spyGrowth'} stroke={SPY} strokeDasharray="6 4" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
       <div className="perf-chart-caption">
         <span>
-          <i className="perf-legend-line" />Your portfolio</span>
+          <i className="perf-legend-line" />{portfolioLabel}</span>
         <span>
           <i className="perf-legend-line is-spy" />SPY · simulated total return</span>
         <small>Both series start at {unit === 'percent' ? '0%' : '$10,000'} · opening valuation {dateLabel(summary.opening.date)}</small>
@@ -129,7 +132,7 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
         <header>
           <div>
             <h3>How the account balance changed</h3>
-            <p>Sample account dollars, separate from the normalized investment chart above.</p>
+            <p>Fictional account dollars, separate from your actual account and the normalized investment chart above.</p>
           </div>
           <span>{range.label}</span>
         </header>
@@ -182,7 +185,7 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
             <Tooltip content={({ active, payload }) => {
               if (!active || !payload?.length) return null; const row = payload[0].payload; return <div className="perf-tooltip">
                 <strong>{row.label} · simulated</strong>
-                <span>Your portfolio <b>{percent(row.portfolioReturn)}</b>
+                <span>{portfolioLabel} <b>{percent(row.portfolioReturn)}</b>
                 </span>
                 <span>SPY <b>{percent(row.spyReturn)}</b>
                 </span>
@@ -190,14 +193,14 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
                 </span>
               </div>;
             }} />
-            <Bar name="Your portfolio" dataKey="portfolioReturn" fill={PORTFOLIO} radius={3} maxBarSize={27} onClick={(row: any) => { const year = row.payload?.year ?? row.year; if (typeof year === 'number') showYear(year); }} style={{ cursor: 'pointer' }} isAnimationActive={false} />
+            <Bar name={portfolioLabel} dataKey="portfolioReturn" fill={PORTFOLIO} radius={3} maxBarSize={27} onClick={(row: any) => { const year = row.payload?.year ?? row.year; if (typeof year === 'number') showYear(year); }} style={{ cursor: 'pointer' }} isAnimationActive={false} />
             <Bar name="SPY · simulated" dataKey="spyReturn" fill={SPY} radius={3} maxBarSize={27} onClick={(row: any) => { const year = row.payload?.year ?? row.year; if (typeof year === 'number') showYear(year); }} style={{ cursor: 'pointer' }} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>
       <div className="perf-chart-caption">
         <span>
-          <i style={{ background: PORTFOLIO }} />Your portfolio</span>
+          <i style={{ background: PORTFOLIO }} />{portfolioLabel}</span>
         <span>
           <i style={{ background: SPY }} />SPY · simulated total return</span>
         <small>Select a year below for its growth chart and balance bridge.</small>
@@ -206,7 +209,7 @@ export default function PreviewPerformance({ numbersVisible, scopeFiltered = fal
         <table className="perf-year-table">
           <caption>Simulated returns and balance reconciliation by year. Earnings are ending value minus opening value minus deposits plus withdrawals.</caption>
           <thead>
-            <tr>{['Period', 'Portfolio', 'SPY', 'Difference', 'Opening', 'Deposits', 'Withdrawals', 'Earnings', 'Ending'].map(label => <th key={label} scope="col">{label}</th>)}</tr>
+            <tr>{['Period', stagingDemo ? 'Demo portfolio' : 'Portfolio', 'SPY', 'Difference', 'Opening', 'Deposits', 'Withdrawals', 'Earnings', 'Ending'].map(label => <th key={label} scope="col">{label}</th>)}</tr>
           </thead>
           <tbody>{[...annual].reverse().map(row => <tr key={row.year}>
             <th scope="row">

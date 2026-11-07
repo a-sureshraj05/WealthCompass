@@ -53,3 +53,11 @@ test('the trailing-year UI displays the requested anniversary-plus-one-day range
   assert.match(html, /opening valuation Oct 31, 2025/);
   assert.match(html, /Latest sample valuation: Oct 30, 2026/);
 });
+
+test('staging calendar mode labels the comparison as demo data rather than the signed-in portfolio', () => {
+  const html = renderToStaticMarkup(React.createElement(Preview, { numbersVisible: true, initialView: 'calendar', presentation: 'staging-demo' })).replaceAll('<!-- -->', '');
+  assert.match(html, /STAGING · DEMO DATA/);
+  assert.match(html, /Demo portfolio/);
+  assert.match(html, /Simulated returns and balance reconciliation by year/);
+  assert.doesNotMatch(html, /Your portfolio/);
+});

@@ -16,6 +16,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from backend.app.core import crypto, session_store
+from backend.app.core.runtime_features import performance_demo_enabled
 from backend.app.core.crypto_migrate import enable_encryption_for_user
 from backend.app.core.database import get_db
 from backend.app.db.schema import InviteCode, User
@@ -399,7 +400,7 @@ def me(current_user: User = Depends(get_current_user)):
 def auth_status(db: Session = Depends(get_db)):
     """Unauthenticated instance description, read by the login page.
 
-    Its live consumer is the registration policy: the signup toggle follows
+    Its registration consumer is the signup policy: the toggle follows
     `registration_open`, because offering a link the server answers with 403 is
     worse than offering none.
 
@@ -408,11 +409,14 @@ def auth_status(db: Session = Depends(get_db)):
     now carries no demo labelling, and an endpoint that advertised the
     credentials anyway would simply relocate what was deliberately taken off the
     page. The `demo` flag stays: it is a property of the instance, not a
-    credential, and /healthz reports it too.
+    credential, and /healthz reports it too. The performance_demo boolean is
+    likewise non-secret presentation metadata; it neither signs a user in nor
+    changes their portfolio data.
     """
     has_user = db.query(User).first() is not None
     return {
         "registered": has_user,
         "registration_open": ALLOW_REGISTRATION,
         "demo": _demo,
+        "performance_demo": performance_demo_enabled(),
     }
