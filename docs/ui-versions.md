@@ -9,8 +9,9 @@ preserve the versions that were in those environments on this date.
 | Version 1 | Current production | `ui-v1` | `design/cloud-launch` | `44f0f60063ea154fe06092f281a758219dc9b5df` |
 | Version 2 | Current staging | `ui-v2` | `staging` | `13cb12c0e106532b488ad0cde0d125799251af9f` |
 | Version 3, draft 1 | Refined design for local review; not deployed | `ui-v3-draft-1` | `design/local-portfolio-studio` | Resolve with `git rev-parse 'ui-v3-draft-1^{commit}'` |
+| Version 3, draft 2 | Actionable summary cards, clearer view navigation and compact balance details; not deployed | `ui-v3-draft-2` | `design/local-portfolio-studio` | Resolve with `git rev-parse 'ui-v3-draft-2^{commit}'` |
 
-All three are annotated tags pushed to GitHub. V3's branch is also pushed as a
+All checkpoints above are annotated tags pushed to GitHub. V3's branch is also pushed as a
 backup, without merging it into staging or production. The dated bookmark
 `baseline/staging-ui-2026-11-06` remains an alias for the same commit as `ui-v2`.
 The separate signup/onboarding branch is excluded from these V2/V3 checkpoints.
@@ -23,7 +24,9 @@ The separate signup/onboarding branch is excluded from these V2/V3 checkpoints.
 - **V3 draft:** A refinement of the familiar layout: lighter surfaces, compact
   summary cards, quieter sidebar/filter styling, and Snapshot, Performance and
   AI Insights sections within Overview. The local preview can switch between the
-  current V2 layout and the V3 concept using fictional sample data.
+  current V2 layout and the V3 concept using fictional sample data. Draft 2 adds
+  four summary shortcuts, a stronger view selector and breadcrumb, and optional
+  collapsed balance reconciliation.
 
 Git tags capture the full repository at a commit, not just the frontend. These
 are design labels rather than package/database schema versions. They do not
@@ -38,12 +41,16 @@ git tag --list 'ui-v*'
 git show --no-patch ui-v1
 git show --no-patch ui-v2
 git show --no-patch ui-v3-draft-1
+git show --no-patch ui-v3-draft-2
 
 # Compare the deployed production and staging frontends.
 git diff ui-v1 ui-v2 -- frontend/
 
 # Compare staging with the saved refined concept.
-git diff ui-v2 ui-v3-draft-1 -- frontend/
+git diff ui-v2 ui-v3-draft-2 -- frontend/
+
+# Compare the two V3 review checkpoints.
+git diff ui-v3-draft-1 ui-v3-draft-2 -- frontend/
 
 # Read a particular file without switching branches.
 git show ui-v1:frontend/components/Sidebar.tsx
@@ -51,13 +58,14 @@ git show ui-v1:frontend/components/Sidebar.tsx
 
 [Browse V1](https://github.com/a-sureshraj05/WealthCompass/tree/ui-v1) ·
 [Browse V2](https://github.com/a-sureshraj05/WealthCompass/tree/ui-v2) ·
-[Browse V3 draft 1](https://github.com/a-sureshraj05/WealthCompass/tree/ui-v3-draft-1)
+[Browse V3 draft 1](https://github.com/a-sureshraj05/WealthCompass/tree/ui-v3-draft-1) ·
+[Browse V3 draft 2](https://github.com/a-sureshraj05/WealthCompass/tree/ui-v3-draft-2)
 
 ## Inspect a version without disturbing current work
 
 ```sh
-git worktree add --detach /tmp/wealthcompass-ui-v3 ui-v3-draft-1
-cd /tmp/wealthcompass-ui-v3/frontend
+git worktree add --detach /tmp/wealthcompass-ui-v3-draft-2 ui-v3-draft-2
+cd /tmp/wealthcompass-ui-v3-draft-2/frontend
 npm ci
 npm run dev -- --host 127.0.0.1 --port 5182 --strictPort
 ```
@@ -74,8 +82,8 @@ Keep existing version tags fixed. Continue V3 development on its branch and
 create another annotated tag for a useful review milestone:
 
 ```sh
-git tag -a ui-v3-draft-2 -m 'UI Version 3 draft 2: describe the reviewed changes' HEAD
-git push origin ui-v3-draft-2
+git tag -a ui-v3-draft-3 -m 'UI Version 3 draft 3: describe the reviewed changes' HEAD
+git push origin ui-v3-draft-3
 ```
 
 When V3 is approved, create `ui-v3` at the approved commit and update this registry.

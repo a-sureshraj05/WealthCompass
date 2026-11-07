@@ -14,7 +14,11 @@ const PORTFOLIO = '#315da6';
 const SPY = '#9380b6';
 const TRADE_SPY = '#218b83';
 
-function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView = 'growth', initialPeriod = 'ytd', presentation = 'design-preview', history }: { numbersVisible: boolean; scopeFiltered?: boolean; initialView?: 'growth' | 'calendar'; initialPeriod?: PerformancePeriod; presentation?: 'design-preview' | 'staging-demo' | 'transaction-history'; history?: { snapshots: PerformanceSnapshot[]; asOf: string; firstYear: number; coverageStart: string; coverageEnd?: string; marketDates?: string[] };  }) {
+function BalanceDisclosure({ compact, children }: { compact: boolean; children: React.ReactNode }) {
+  return compact ? <details className="perf-balance-disclosure"><summary><strong>Balance details</strong><span>Opening, cash flows &amp; earnings<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></span></summary>{children}</details> : <>{children}</>;
+}
+
+function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView = 'growth', initialPeriod = 'ytd', presentation = 'design-preview', history, compactBalance = false }: { numbersVisible: boolean; scopeFiltered?: boolean; initialView?: 'growth' | 'calendar'; initialPeriod?: PerformancePeriod; compactBalance?: boolean; presentation?: 'design-preview' | 'staging-demo' | 'transaction-history'; history?: { snapshots: PerformanceSnapshot[]; asOf: string; firstYear: number; coverageStart: string; coverageEnd?: string; marketDates?: string[] };  }) {
   const actual = presentation === 'transaction-history';
   // A live history must be supplied explicitly; never fall back to the fixture.
   const asOf = actual ? history!.asOf : PERFORMANCE_AS_OF;
@@ -156,11 +160,11 @@ function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView =
         <p>Buy SPY with each recorded purchase amount; sell SPY for each recorded sale amount. Keep sale proceeds in cash until the next purchase or withdrawal.{typeof summary.tradeComparison.cash === 'number' ? ` SPY account cash: ${formatCurrency(summary.tradeComparison.cash)}.` : ''}</p>
         <small>Hypothetical daily-close execution, fractional exposure and reinvested SPY dividends. Original-stock income and reinvestments are not copied; idle cash earns no interest. Recorded separate fees apply to both accounts. The chart above shows normalized returns, not these account balances.</small>
       </section>}
-      <section className="perf-balance" aria-label="Account balance reconciliation">
+      <BalanceDisclosure compact={compactBalance}><section className="perf-balance" aria-label="Account balance reconciliation">
         <header>
           <div>
-            <h3>How the account balance changed</h3>
-            <p>{actual ? 'Reconstructed account values, including sale proceeds retained in cash.' : 'Fictional account dollars, separate from your actual account and the normalized investment chart above.'}</p>
+            <h3>{compactBalance ? 'Reconcile this period' : 'How the account balance changed'}</h3>
+            <p>{compactBalance ? 'A check of the opening value, cash movements and investment result.' : actual ? 'Reconstructed account values, including sale proceeds retained in cash.' : 'Fictional account dollars, separate from your actual account and the normalized investment chart above.'}</p>
           </div>
           <span>{range.label}</span>
         </header>
@@ -191,7 +195,7 @@ function PerformanceChart({ numbersVisible, scopeFiltered = false, initialView =
           </div>
         </div>
         <p className="perf-balance-note">Selling investments and keeping the proceeds in cash is already included. Only money entering or leaving the selected portfolio counts as an external flow.</p>
-      </section>
+      </section></BalanceDisclosure>
     </> : <div className="perf-hidden">
       <strong>Full-period history unavailable</strong>
       <p>Opening valuation and complete activity are needed before showing a return.</p>

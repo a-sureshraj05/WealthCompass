@@ -32,8 +32,10 @@ export function RealizedGainsChart({ periods, year, hasData }: { periods: Period
   </section>;
 }
 
-export function GainsHeatmap({ overall, daily }: { overall: HoldingResult[]; daily: HoldingResult[] }) {
-  const [mode, setMode] = useState<'overall' | 'daily'>('overall');
+export type HeatmapMode = 'overall' | 'daily';
+
+export function GainsHeatmap({ overall, daily, initialMode = 'overall' }: { overall: HoldingResult[]; daily: HoldingResult[]; initialMode?: HeatmapMode }) {
+  const [mode, setMode] = useState<HeatmapMode>(initialMode);
   const [active, setActive] = useState<string | null>(null);
   const container = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 330, height: 235 });

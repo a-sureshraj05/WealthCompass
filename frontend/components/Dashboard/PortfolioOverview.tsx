@@ -8,6 +8,8 @@ import './portfolio-overview.css';
 import TickerLogo from '../TickerLogo';
 import BrokerageMark from '../BrokerageMark';
 import type { OverviewSection } from '../../preview/previewDesign';
+import type { HeatmapMode } from '../GainsLosses/GainsCharts';
+import OverviewSummaryTiles from './OverviewSummaryTiles';
 
 interface Props {
   holdings: StockHolding[];
@@ -23,6 +25,9 @@ interface Props {
   performance?: React.ReactNode;
   refined?: boolean;
   initialSection?: OverviewSection;
+  activeSection?: OverviewSection;
+  onSectionChange?: (section: OverviewSection) => void;
+  onOpenHeatmap?: (period: HeatmapMode) => void;
 }
 
 const money = formatCurrency;
@@ -30,7 +35,7 @@ const signed = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${
 const percent = (value: number | null) => value === null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
 const compact = (value: number) => `${value < 0 ? '−' : ''}$${Math.abs(value) >= 1000 ? `${(Math.abs(value) / 1000).toFixed(Math.abs(value) >= 10000 ? 0 : 1)}k` : Math.abs(value).toFixed(0)}`;
 
-export function Icon({ name, size = 18 }: { name: 'arrow' | 'refresh' | 'plus' | 'wallet' | 'trend' | 'grid' | 'chevron'; size?: number }) {
+export function Icon({ name, size = 18 }: { name: 'arrow' | 'refresh' | 'plus' | 'wallet' | 'trend' | 'grid' | 'chevron' | 'sparkle'; size?: number }) {
   const paths = {
     arrow: 'M7 17 17 7M7 7h10v10',
     refresh: 'M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.55-2L20 8M4 16l2.35 3A7 7 0 0 0 17.9 17',
@@ -39,12 +44,15 @@ export function Icon({ name, size = 18 }: { name: 'arrow' | 'refresh' | 'plus' |
     trend: 'm3 17 6-6 4 4 8-10m-6 0h6v6',
     grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
     chevron: 'm9 5 7 7-7 7',
+    sparkle: 'm12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z',
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>;
 }
 
-const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbersVisible = true, selectedBrokerages = [], onBrokeragesChange, onOpenHoldings, onRefresh, onConnect, preview = false, insights, performance, refined = false, initialSection = 'snapshot' }) => {
-  const [section, setSection] = useState<OverviewSection>(initialSection);
+const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbersVisible = true, selectedBrokerages = [], onBrokeragesChange, onOpenHoldings, onRefresh, onConnect, preview = false, insights, performance, refined = false, initialSection = 'snapshot', activeSection, onSectionChange, onOpenHeatmap }) => {
+  const [localSection, setLocalSection] = useState<OverviewSection>(initialSection);
+  const section = activeSection ?? localSection;
+  const setSection = (next: OverviewSection) => { setLocalSection(next); onSectionChange?.(next); };
   const sectionKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     const sections: OverviewSection[] = ['snapshot', 'performance', 'insights'];
     const index = sections.indexOf(section);
@@ -89,7 +97,7 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
     </header>
     {refreshError && <p className="overview-error" role="alert">{refreshError}</p>}
 
-    <section className="overview-hero" aria-label="Portfolio summary">
+    {refined ? <OverviewSummaryTiles model={model} numbersVisible={numbersVisible} onHoldings={() => onOpenHoldings()} onHeatmap={onOpenHeatmap} onAccounts={onConnect} /> : <section className="overview-hero" aria-label="Portfolio summary">
       <div className="hero-primary">
         <div className="hero-label"><span className="hero-icon"><Icon name="wallet" size={17} /></span>Total portfolio value<span className="hero-pill">{selectedBrokerages.length ? 'FILTERED' : 'CONSOLIDATED'}</span></div>
         <div className="hero-value">{display(model.totalValue)}</div>
@@ -101,9 +109,9 @@ const PortfolioOverview: React.FC<Props> = ({ holdings, cashByBrokerage, numbers
         <div className="hero-metric"><span>Unrealized gain / loss<Icon name="arrow" size={16} /></span><strong className={!numbersVisible ? '' : model.gain >= 0 ? 'is-positive' : 'is-negative'}>{display(model.gain, true)}</strong><p><b>{numbersVisible ? percent(model.gainPercent) : mask}</b> on open-position cost basis</p></div>
         <div className="hero-metric"><span>{model.cashValue < 0 ? 'Net cash / margin' : 'Cash balance'}<Icon name="wallet" size={16} /></span><strong>{display(model.cashValue)}</strong><p>{model.cashValue < 0 ? 'Negative cash balance includes margin' : `${model.brokers.length} brokerages in this view`}</p></div>
       </div>
-    </section>
+    </section>}
 
-    {refined && <nav className="refined-overview-tabs" role="tablist" aria-label="Overview sections">{(['snapshot', 'performance', 'insights'] as const).map(value => <button key={value} role="tab" id={`refined-tab-${value}`} aria-controls={`refined-panel-${value}`} aria-selected={section === value} tabIndex={section === value ? 0 : -1} onKeyDown={sectionKeyDown} onClick={() => setSection(value)}>{value === 'snapshot' ? 'Snapshot' : value === 'performance' ? 'Performance' : 'AI Insights'}</button>)}<span>One portfolio. Three perspectives.</span></nav>}
+    {refined && <section className="refined-view-selector" aria-label="Views within Portfolio Overview"><div className="refined-view-context"><span>Overview views</span><strong>{section === 'snapshot' ? 'Today’s snapshot' : section === 'performance' ? 'Portfolio performance' : 'AI Insights'}</strong></div><nav className="refined-overview-tabs" role="tablist" aria-label="Overview sections">{(['snapshot', 'performance', 'insights'] as const).map(value => <button key={value} role="tab" id={`refined-tab-${value}`} aria-controls={`refined-panel-${value}`} aria-selected={section === value} tabIndex={section === value ? 0 : -1} onKeyDown={sectionKeyDown} onClick={() => setSection(value)}><Icon name={value === 'snapshot' ? 'grid' : value === 'performance' ? 'trend' : 'sparkle'} size={16} /><span><strong>{value === 'snapshot' ? 'Snapshot' : value === 'performance' ? 'Performance' : 'AI Insights'}</strong><small>{value === 'snapshot' ? 'Holdings & daily moves' : value === 'performance' ? 'Returns & SPY comparison' : 'Portfolio observations'}</small></span></button>)}</nav></section>}
     {!refined && <>{insights}{performance}</>}
     {refined && section !== 'snapshot' && <div role="tabpanel" tabIndex={0} id={`refined-panel-${section}`} aria-labelledby={`refined-tab-${section}`}>{section === 'performance' ? performance : insights}</div>}
 

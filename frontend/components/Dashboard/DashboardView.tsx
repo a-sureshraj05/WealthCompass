@@ -11,12 +11,15 @@ import GainsLossesView from '../GainsLossesView';
 import OptionsView from '../OptionsView';
 import WorkspacePage from '../WorkspacePage';
 import type { OverviewSection } from '../../preview/previewDesign';
+import type { HeatmapMode } from '../GainsLosses/GainsCharts';
 
 interface Props {
   activeTab: string;
   preview?: boolean;
   refinedPreview?: boolean;
   initialOverviewSection?: OverviewSection;
+  overviewSection?: OverviewSection;
+  onOverviewSectionChange?: (section: OverviewSection) => void;
   performanceDemo?: boolean;
   setActiveTab: (tab: 'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses') => void;
   holdings: StockHolding[];
@@ -55,6 +58,8 @@ const DashboardView: React.FC<Props> = ({
   preview = false,
   refinedPreview = false,
   initialOverviewSection,
+  overviewSection,
+  onOverviewSectionChange,
   performanceDemo = false,
   setActiveTab,
   holdings,
@@ -87,6 +92,7 @@ const DashboardView: React.FC<Props> = ({
   accounts,
 }) => {
   const [syncMessage, setSyncMessage] = useState('');
+  const [heatmapTarget, setHeatmapTarget] = useState<HeatmapMode | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [holdingsSection, setHoldingsSection] = useState<'equity' | 'options'>('equity');
   const [focusTicker, setFocusTicker] = useState<string | null>(null);
@@ -101,6 +107,7 @@ const DashboardView: React.FC<Props> = ({
   const [selectedTerms, setSelectedTerms] = useState<('long' | 'short')[]>([]);
 
   useEffect(() => { setSyncMessage(''); }, [activeTab]);
+  useEffect(() => { if (activeTab !== 'gainsLosses') setHeatmapTarget(null); }, [activeTab]);
   useEffect(() => { if (activeTab !== 'transactions') { setFocusTicker(null); setFocusDate(null); } }, [activeTab]);
 
   if (activeTab === 'importData') {
@@ -163,7 +170,7 @@ const DashboardView: React.FC<Props> = ({
 
   if (activeTab === 'gainsLosses') {
     return <WorkspacePage tab="gainsLosses" actions={<button onClick={onProcessGains} className="workspace-button">Recalculate gains</button>}>
-        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} stTaxRate={stTaxRate} setStTaxRate={setStTaxRate} ltTaxRate={ltTaxRate} setLtTaxRate={setLtTaxRate} numbersVisible={numbersVisible} />
+        <GainsLossesView realizedGains={realizedGains} unrealizedGains={unrealizedGains} selectedBrokerages={selectedBrokerages} setSelectedBrokerages={setSelectedBrokerages} selectedTickers={selectedTickers} setSelectedTickers={setSelectedTickers} stTaxRate={stTaxRate} setStTaxRate={setStTaxRate} ltTaxRate={ltTaxRate} setLtTaxRate={setLtTaxRate} numbersVisible={numbersVisible} heatmapTarget={heatmapTarget} onReturnOverview={() => setActiveTab('dashboardView')} />
     </WorkspacePage>;
   }
 
@@ -173,7 +180,10 @@ const DashboardView: React.FC<Props> = ({
         preview={preview}
         refined={preview && refinedPreview}
         initialSection={initialOverviewSection}
-        performance={performanceDemo ? <TransactionPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} refreshNonce={refreshNonce} onReviewTransactions={() => setActiveTab('transactions')} /> : import.meta.env.DEV && preview ? <PreviewPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} /> : undefined}
+        activeSection={overviewSection}
+        onSectionChange={onOverviewSectionChange}
+        onOpenHeatmap={period => { setSelectedTickers([]); setHeatmapTarget(period); setActiveTab('gainsLosses'); }}
+        performance={performanceDemo ? <TransactionPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} refreshNonce={refreshNonce} onReviewTransactions={() => setActiveTab('transactions')} /> : import.meta.env.DEV && preview ? <PreviewPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} compactBalance={refinedPreview} /> : undefined}
         insights={<AIInsights holdings={holdings} cashByBrokerage={buyingPower} refreshNonce={refreshNonce}
           preview={preview} numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0}
           onOpenHoldings={ticker => { setSelectedBrokerages([]); setSelectedTickers(ticker ? [ticker] : []); setSelectedAssetTypes([]); setSelectedTerms([]); setActiveTab('holdings'); }}

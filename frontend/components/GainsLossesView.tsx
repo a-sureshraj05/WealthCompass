@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RealizedGain, UnrealizedLot } from '../types';
 import { FilterToolbar, MultiSelectFilter, SelectFilter, selectionChips, TAX_TERM_OPTIONS } from './TableFilters';
 import { formatCurrency } from '../utils/finance';
@@ -7,6 +7,7 @@ import { RealizedGainsChart, GainsHeatmap, TaxTermBreakdown, signedMoney, signed
 import GainLotTable from './GainsLosses/GainLotTable';
 import GainsReconciliation from './GainsLosses/GainsReconciliation';
 import './GainsLosses/gains-losses.css';
+import type { HeatmapMode } from './GainsLosses/GainsCharts';
 
 interface Props {
   realizedGains: RealizedGain[];
@@ -20,12 +21,24 @@ interface Props {
   ltTaxRate: number;
   setLtTaxRate: (value: number) => void;
   numbersVisible?: boolean;
+  heatmapTarget?: HeatmapMode | null;
+  onReturnOverview?: () => void;
 }
 
 const countLabel = (count: number, label: string) => `${count} ${label}${count === 1 ? '' : 's'}`;
 
-export default function GainsLossesView({ realizedGains, unrealizedGains, selectedBrokerages, setSelectedBrokerages, selectedTickers, setSelectedTickers, stTaxRate, setStTaxRate, ltTaxRate, setLtTaxRate, numbersVisible = true }: Props) {
+export default function GainsLossesView({ realizedGains, unrealizedGains, selectedBrokerages, setSelectedBrokerages, selectedTickers, setSelectedTickers, stTaxRate, setStTaxRate, ltTaxRate, setLtTaxRate, numbersVisible = true, heatmapTarget, onReturnOverview }: Props) {
   const [mode, setMode] = useState<GainsMode>('unrealized');
+  const heatmap = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!heatmapTarget || !numbersVisible) return;
+    const element = heatmap.current;
+    const frame = requestAnimationFrame(() => {
+      element?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      element?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [heatmapTarget, numbersVisible]);
   const [year, setYear] = useState('all');
   const [terms, setTerms] = useState<TaxTerm[]>([]);
   const [expandedTerms, setExpandedTerms] = useState<Set<TaxTerm>>(new Set());
@@ -62,10 +75,10 @@ export default function GainsLossesView({ realizedGains, unrealizedGains, select
     <GainsReconciliation rows={rows} mode={mode} numbersVisible={numbersVisible} />
 
     {numbersVisible ? mode === 'unrealized' ? (
-      <div className="gains-heatmap-only"><GainsHeatmap overall={holdingResults} daily={dailyResults} /></div>
+      <div className="gains-heatmap-only" ref={heatmap} tabIndex={heatmapTarget ? -1 : undefined} aria-label={heatmapTarget ? 'Holdings heatmap opened from Overview' : undefined} style={{ scrollMarginTop: 20 }}>{heatmapTarget && <div className="gains-navigation-context">{onReturnOverview ? <button type="button" onClick={onReturnOverview}>← Portfolio Overview</button> : <span>From Portfolio Overview</span>}<span>Open positions · {selectedBrokerages.length ? selectedBrokerages.join(', ') : 'All brokerages'}</span></div>}<GainsHeatmap overall={holdingResults} daily={dailyResults} initialMode={heatmapTarget || 'overall'} /></div>
     ) : (
       <div className="gains-charts-grid"><RealizedGainsChart periods={periods} year={year} hasData={rows.length > 0} /><TaxTermBreakdown shortGain={summary.shortGain} longGain={summary.longGain} shortLots={summary.shortLots} longLots={summary.longLots} /></div>
-    ) : <div className="gains-privacy-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg><strong>Your portfolio figures are hidden</strong><p>Use Show figures in the header to reveal charts and lot details.</p></div>}
+    ) : <div className="gains-privacy-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg><strong>Your portfolio figures are hidden</strong><p>Use your profile’s visibility setting to reveal charts and lot details.</p></div>}
 
     <section className="gains-tax-assumptions" aria-label="Tax rate assumptions"><div><h2>Tax assumptions</h2><p>Shared with Gain to Sell in Holdings. These are adjustable inputs, not your actual tax liability.</p></div><div className="gains-tax-controls"><div className="gains-tax-impact"><span>{mode === 'unrealized' ? 'Illustrative tax if sold' : 'Illustrative tax estimate'}</span><strong>{money(summary.tax.total)}</strong><small>ST {money(summary.tax.shortTax)} · LT {money(summary.tax.longTax)}</small></div><div className="gains-rate-fields"><label><span><i className="gains-short-dot" />Short-term rate</span><div><input aria-label="Short-term tax rate percent" type="number" min="0" max="100" step="0.1" value={stTaxRate} onChange={event => setStTaxRate(clampTaxRate(Number(event.target.value)))} /><span>%</span></div></label><label><span><i className="gains-long-dot" />Long-term rate</span><div><input aria-label="Long-term tax rate percent" type="number" min="0" max="100" step="0.1" value={ltTaxRate} onChange={event => setLtTaxRate(clampTaxRate(Number(event.target.value)))} /><span>%</span></div></label></div></div><p className="gains-tax-method">The estimate uses the existing simplified offset between short- and long-term net gains, then applies these rates to remaining positive gains. It is based only on the filtered records shown here.</p></section>
 
