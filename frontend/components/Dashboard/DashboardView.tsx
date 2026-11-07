@@ -13,6 +13,7 @@ import WorkspacePage from '../WorkspacePage';
 interface Props {
   activeTab: string;
   preview?: boolean;
+  performanceDemo?: boolean;
   setActiveTab: (tab: 'dashboardView' | 'holdings' | 'importData' | 'transactions' | 'gainsLosses') => void;
   holdings: StockHolding[];
   transactions: Transaction[];
@@ -48,6 +49,7 @@ interface Props {
 const DashboardView: React.FC<Props> = ({
   activeTab,
   preview = false,
+  performanceDemo = false,
   setActiveTab,
   holdings,
   transactions,
@@ -163,7 +165,7 @@ const DashboardView: React.FC<Props> = ({
     <div className="space-y-6">
       <PortfolioOverview
         preview={preview}
-        performance={import.meta.env.DEV && preview ? <PreviewPerformance numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} /> : undefined}
+        performance={performanceDemo || import.meta.env.DEV && preview ? <PreviewPerformance presentation={performanceDemo ? 'staging-demo' : 'design-preview'} numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0} /> : undefined}
         insights={<AIInsights holdings={holdings} cashByBrokerage={buyingPower} refreshNonce={refreshNonce}
           preview={preview} numbersVisible={numbersVisible} scopeFiltered={selectedBrokerages.length > 0}
           onOpenHoldings={ticker => { setSelectedBrokerages([]); setSelectedTickers(ticker ? [ticker] : []); setSelectedAssetTypes([]); setSelectedTerms([]); setActiveTab('holdings'); }}

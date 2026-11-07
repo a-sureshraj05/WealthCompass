@@ -40,6 +40,13 @@ services:
       - key: WC_DEMO_MODE
         value: "false"
 
+      # Show the clearly labelled, simulated portfolio/SPY comparison after
+      # sign-in. This is independent of demo-user/database seeding.
+      - key: WC_APP_ENV
+        value: "staging"
+      - key: WC_PERFORMANCE_DEMO
+        value: "true"
+
       - key: JWT_SECRET
         generateValue: true
 

@@ -158,8 +158,9 @@ A proposed Performance vs SPY module is available in the development preview
 below AI Insights. It includes YTD, trailing 1/3/5-year and calendar-year views,
 a permanent simulated SPY total-return comparison, normalized percent/$10k
 charts, and a reconciled opening/deposit/withdrawal/earnings/ending balance bridge.
-Both series are explicitly simulated. No real performance is exposed in the
-signed-in app; live history and cash-flow classification are not implemented.
+Both series are explicitly simulated. An explicit staging runtime setting also
+exposes this fictional comparison in the signed-in Overview, labelled Demo
+performance vs SPY. Live history and cash-flow classification are not implemented.
 See `docs/portfolio-performance-design.md` for methods, date rules and backend work.
 
 The top-right avatar is now a shared account menu in the preview and signed-in
